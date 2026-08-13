@@ -162,6 +162,19 @@ bun run pack:check
 
 The web dev server listens on `http://127.0.0.1:5173` and proxies `/api` to the backend on `8787`.
 
+## Release
+
+Pushes to `main` run [semantic-release](https://semantic-release.gitbook.io/). It reads conventional commits, bumps `@seaveyon/harness-switch`, tags `v*`, and publishes to npm via Trusted Publishing.
+
+| Commit | Version bump |
+|---|---|
+| `fix:` | patch (`0.1.0` → `0.1.1`) |
+| `feat:` | minor (`0.1.0` → `0.2.0`) |
+| `feat!:` / `BREAKING CHANGE:` | major (`0.2.0` → `1.0.0`) |
+| `chore:` / `ci:` / `docs:` | no release |
+
+You can also run **Publish npm** manually from the Actions tab (`workflow_dispatch`). Commits that do not need a release will no-op.
+
 ## License
 
 [MIT](./LICENSE)

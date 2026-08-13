@@ -13,6 +13,10 @@
     "headless"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/B1anker/harness-switch.git"
+  },
   "type": "module",
   "bin": {
     "harness-switch": "./dist/harness-switch.js"
@@ -41,6 +45,7 @@
     "bun": ">=1.2.0"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   }
 }
