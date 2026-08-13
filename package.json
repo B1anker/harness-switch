@@ -1,0 +1,38 @@
+{
+  "name": "@seavey/harness-switch",
+  "version": "0.1.0",
+  "description": "A secure web control plane for switching API profiles across Claude Code, pi, Codex, zcode, and Kimi Code on SSH servers.",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "kimi-code",
+    "zcode",
+    "pi",
+    "api-key",
+    "ssh",
+    "headless"
+  ],
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "bin/harness-switch.js",
+  "bin": {
+    "harness-switch": "bin/harness-switch.js"
+  },
+  "files": [
+    "bin/",
+    "public/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/harness-switch.js",
+    "test": "node --check bin/harness-switch.js",
+    "pack:check": "npm pack --dry-run"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
