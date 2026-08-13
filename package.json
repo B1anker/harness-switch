@@ -1,5 +1,5 @@
 {
-  "name": "@seavey/harness-switch",
+  "name": "@seaveyon/harness-switch",
   "version": "0.1.0",
   "description": "A secure web control plane for switching API profiles across Claude Code, pi, Codex, zcode, and Kimi Code on SSH servers.",
   "keywords": [

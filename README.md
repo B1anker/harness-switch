@@ -1,6 +1,6 @@
 # harness-switch
 
-[![npm version](https://img.shields.io/npm/v/%40seavey%2Fharness-switch.svg)](https://www.npmjs.com/package/@seavey/harness-switch)
+[![npm version](https://img.shields.io/npm/v/%40seaveyon%2Fharness-switch.svg)](https://www.npmjs.com/package/@seaveyon/harness-switch)
 
 **harness-switch** is a dependency-free Node.js web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **pi**, **Codex**, **zcode**, and **Kimi Code**.
 
@@ -9,13 +9,13 @@ It is a configuration manager, not an API proxy: it does not route or inspect mo
 ## Install and run
 
 ```bash
-npx @seavey/harness-switch
+npx @seaveyon/harness-switch
 ```
 
 Or install it globally:
 
 ```bash
-npm install -g @seavey/harness-switch
+npm install -g @seaveyon/harness-switch
 harness-switch
 ```
 
