@@ -49,6 +49,7 @@ jobs:
           extra_plugins: |
             @semantic-release/changelog
             @semantic-release/git
+            @semantic-release/exec
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -56,7 +57,7 @@ jobs:
         if: steps.semantic.outputs.new_release_published == 'true'
         working-directory: apps/server
         run: |
-          bun pm pack
+          bun ../../scripts/npm-pack.ts
           npm publish ./*.tgz --access public
         env:
           NPM_CONFIG_PROVENANCE: true

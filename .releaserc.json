@@ -11,10 +11,9 @@
       }
     ],
     [
-      "@semantic-release/npm",
+      "@semantic-release/exec",
       {
-        "npmPublish": false,
-        "pkgRoot": "apps/server"
+        "prepareCmd": "bun scripts/bump-version.ts ${nextRelease.version}"
       }
     ],
     [

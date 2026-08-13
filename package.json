@@ -22,11 +22,12 @@
     "check": "oxlint . && biome check .",
     "precommit": "bun run check && bun run test",
     "prepare": "bun scripts/install-git-hooks.ts",
-    "pack:check": "bun run build && bun pm pack --cwd apps/server --dry-run"
+    "pack:check": "bun run build && bun scripts/npm-pack.ts --dry-run"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.8",
     "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "oxlint": "^1.78.0",
     "semantic-release": "^24.2.7"
