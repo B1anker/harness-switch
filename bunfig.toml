@@ -1,0 +1,3 @@
+[test]
+# Web tests use rstest; bun:test should only see the server suite.
+root = "./apps/server"

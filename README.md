@@ -130,7 +130,7 @@ packages/shared   Shared TypeScript types
 git clone <your-repository-url>
 cd harness-switch
 bun install
-bun test
+bun run test
 bun run check
 bun run dev:server
 bun run dev:web
@@ -146,7 +146,7 @@ bun run format:check
 bun run check
 ```
 
-`bun install` installs a git `pre-commit` hook that runs `bun run check` and `bun test`. Commits are blocked if either step fails. To run the same gate manually:
+`bun install` installs a git `pre-commit` hook that runs `bun run check` and `bun run test`. Commits are blocked if either step fails. To run the same gate manually:
 
 ```bash
 bun run precommit
