@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "types": ["bun"],
+    "lib": ["ES2022"]
+  },
+  "include": ["src", "test"]
+}

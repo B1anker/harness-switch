@@ -2,20 +2,22 @@
 
 [![npm version](https://img.shields.io/npm/v/%40seaveyon%2Fharness-switch.svg)](https://www.npmjs.com/package/@seaveyon/harness-switch)
 
-**harness-switch** is a dependency-free Node.js web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **pi**, **Codex**, **zcode**, and **Kimi Code**.
+**harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **pi**, **Codex**, **zcode**, and **Kimi Code**.
 
 It is a configuration manager, not an API proxy: it does not route or inspect model traffic.
 
 ## Install and run
 
+Requires [Bun](https://bun.sh) >= 1.2.
+
 ```bash
-npx @seaveyon/harness-switch
+bunx @seaveyon/harness-switch
 ```
 
 Or install it globally:
 
 ```bash
-npm install -g @seaveyon/harness-switch
+bun add -g @seaveyon/harness-switch
 harness-switch
 ```
 
@@ -62,6 +64,25 @@ API keys are encrypted with AES-256-GCM in `~/.harness-switch/profiles.json`; th
 | `HOST` | `127.0.0.1` | Bind address. Keep the default when using SSH tunnelling. |
 | `PORT` | `8787` | Listening port. |
 | `HSW_DATA_DIR` | `~/.harness-switch` | Directory for encrypted profiles, active state, key, password, and env file. |
+| `HSW_HOME_DIR` | `$HOME` | Home directory used when writing native Claude/Kimi configs. |
+| `HSW_PUBLIC_DIR` | auto | Optional override for the built frontend directory. |
+
+## HTTP API
+
+The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/healthz` | Liveness |
+| `POST` | `/api/auth/login` | `{ "password": "..." }` |
+| `POST` | `/api/auth/logout` | Clears the session cookie |
+| `GET` | `/api/auth/session` | `401` when unauthenticated |
+| `GET` | `/api/harnesses` | Collection with nested profiles |
+| `GET` | `/api/harnesses/:id` | One harness |
+| `POST` | `/api/harnesses/:id/profiles` | Create |
+| `PATCH` | `/api/harnesses/:id/profiles/:name` | Update; omit `apiKey` to keep the stored secret |
+| `DELETE` | `/api/harnesses/:id/profiles/:name` | Delete |
+| `POST` | `/api/harnesses/:id/profiles/:name/activate` | Activate and rewrite env/native config |
 
 ## systemd
 
@@ -97,13 +118,49 @@ sudo journalctl -u harness-switch -f
 
 ## Development
 
+This is a Bun workspace:
+
+```text
+apps/web      React + Zustand + shadcn/ui, built with Rspack
+apps/server   Hono + VS Code-style DI, published as @seaveyon/harness-switch
+packages/shared   Shared TypeScript types
+```
+
 ```bash
 git clone <your-repository-url>
 cd harness-switch
-npm test
-npm start
-npm pack --dry-run
+bun install
+bun test
+bun run check
+bun run dev:server
+bun run dev:web
 ```
+
+Linting and formatting are split: **Oxlint** for diagnostics, **Biome** for format and import organization.
+
+```bash
+bun run lint
+bun run lint:fix
+bun run format
+bun run format:check
+bun run check
+```
+
+`bun install` installs a git `pre-commit` hook that runs `bun run check` and `bun test`. Commits are blocked if either step fails. To run the same gate manually:
+
+```bash
+bun run precommit
+```
+
+Production build (frontend assets are copied into `apps/server/public`, then the CLI is bundled):
+
+```bash
+bun run build
+bun run start
+bun run pack:check
+```
+
+The web dev server listens on `http://127.0.0.1:5173` and proxies `/api` to the backend on `8787`.
 
 ## License
 

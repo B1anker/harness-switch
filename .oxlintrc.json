@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "node", "react"],
+  "env": {
+    "builtin": true
+  },
+  "ignorePatterns": ["node_modules", "dist", "apps/server/public", "apps/web/dist", ".tools"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "settings": {
+    "react": {
+      "version": "19.2.0"
+    }
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": "off",
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["apps/web/**/*.{ts,tsx}"],
+      "env": {
+        "browser": true
+      }
+    },
+    {
+      "files": ["apps/server/**/*.ts"],
+      "env": {
+        "node": true
+      }
+    },
+    {
+      "files": ["**/*.{test,spec}.{ts,tsx}", "**/rstest.setup.ts"],
+      "env": {
+        "jest": true
+      }
+    }
+  ]
+}

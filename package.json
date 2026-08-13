@@ -1,38 +1,35 @@
 {
-  "name": "@seaveyon/harness-switch",
+  "name": "harness-switch",
+  "private": true,
   "version": "0.1.0",
   "description": "A secure web control plane for switching API profiles across Claude Code, pi, Codex, zcode, and Kimi Code on SSH servers.",
-  "keywords": [
-    "claude-code",
-    "codex",
-    "kimi-code",
-    "zcode",
-    "pi",
-    "api-key",
-    "ssh",
-    "headless"
-  ],
   "license": "MIT",
-  "type": "commonjs",
-  "main": "bin/harness-switch.js",
-  "bin": {
-    "harness-switch": "bin/harness-switch.js"
-  },
-  "files": [
-    "bin/",
-    "public/",
-    "README.md",
-    "LICENSE"
+  "workspaces": [
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
-    "start": "node bin/harness-switch.js",
-    "test": "node --check bin/harness-switch.js",
-    "pack:check": "npm pack --dry-run"
+    "dev": "bun scripts/dev.ts",
+    "dev:web": "bun run --filter @seaveyon/harness-switch-web dev",
+    "dev:server": "bun run --filter @seaveyon/harness-switch dev",
+    "build": "bun run --filter @seaveyon/harness-switch-web build && bun run --filter @seaveyon/harness-switch build",
+    "start": "bun run --filter @seaveyon/harness-switch start",
+    "test": "bun run --filter @seaveyon/harness-switch test && bun run --filter @seaveyon/harness-switch-web test",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "format": "biome check --write .",
+    "format:check": "biome check .",
+    "check": "oxlint . && biome check .",
+    "precommit": "bun run check && bun run test",
+    "prepare": "bun scripts/install-git-hooks.ts",
+    "pack:check": "bun run build && bun pm pack --cwd apps/server --dry-run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "oxlint": "^1.78.0"
   },
   "engines": {
-    "node": ">=18"
+    "bun": ">=1.2.0"
   },
-  "publishConfig": {
-    "access": "public"
-  }
+  "packageManager": "bun@1.3.14"
 }
