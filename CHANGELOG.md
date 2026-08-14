@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/B1anker/harness-switch/compare/v0.2.0...v0.3.0) (2026-08-14)
+
+
+### Features
+
+* switch harnesses by writing their native config files ([d0a9576](https://github.com/B1anker/harness-switch/commit/d0a9576caee30a3a7a55e5f0fd6ad90840c06bd0))
+
 # [0.2.0](https://github.com/B1anker/harness-switch/compare/v0.1.0...v0.2.0) (2026-08-13)
 
 
