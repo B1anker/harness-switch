@@ -38,6 +38,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       targets: adapter.targets(),
       envVars: adapter.envVarNames,
       envNote: adapter.envNote,
+      supportsOfficialAuth: adapter.renderOfficial !== undefined,
     };
   }
 
@@ -76,7 +77,8 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
     const profile = profiles.upsert(
       harnessId,
       {
-        name,
+        name: String(body.name ?? name),
+        sourceName: name,
         baseUrl: body.baseUrl,
         apiKey: body.apiKey,
         model: body.model,
@@ -88,7 +90,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
     );
     // Editing the live provider must reach the live files immediately, otherwise the UI
     // would show the new values while the tool keeps using the old ones.
-    activation.reapplyIfActive(harnessId, name);
+    activation.reconcileProfileUpdate(harnessId, name, profile.name);
     return c.json(profile);
   });
 
@@ -110,6 +112,12 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const name = decodeURIComponent(c.req.param('name'));
     const result = activation.activate(harnessId, name);
+    return c.json({ ok: true, envFile: result.envFile, warnings: result.warnings });
+  });
+
+  app.post('/:harnessId/official/activate', (c) => {
+    const harnessId = harnesses.require(c.req.param('harnessId'));
+    const result = activation.activateOfficial(harnessId);
     return c.json({ ok: true, envFile: result.envFile, warnings: result.warnings });
   });
 

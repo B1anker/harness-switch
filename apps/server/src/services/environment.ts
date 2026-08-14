@@ -27,6 +27,7 @@ export interface IEnvironmentService {
     codex: string;
     kimiCode: string;
     piAgent: string;
+    dsh: string;
   };
   ensureDataDir(): void;
 }
@@ -57,6 +58,7 @@ export class EnvironmentService implements IEnvironmentService {
     codex: process.env.CODEX_HOME || join(this.homeDir, '.codex'),
     kimiCode: process.env.KIMI_CODE_HOME || join(this.homeDir, '.kimi-code'),
     piAgent: process.env.PI_CODING_AGENT_DIR || join(this.homeDir, '.omp', 'agent'),
+    dsh: process.env.DSH_HOME || join(this.homeDir, '.dsh'),
   };
 
   ensureDataDir(): void {

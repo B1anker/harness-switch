@@ -62,9 +62,11 @@ export default defineConfig({
   devServer: {
     port: 5173,
     historyApiFallback: true,
-    proxy: {
-      '/api': 'http://127.0.0.1:8787',
-      '/healthz': 'http://127.0.0.1:8787',
-    },
+    proxy: [
+      {
+        context: ['/api', '/healthz'],
+        target: 'http://127.0.0.1:8787',
+      },
+    ],
   },
 });

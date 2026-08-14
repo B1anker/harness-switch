@@ -59,6 +59,8 @@ export type ActivePublic = {
   name: string;
   baseUrl: string;
   model: string;
+  /** True when the harness is using its own built-in account login. */
+  official?: boolean;
 };
 
 export type HarnessSummary = {
@@ -73,6 +75,8 @@ export type HarnessSummary = {
   envVars: string[];
   /** Set when the harness ignores shell environment variables entirely. */
   envNote?: string;
+  /** Whether this harness can safely return to its built-in account login. */
+  supportsOfficialAuth?: boolean;
 };
 
 export type HarnessesResponse = {
@@ -99,6 +103,7 @@ export type CreateProfileRequest = {
 };
 
 export type UpdateProfileRequest = {
+  name?: string;
   baseUrl?: string;
   apiKey?: string;
   model?: string;

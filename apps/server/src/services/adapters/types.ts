@@ -56,6 +56,12 @@ export interface HarnessAdapter {
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles;
 
   /**
+   * Remove this manager's provider routing and return control to the harness's built-in
+   * account login. Only implemented by harnesses with a native official login flow.
+   */
+  renderOfficial?(profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles;
+
+  /**
    * Additive mode only: drop this profile's provider entry from the live files, used
    * when the profile is deleted so no orphan provider is left behind.
    */

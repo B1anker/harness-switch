@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40seaveyon%2Fharness-switch.svg)](https://www.npmjs.com/package/@seaveyon/harness-switch)
 
-**harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **Codex**, **Kimi Code**, and **oh-my-pi**.
+**harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **Codex**, **Kimi Code**, **oh-my-pi**, and **DeepSeek Harness (DSH)**.
 
 It is a configuration manager, not an API proxy: it does not route or inspect model traffic.
 
@@ -43,6 +43,7 @@ Activation writes each tool's own configuration file. Nothing depends on you hav
 | Codex | `$CODEX_HOME/config.toml`, plus `auth.json` only if you pick that auth mode | replace | Next `codex` start |
 | Kimi Code | `$KIMI_CODE_HOME/config.toml` (`~/.kimi-code`) | additive | Next `kimi` start |
 | oh-my-pi | `~/.omp/agent/models.yml` and `config.yml` | additive | Next `omp` start |
+| DeepSeek Harness | `$DSH_HOME/settings.yaml` and `.credentials.yaml` (`~/.dsh`) | additive | Hot reload; default applies to new sessions |
 
 **Replace mode** means the file holds exactly one provider, so activating replaces it. **Additive mode** means the file holds many providers plus a pointer to the current one, so activating only moves that pointer and leaves providers you wrote by hand alone.
 
@@ -52,6 +53,7 @@ Notes on individual harnesses:
 - **Codex** defaults to putting the token in `config.toml` as `experimental_bearer_token`. The alternative that writes `auth.json` will overwrite your ChatGPT login cache, so it is opt-in; the previous `auth.json` is captured in a backup first either way.
 - **Kimi Code** (`~/.kimi-code`) is a different product from Kimi CLI (`~/.kimi`), even though both provide a `kimi` command. This project targets Kimi Code, which does not read credentials from the shell at all.
 - **oh-my-pi** has no single "current provider" key. Activating registers the provider in `models.yml` and moves it to the front of `modelProviderOrder`, which is what breaks ties between providers offering the same model id. A `--model` flag still overrides it at runtime.
+- **DeepSeek Harness** registers a custom `llm-pi-ai` provider, stores the API key in its separate credentials document, and updates `agent-default-model`. Existing sessions keep their selected route; newly created sessions use the activated profile.
 
 `~/.harness-switch/env.sh` remains as a compatibility layer and only contains variables the corresponding tool genuinely honours. It is needed only when a Codex profile uses the environment-variable auth mode:
 

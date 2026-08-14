@@ -27,6 +27,8 @@ export type ProfileStore = Record<string, Record<string, StoredProfile>>;
 
 export type ProfileInput = {
   name: string;
+  /** Existing key used to locate a profile while renaming it. */
+  sourceName?: string;
   baseUrl?: string;
   apiKey?: string;
   model?: string;
@@ -79,15 +81,20 @@ export class ProfileService implements IProfileService {
   upsert(harness: HarnessId, input: ProfileInput, isCreate: boolean): ProfilePublic {
     this.harnesses.require(harness);
     const name = input.name.trim();
+    const sourceName = isCreate ? name : input.sourceName?.trim() || name;
     this.assertName(name);
+    this.assertName(sourceName);
     const store = this.read();
     store[harness] ||= {};
-    const prior = store[harness][name];
+    const prior = store[harness][sourceName];
     if (isCreate && prior) {
       throw new HttpError(409, 'profile already exists');
     }
     if (!isCreate && !prior) {
       throw new HttpError(404, 'profile not found');
+    }
+    if (!isCreate && sourceName !== name && store[harness][name]) {
+      throw new HttpError(409, 'profile already exists');
     }
     const apiKey = input.apiKey || (prior ? this.crypto.decrypt(prior.api_key) : '');
     if (isCreate && !apiKey) {
@@ -113,6 +120,9 @@ export class ProfileService implements IProfileService {
     });
 
     store[harness][name] = next;
+    if (sourceName !== name) {
+      delete store[harness][sourceName];
+    }
     this.files.writeJson(this.environment.files.profiles, store);
     return this.toPublic(harness, name, next);
   }
@@ -141,11 +151,7 @@ export class ProfileService implements IProfileService {
     };
   }
 
-  /**
-   * Only touches the three values a live file can carry. Anything we own, such as notes
-   * and the harness-specific fields, is left alone: overwriting those with values a live
-   * file cannot express would silently erase them on the next save.
-   */
+  /** Only touches values an adapter explicitly recovered from its live files. */
   applyBackfill(harness: HarnessId, name: string, values: Partial<AdapterProfile>): void {
     const store = this.read();
     const stored = store[harness]?.[name];
@@ -160,6 +166,9 @@ export class ProfileService implements IProfileService {
     }
     if (values.apiKey) {
       stored.api_key = this.crypto.encrypt(values.apiKey);
+    }
+    if (values.extras !== undefined) {
+      stored.extras = { ...stored.extras, ...values.extras };
     }
     this.files.writeJson(this.environment.files.profiles, store);
   }

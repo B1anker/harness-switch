@@ -82,6 +82,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
     try {
       if (isEdit) {
         await updateProfile(harness.id, profile.name, {
+          name,
           baseUrl,
           apiKey: apiKey || undefined,
           model,
@@ -102,7 +103,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
         <form onSubmit={onSubmit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>
@@ -116,34 +117,37 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
-            {isEdit ? null : (
-              <div className="space-y-2">
-                <Label htmlFor="name">配置名称</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="例如：openrouter-main"
-                  required
-                />
-              </div>
-            )}
+          <PresetRow
+            harnessId={harness.id}
+            onPick={(preset) => {
+              setBaseUrl(preset.baseUrl);
+              if (preset.model) {
+                setModel(preset.model);
+              }
+              if (preset.extras) {
+                setExtras((current) => ({ ...current, ...preset.extras }));
+              }
+            }}
+          />
 
-            <PresetRow
-              harnessId={harness.id}
-              onPick={(preset) => {
-                setBaseUrl(preset.baseUrl);
-                if (preset.model) {
-                  setModel(preset.model);
-                }
-                if (preset.extras) {
-                  setExtras((current) => ({ ...current, ...preset.extras }));
-                }
-              }}
-            />
+          <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="name">配置名称</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="例如：openrouter-main"
+                required
+              />
+              {isEdit ? (
+                <p className="text-xs text-muted-foreground">
+                  修改后会同步更新当前激活状态和原生配置中的 Provider 标识。
+                </p>
+              ) : null}
+            </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="baseUrl">API Base URL</Label>
               <Input
                 id="baseUrl"
@@ -167,13 +171,24 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="model">模型</Label>
+              <Label htmlFor="model">
+                {harness.id === 'claude' ? '回退模型（ANTHROPIC_MODEL）' : '模型'}
+              </Label>
               <Input
                 id="model"
                 value={model}
                 onChange={(event) => setModel(event.target.value)}
-                placeholder="例如：claude-sonnet-4-5"
+                placeholder={
+                  harness.id === 'claude'
+                    ? '可选；各档未匹配时使用，例如 glm-5'
+                    : '例如：claude-sonnet-4-5'
+                }
               />
+              {harness.id === 'claude' ? (
+                <p className="text-xs text-muted-foreground">
+                  留空则沿用 Claude Code 默认模型；可在下面分别映射各模型档位。
+                </p>
+              ) : null}
             </div>
 
             {harness.fields.map((field) => (
@@ -185,7 +200,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
               />
             ))}
 
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="notes">备注（可选）</Label>
               <Textarea
                 id="notes"
@@ -200,7 +215,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             <button
               type="button"
               onClick={toggleAdvanced}
-              className="flex w-full items-center gap-2 px-3 py-2 text-sm font-medium"
+              className="flex w-full cursor-pointer items-center gap-2 rounded-t-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:bg-accent/80"
             >
               {advanced ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
               高级：原始配置
@@ -341,7 +356,7 @@ function ExtraField({
 }) {
   const id = `extra-${field.key}`;
   return (
-    <div className="space-y-2">
+    <div className={field.kind === 'textarea' ? 'space-y-2 sm:col-span-2' : 'space-y-2'}>
       <Label htmlFor={id}>{field.label}</Label>
       {field.kind === 'select' ? (
         <Select id={id} value={value} onChange={(event) => onChange(event.target.value)}>

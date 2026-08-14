@@ -33,6 +33,11 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
           { value: 'ANTHROPIC_API_KEY', label: 'ANTHROPIC_API_KEY（官方）' },
         ],
       },
+      { key: 'haikuModel', label: 'Haiku 模型映射', kind: 'text' },
+      { key: 'sonnetModel', label: 'Sonnet 模型映射', kind: 'text' },
+      { key: 'opusModel', label: 'Opus 模型映射', kind: 'text' },
+      { key: 'fableModel', label: 'Fable 模型映射（可选）', kind: 'text' },
+      { key: 'subagentModel', label: '子代理模型（可选）', kind: 'text' },
     ],
     targets: [
       {
@@ -43,6 +48,7 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
       },
     ],
     envVars: ['ANTHROPIC_BASE_URL'],
+    supportsOfficialAuth: true,
     ...overrides,
   };
 }

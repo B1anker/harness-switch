@@ -76,6 +76,21 @@ describe('profile storage', () => {
     expect(profiles.decrypt('claude', 'main').apiKey).toBe('sk-rotated');
   });
 
+  test('renames a profile without losing its encrypted values', () => {
+    const profiles = services.get(IProfileService);
+    create('main');
+    const renamed = profiles.upsert(
+      'claude',
+      { name: 'renamed', sourceName: 'main', notes: 'kept' },
+      false,
+    );
+
+    expect(renamed.name).toBe('renamed');
+    expect(profiles.get('claude', 'main')).toBeUndefined();
+    expect(profiles.decrypt('claude', 'renamed').apiKey).toBe('sk-original');
+    expect(profiles.get('claude', 'renamed')?.notes).toBe('kept');
+  });
+
   test('reports the usual conflicts instead of overwriting silently', () => {
     const profiles = services.get(IProfileService);
     create('main');

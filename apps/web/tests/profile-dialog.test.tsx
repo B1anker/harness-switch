@@ -46,7 +46,10 @@ test('creating submits the core fields together with the field defaults', async 
   fill('配置名称', 'openrouter-main');
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-test');
-  fill('模型', 'claude-sonnet-4-5');
+  fill('回退模型（ANTHROPIC_MODEL）', 'claude-sonnet-4-5');
+  fill('Haiku 模型映射', 'claude-haiku-4-5');
+  fill('Sonnet 模型映射', 'claude-sonnet-4-5');
+  fill('Opus 模型映射', 'claude-opus-4-5');
   fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
   await waitFor(() => expect(recorded.created).toHaveLength(1));
@@ -58,7 +61,14 @@ test('creating submits the core fields together with the field defaults', async 
       apiKey: 'sk-test',
       model: 'claude-sonnet-4-5',
       notes: '',
-      extras: { authVar: 'ANTHROPIC_AUTH_TOKEN' },
+      extras: {
+        authVar: 'ANTHROPIC_AUTH_TOKEN',
+        haikuModel: 'claude-haiku-4-5',
+        sonnetModel: 'claude-sonnet-4-5',
+        opusModel: 'claude-opus-4-5',
+        fableModel: '',
+        subagentModel: '',
+      },
     },
   ]);
 });
@@ -70,10 +80,10 @@ test('a preset fills the base url and the model in one click', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Z.AI（Anthropic 兼容）' }));
 
   expect(screen.getByLabelText('API Base URL')).toHaveValue('https://api.z.ai/api/anthropic');
-  expect(screen.getByLabelText('模型')).toHaveValue('glm-4.6');
+  expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）')).toHaveValue('glm-4.6');
 });
 
-test('editing prefills, locks the name and keeps the stored key when left blank', async () => {
+test('editing can rename the profile and keeps the stored key when left blank', async () => {
   const recorded = setup();
   render(
     <ProfileDialog
@@ -83,16 +93,18 @@ test('editing prefills, locks the name and keeps the stored key when left blank'
     />,
   );
 
-  expect(screen.queryByLabelText('配置名称')).toBeNull();
+  expect(screen.getByLabelText('配置名称')).toHaveValue('openrouter-main');
   expect(screen.getByLabelText('API Base URL')).toHaveValue('https://api.example.com/v1');
   expect(screen.getByLabelText('凭据变量')).toHaveValue('ANTHROPIC_API_KEY');
   expect(screen.getByLabelText('API Key')).toHaveAttribute('placeholder', '留空表示保持不变');
 
+  fill('配置名称', 'renamed-main');
   fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
   await waitFor(() => expect(recorded.updated).toHaveLength(1));
 
   const [, name, payload] = recorded.updated[0] as [string, string, { apiKey?: string }];
   expect(name).toBe('openrouter-main');
+  expect(payload).toMatchObject({ name: 'renamed-main' });
   // An empty field must not blank out the stored secret.
   expect(payload.apiKey).toBeUndefined();
 });

@@ -30,6 +30,7 @@
 }
 
 :root {
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -53,6 +54,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -80,5 +82,29 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
+  }
+
+  * {
+    scrollbar-color: var(--muted-foreground) var(--muted);
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--muted);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid var(--muted);
+    border-radius: 999px;
+    background: var(--muted-foreground);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--foreground);
   }
 }

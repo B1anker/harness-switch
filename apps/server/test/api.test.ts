@@ -13,6 +13,7 @@ import { IAuthService } from '../src/services/auth';
 import { IEnvironmentService } from '../src/services/environment';
 
 let homeDir = '';
+const originalCodexHome = process.env.CODEX_HOME;
 
 type TestApp = {
   app: ReturnType<typeof createApp>;
@@ -25,6 +26,7 @@ async function createTestApp(): Promise<TestApp> {
   homeDir = await mkdtemp(join(tmpdir(), 'hsw-home-'));
   process.env.HSW_HOME_DIR = homeDir;
   process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
+  process.env.CODEX_HOME = join(homeDir, '.codex');
   const services = createServices();
   services.get(IEnvironmentService).ensureDataDir();
   const password = services.get(IAuthService).ensurePassword();
@@ -88,6 +90,11 @@ describe('rest api', () => {
   afterEach(async () => {
     delete process.env.HSW_HOME_DIR;
     delete process.env.HSW_DATA_DIR;
+    if (originalCodexHome === undefined) {
+      delete process.env.CODEX_HOME;
+    } else {
+      process.env.CODEX_HOME = originalCodexHome;
+    }
     if (homeDir) {
       await rm(homeDir, { recursive: true, force: true });
     }
@@ -240,6 +247,85 @@ describe('rest api', () => {
     expect(env).toContain("export ANTHROPIC_AUTH_TOKEN='sk-test'");
   });
 
+  test('returns Claude to its built-in official login', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'claude', {
+      name: 'relay',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-test',
+      model: 'relay-model',
+      extras: { sonnetModel: 'relay-sonnet' },
+    });
+    await activate(context, 'claude', 'relay');
+
+    const response = await context.app.request('/api/harnesses/claude/official/activate', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+    expect(response.status).toBe(200);
+
+    const settings = JSON.parse(await readFile(claudeSettings(), 'utf8'));
+    expect(settings.env?.ANTHROPIC_BASE_URL).toBeUndefined();
+    expect(settings.env?.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(settings.env?.ANTHROPIC_MODEL).toBeUndefined();
+    expect(settings.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBeUndefined();
+
+    const claude = await summary(context, 'claude');
+    expect(claude.active?.official).toBe(true);
+    expect(claude.active?.name).toBe('官方登录');
+    expect(claude.supportsOfficialAuth).toBe(true);
+
+    const kimi = await context.app.request('/api/harnesses/kimi/official/activate', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+    expect(kimi.status).toBe(400);
+  });
+
+  test('re-activating Codex official login heals a drifted model_provider', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'codex', {
+      name: 'via-env',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-or',
+      extras: { authMode: 'env_key', envKeyName: 'MY_KEY' },
+    });
+    await activate(context, 'codex', 'via-env');
+
+    const first = await context.app.request('/api/harnesses/codex/official/activate', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+    expect(first.status).toBe(200);
+
+    const configPath = join(homeDir, '.codex', 'config.toml');
+    // Simulate Codex UI re-selecting a leftover third-party provider after official switch.
+    await writeFile(
+      configPath,
+      [
+        'model_provider = "third-party"',
+        '[model_providers.third-party]',
+        'name = "third-party"',
+        'base_url = "https://openrouter.ai/api/v1"',
+        'wire_api = "responses"',
+        'requires_openai_auth = true',
+        '',
+      ].join('\n'),
+    );
+
+    const second = await context.app.request('/api/harnesses/codex/official/activate', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+    expect(second.status).toBe(200);
+
+    const config = await readFile(configPath, 'utf8');
+    expect(config).not.toContain('model_provider');
+    expect(config).not.toContain('third-party');
+    expect(config).not.toContain('openrouter.ai');
+    expect((await summary(context, 'codex')).active?.official).toBe(true);
+  });
+
   test('refuses to delete the active profile so no orphan config is left behind', async () => {
     const context = await createTestApp();
     await createProfile(context, 'claude', {
@@ -287,6 +373,30 @@ describe('rest api', () => {
 
     const settings = JSON.parse(await readFile(claudeSettings(), 'utf8'));
     expect(settings.env.ANTHROPIC_BASE_URL).toBe('https://edited.example.com/v1');
+  });
+
+  test('renaming the active profile updates its stored key and active pointer', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'claude', {
+      name: 'main',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-test',
+    });
+    await activate(context, 'claude', 'main');
+
+    const patched = await context.app.request('/api/harnesses/claude/profiles/main', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ name: 'renamed' }),
+    });
+    expect(patched.status).toBe(200);
+
+    const claude = await summary(context, 'claude');
+    expect(claude.active?.name).toBe('renamed');
+    expect(claude.profiles.map((profile) => profile.name)).toEqual(['renamed']);
+    expect(JSON.parse(await readFile(claudeSettings(), 'utf8')).env.ANTHROPIC_AUTH_TOKEN).toBe(
+      'sk-test',
+    );
   });
 
   test('switching away saves hand edits without wiping fields the live file cannot hold', async () => {
@@ -405,6 +515,30 @@ describe('rest api', () => {
     expect(config).not.toContain('[providers.first]');
     expect(config).toContain('[providers.second]');
     expect(config).toContain('default_model = "second"');
+  });
+
+  test('renaming an additive profile removes its old provider id', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'kimi', {
+      name: 'old-name',
+      baseUrl: 'https://api.moonshot.cn/v1',
+      apiKey: 'sk-kimi',
+      model: 'kimi-k2',
+    });
+    await activate(context, 'kimi', 'old-name');
+
+    const patched = await context.app.request('/api/harnesses/kimi/profiles/old-name', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ name: 'new-name' }),
+    });
+    expect(patched.status).toBe(200);
+
+    const config = await readFile(join(homeDir, '.kimi-code', 'config.toml'), 'utf8');
+    expect(config).not.toContain('[providers.old-name]');
+    expect(config).toContain('[providers.new-name]');
+    expect(config).toContain('default_model = "new-name"');
+    expect((await summary(context, 'kimi')).active?.name).toBe('new-name');
   });
 
   test('the env file only carries variables the tool actually honours', async () => {

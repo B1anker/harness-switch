@@ -30,6 +30,7 @@ type AppState = {
   updateProfile: (harnessId: HarnessId, name: string, input: UpdateProfileRequest) => Promise<void>;
   deleteProfile: (harnessId: HarnessId, name: string) => Promise<void>;
   activateProfile: (harnessId: HarnessId, name: string) => Promise<void>;
+  activateOfficial: (harnessId: HarnessId) => Promise<void>;
   previewProfile: (harnessId: HarnessId, name: string) => Promise<PreviewTarget[]>;
   loadBackups: () => Promise<void>;
   restoreBackup: (id: string) => Promise<void>;
@@ -123,6 +124,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const lines = [
       `${label} 已切换到「${name}」，原生配置文件已写入。`,
       'Claude Code 会立即生效；Codex、Kimi Code、oh-my-pi 需要重新启动进程。',
+      ...result.warnings.map((warning) => `注意：${warning}`),
+    ];
+    set({ notice: lines.join('\n') });
+    await get().loadHarnesses();
+  },
+
+  activateOfficial: async (harnessId) => {
+    const result = await api<ActivateResponse>(`/api/harnesses/${harnessId}/official/activate`, {
+      method: 'POST',
+    });
+    const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
+    const lines = [
+      `${label} 已切回官方登录，第三方 API 路由已从原生配置中移除。`,
+      '如尚未登录，请在终端启动对应工具并完成一次官方登录。',
       ...result.warnings.map((warning) => `注意：${warning}`),
     ];
     set({ notice: lines.join('\n') });

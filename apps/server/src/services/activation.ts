@@ -16,6 +16,7 @@ type ActiveEntry = {
   api_key: string;
   model: string;
   extras?: Record<string, string>;
+  official?: boolean;
 };
 
 type ActiveStore = Record<string, ActiveEntry>;
@@ -29,9 +30,10 @@ export interface IActivationService {
   readonly _serviceBrand: undefined;
   getActive(harness: HarnessId): ActivePublic | null;
   activate(harness: HarnessId, name: string): ActivationResult;
+  activateOfficial(harness: HarnessId): ActivationResult;
   preview(harness: HarnessId, name: string): PreviewTarget[];
-  /** Keeps the live files in step when the currently active profile is edited. */
-  reapplyIfActive(harness: HarnessId, name: string): void;
+  /** Keeps live files and active pointers in step after an edit or rename. */
+  reconcileProfileUpdate(harness: HarnessId, previousName: string, nextName: string): void;
   /** Refuses to delete the active profile and clears additive leftovers otherwise. */
   prepareDelete(harness: HarnessId, name: string): void;
 }
@@ -69,6 +71,7 @@ export class ActivationService implements IActivationService {
       name: stored.name,
       baseUrl: stored.base_url || '',
       model: stored.model || '',
+      official: stored.official === true,
     };
   }
 
@@ -92,6 +95,7 @@ export class ActivationService implements IActivationService {
       api_key: profile.apiKey,
       model: profile.model,
       extras: profile.extras,
+      official: false,
     };
     this.files.writeJson(this.environment.files.active, active);
 
@@ -104,6 +108,55 @@ export class ActivationService implements IActivationService {
       warnings.push('原生配置已写入，但重建 env.sh 失败');
     }
 
+    return { envFile: this.environment.files.env, warnings };
+  }
+
+  activateOfficial(harness: HarnessId): ActivationResult {
+    const adapter = this.adapters.get(harness);
+    if (!adapter.renderOfficial) {
+      throw new HttpError(400, `${this.harnesses.label(harness)} 不支持官方账号登录模式`);
+    }
+
+    const warnings: string[] = [];
+    const active = this.read();
+    const previous = active[harness];
+    const alreadyOfficial = previous?.official === true;
+
+    // Always re-render even when already marked official: config.toml can drift
+    // (Codex re-selects a leftover provider) while active.json still says official.
+    if (!alreadyOfficial) {
+      this.backfillPrevious(adapter, previous, '__official__', warnings);
+    }
+    const profile =
+      previous && !alreadyOfficial
+        ? {
+            name: previous.name,
+            baseUrl: previous.base_url,
+            apiKey: previous.api_key,
+            model: previous.model,
+            extras: previous.extras ?? {},
+          }
+        : undefined;
+    const targets = adapter.targets();
+    const rendered = adapter.renderOfficial(profile, this.readCurrent(targets));
+    this.liveWrite.apply(harness, '官方登录', this.toWrites(targets, rendered));
+
+    active[harness] = {
+      name: '官方登录',
+      base_url: '',
+      api_key: '',
+      model: '',
+      extras: {},
+      official: true,
+    };
+    this.files.writeJson(this.environment.files.active, active);
+
+    try {
+      this.writeEnv(active);
+    } catch (error) {
+      this.log.error('failed to rebuild env file', error);
+      warnings.push('已恢复官方登录，但重建 env.sh 失败');
+    }
     return { envFile: this.environment.files.env, warnings };
   }
 
@@ -128,11 +181,20 @@ export class ActivationService implements IActivationService {
     });
   }
 
-  reapplyIfActive(harness: HarnessId, name: string): void {
-    if (this.read()[harness]?.name !== name) {
+  reconcileProfileUpdate(harness: HarnessId, previousName: string, nextName: string): void {
+    const adapter = this.adapters.get(harness);
+    if (previousName !== nextName && adapter.revoke) {
+      const profile = this.profiles.decrypt(harness, nextName);
+      const previousProfile = { ...profile, name: previousName };
+      const targets = adapter.targets();
+      const rendered = adapter.revoke(previousProfile, this.readCurrent(targets));
+      this.liveWrite.apply(harness, previousName, this.toWrites(targets, rendered));
+    }
+
+    if (this.read()[harness]?.name !== previousName) {
       return;
     }
-    this.activate(harness, name);
+    this.activate(harness, nextName);
   }
 
   prepareDelete(harness: HarnessId, name: string): void {
@@ -166,7 +228,7 @@ export class ActivationService implements IActivationService {
     nextName: string,
     warnings: string[],
   ): void {
-    if (!adapter.backfill || !previous || previous.name === nextName) {
+    if (!adapter.backfill || !previous || previous.official || previous.name === nextName) {
       return;
     }
     try {
@@ -239,6 +301,11 @@ export class ActivationService implements IActivationService {
     for (const adapter of this.adapters.all()) {
       const entry = active[adapter.id];
       if (!entry) {
+        continue;
+      }
+      if (entry.official) {
+        lines.push('', `# ${this.harnesses.label(adapter.id)} / 官方登录`);
+        lines.push('# 使用工具自身的官方账号登录，不注入环境变量。');
         continue;
       }
       const profile: AdapterProfile = {

@@ -1,5 +1,5 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { CircleUserRound, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -25,6 +25,7 @@ type HarnessCardProps = {
 
 export function HarnessCard({ harness, onAdd, onEdit }: HarnessCardProps) {
   const activateProfile = useAppStore((state) => state.activateProfile);
+  const activateOfficial = useAppStore((state) => state.activateOfficial);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
 
@@ -44,6 +45,37 @@ export function HarnessCard({ harness, onAdd, onEdit }: HarnessCardProps) {
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
+        {harness.supportsOfficialAuth ? (
+          <>
+            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground shadow-sm ring-1 ring-border">
+                  <CircleUserRound className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">官方登录</p>
+                    {harness.active?.official ? <Badge variant="secondary">已激活</Badge> : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {harness.id === 'claude'
+                      ? '使用 Claude Code 自身的 Anthropic 账号登录'
+                      : '使用 Codex 自身的 ChatGPT / OpenAI 账号登录'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant={harness.active?.official ? 'secondary' : 'outline'}
+                disabled={harness.active?.official}
+                onClick={() => void activateOfficial(harness.id)}
+              >
+                {harness.active?.official ? '已使用' : '切回官方'}
+              </Button>
+            </div>
+            <Separator />
+          </>
+        ) : null}
         {harness.profiles.length === 0 ? (
           <p className="py-4 text-sm text-muted-foreground">还没有配置档案</p>
         ) : (

@@ -1,4 +1,4 @@
-export const HARNESS_IDS = ['claude', 'codex', 'kimi', 'pi'] as const;
+export const HARNESS_IDS = ['claude', 'codex', 'kimi', 'pi', 'dsh'] as const;
 
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
@@ -7,6 +7,7 @@ export const HARNESS_LABELS: Record<HarnessId, string> = {
   codex: 'Codex',
   kimi: 'Kimi Code',
   pi: 'oh-my-pi',
+  dsh: 'DeepSeek Harness',
 };
 
 export function isHarnessId(value: string): value is HarnessId {

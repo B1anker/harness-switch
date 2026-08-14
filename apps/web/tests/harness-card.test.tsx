@@ -49,6 +49,16 @@ test('activating asks the store to switch that exact profile', () => {
   expect(calls.activateProfile).toEqual([['claude', 'openrouter-main']]);
 });
 
+test('offers a built-in official login and asks the store to restore it', () => {
+  const calls = stubStoreActions(['activateOfficial']);
+  render(<HarnessCard harness={harnessFixture()} onAdd={() => {}} onEdit={() => {}} />);
+
+  fireEvent.click(screen.getByRole('button', { name: '切回官方' }));
+
+  expect(calls.activateOfficial).toEqual([['claude']]);
+  expect(screen.getByText(/Claude Code 自身的 Anthropic 账号登录/)).toBeInTheDocument();
+});
+
 test('editing hands the whole profile back, so the form can prefill', () => {
   stubStoreActions(['activateProfile']);
   const edited: ProfilePublic[] = [];

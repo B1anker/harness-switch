@@ -1,4 +1,4 @@
-import type { HarnessId, ProfilePublic } from '@seaveyon/harness-switch-shared';
+import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
 import { HarnessCard } from '@/components/harness-card';
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 type Editing = {
@@ -27,7 +28,9 @@ export function DashboardPage() {
   const logout = useAppStore((state) => state.logout);
   const clearNotice = useAppStore((state) => state.clearNotice);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
+  const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
 
   return (
     <div className="min-h-svh">
@@ -66,15 +69,25 @@ export function DashboardPage() {
             </CardHeader>
           </Card>
         </section>
-        <section className="grid gap-4 md:grid-cols-2">
-          {harnesses.map((harness) => (
-            <HarnessCard
-              key={harness.id}
-              harness={harness}
-              onAdd={() => setEditing({ harnessId: harness.id, profile: null })}
-              onEdit={(profile) => setEditing({ harnessId: harness.id, profile })}
-            />
-          ))}
+        <section className="space-y-4">
+          <HarnessTabs
+            harnesses={harnesses}
+            value={selectedHarness?.id}
+            onChange={setSelectedHarnessId}
+          />
+          {selectedHarness ? (
+            <div
+              role="tabpanel"
+              id={`harness-panel-${selectedHarness.id}`}
+              aria-labelledby={`harness-tab-${selectedHarness.id}`}
+            >
+              <HarnessCard
+                harness={selectedHarness}
+                onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
+                onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
+              />
+            </div>
+          ) : null}
         </section>
         <BackupPanel />
         <Card>
@@ -116,4 +129,92 @@ export function DashboardPage() {
       </Dialog>
     </div>
   );
+}
+
+function HarnessTabs({
+  harnesses,
+  value,
+  onChange,
+}: {
+  harnesses: HarnessSummary[];
+  value: HarnessId | undefined;
+  onChange: (id: HarnessId) => void;
+}) {
+  function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+      return;
+    }
+    event.preventDefault();
+    const offset = event.key === 'ArrowRight' ? 1 : -1;
+    const nextIndex = (index + offset + harnesses.length) % harnesses.length;
+    const next = harnesses[nextIndex];
+    if (next) {
+      onChange(next.id);
+      const tabs =
+        event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+      tabs?.[nextIndex]?.focus();
+    }
+  }
+
+  return (
+    <div
+      role="tablist"
+      aria-label="切换 Harness"
+      className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/50 p-1.5 md:grid-cols-5"
+    >
+      {harnesses.map((harness, index) => {
+        const selected = harness.id === value;
+        return (
+          <button
+            key={harness.id}
+            type="button"
+            role="tab"
+            id={`harness-tab-${harness.id}`}
+            aria-controls={`harness-panel-${harness.id}`}
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            onClick={() => onChange(harness.id)}
+            onKeyDown={(event) => onKeyDown(event, index)}
+            className={cn(
+              'group flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-[color,background-color,box-shadow,transform] hover:bg-background/70 active:translate-y-px',
+              selected
+                ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <span
+              className={cn(
+                'flex size-8 shrink-0 items-center justify-center rounded-md border bg-background font-mono text-[11px] font-bold uppercase transition-colors',
+                selected && 'border-primary/30 bg-primary text-primary-foreground',
+              )}
+            >
+              {tabMark(harness.id)}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-current">
+                {harness.label}
+              </span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {harness.active ? `当前：${harness.active.name}` : '当前：未激活'}
+              </span>
+            </span>
+            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-secondary-foreground">
+              {harness.profiles.length}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function tabMark(id: HarnessId): string {
+  const marks: Record<HarnessId, string> = {
+    claude: 'CL',
+    codex: 'CX',
+    kimi: 'KM',
+    pi: 'PI',
+    dsh: 'DS',
+  };
+  return marks[id];
 }

@@ -20,6 +20,13 @@ const SETTINGS = 'settings';
 const BASE_URL_VAR = 'ANTHROPIC_BASE_URL';
 const MODEL_VAR = 'ANTHROPIC_MODEL';
 const AUTH_VARS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY'] as const;
+const MODEL_MAPPINGS = [
+  ['haikuModel', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'],
+  ['sonnetModel', 'ANTHROPIC_DEFAULT_SONNET_MODEL'],
+  ['opusModel', 'ANTHROPIC_DEFAULT_OPUS_MODEL'],
+  ['fableModel', 'ANTHROPIC_DEFAULT_FABLE_MODEL'],
+  ['subagentModel', 'CLAUDE_CODE_SUBAGENT_MODEL'],
+] as const;
 
 /**
  * Claude Code reads the `env` block of settings.json itself, so a switch takes effect
@@ -30,7 +37,12 @@ const AUTH_VARS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY'] as const;
 export class ClaudeAdapter implements HarnessAdapter {
   readonly id = 'claude' as const;
   readonly mode: HarnessMode = 'replace';
-  readonly envVarNames = [BASE_URL_VAR, ...AUTH_VARS, MODEL_VAR];
+  readonly envVarNames = [
+    BASE_URL_VAR,
+    ...AUTH_VARS,
+    MODEL_VAR,
+    ...MODEL_MAPPINGS.map(([, envVar]) => envVar),
+  ];
 
   readonly fields: FieldSpec[] = [
     {
@@ -43,6 +55,41 @@ export class ClaudeAdapter implements HarnessAdapter {
         { value: 'ANTHROPIC_AUTH_TOKEN', label: 'ANTHROPIC_AUTH_TOKEN（第三方中转）' },
         { value: 'ANTHROPIC_API_KEY', label: 'ANTHROPIC_API_KEY（官方）' },
       ],
+    },
+    {
+      key: 'haikuModel',
+      label: 'Haiku 模型映射',
+      kind: 'text',
+      placeholder: '例如：glm-5-air',
+      help: '写入 ANTHROPIC_DEFAULT_HAIKU_MODEL；留空使用回退模型或 Claude Code 默认值。',
+    },
+    {
+      key: 'sonnetModel',
+      label: 'Sonnet 模型映射',
+      kind: 'text',
+      placeholder: '例如：glm-5',
+      help: '写入 ANTHROPIC_DEFAULT_SONNET_MODEL。',
+    },
+    {
+      key: 'opusModel',
+      label: 'Opus 模型映射',
+      kind: 'text',
+      placeholder: '例如：glm-5',
+      help: '写入 ANTHROPIC_DEFAULT_OPUS_MODEL。',
+    },
+    {
+      key: 'fableModel',
+      label: 'Fable 模型映射（可选）',
+      kind: 'text',
+      placeholder: '例如：glm-5',
+      help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL；用于支持 Fable 档位的新版 Claude Code。',
+    },
+    {
+      key: 'subagentModel',
+      label: '子代理模型（可选）',
+      kind: 'text',
+      placeholder: '例如：glm-5-air',
+      help: '写入 CLAUDE_CODE_SUBAGENT_MODEL，可让子代理使用更快或成本更低的模型。',
     },
     {
       key: 'extraEnv',
@@ -72,6 +119,11 @@ export class ClaudeAdapter implements HarnessAdapter {
     if (profile.model) {
       vars[MODEL_VAR] = profile.model;
     }
+    for (const [field, envVar] of MODEL_MAPPINGS) {
+      if (profile.extras[field]) {
+        vars[envVar] = profile.extras[field];
+      }
+    }
     return vars;
   }
 
@@ -95,10 +147,39 @@ export class ClaudeAdapter implements HarnessAdapter {
       delete env[MODEL_VAR];
     }
 
+    for (const [field, envVar] of MODEL_MAPPINGS) {
+      const value = profile.extras[field]?.trim();
+      if (value) {
+        env[envVar] = value;
+      } else {
+        delete env[envVar];
+      }
+    }
+
     for (const [key, value] of parseEnvLines(profile.extras.extraEnv)) {
       env[key] = value;
     }
 
+    return { [SETTINGS]: stringifyJson(settings) };
+  }
+
+  renderOfficial(profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles {
+    const settings = parseJsonObject(current[SETTINGS]);
+    const env = ensureObject(settings, 'env');
+    delete env[BASE_URL_VAR];
+    delete env[MODEL_VAR];
+    for (const authVar of AUTH_VARS) {
+      delete env[authVar];
+    }
+    for (const [, envVar] of MODEL_MAPPINGS) {
+      delete env[envVar];
+    }
+    for (const [key] of parseEnvLines(profile?.extras.extraEnv)) {
+      delete env[key];
+    }
+    if (Object.keys(env).length === 0) {
+      delete settings.env;
+    }
     return { [SETTINGS]: stringifyJson(settings) };
   }
 
@@ -111,6 +192,12 @@ export class ClaudeAdapter implements HarnessAdapter {
       baseUrl: readString(env, BASE_URL_VAR) || profile.baseUrl,
       model: readString(env, MODEL_VAR),
       apiKey: apiKey || profile.apiKey,
+      extras: {
+        ...profile.extras,
+        ...Object.fromEntries(
+          MODEL_MAPPINGS.map(([field, envVar]) => [field, readString(env, envVar)]),
+        ),
+      },
     };
   }
 

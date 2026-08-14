@@ -3,6 +3,7 @@ import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
 import { ClaudeAdapter } from '../src/services/adapters/claude';
 import { CodexAdapter } from '../src/services/adapters/codex';
+import { DshAdapter } from '../src/services/adapters/dsh';
 import { KimiAdapter } from '../src/services/adapters/kimi';
 import { PiAdapter } from '../src/services/adapters/pi';
 import type { AdapterProfile } from '../src/services/adapters/types';
@@ -14,6 +15,7 @@ const environment = {
     codex: '/home/tester/.codex',
     kimiCode: '/home/tester/.kimi-code',
     piAgent: '/home/tester/.omp/agent',
+    dsh: '/home/tester/.dsh',
   },
 } as IEnvironmentService;
 
@@ -82,6 +84,35 @@ describe('claude adapter', () => {
     expect(settings.env.ANTHROPIC_MODEL).toBeUndefined();
   });
 
+  test('writes each Claude model tier independently and clears stale mappings', () => {
+    const adapter = new ClaudeAdapter(environment);
+    const current = JSON.stringify({
+      env: {
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'stale-haiku',
+        ANTHROPIC_DEFAULT_FABLE_MODEL: 'stale-fable',
+      },
+    });
+    const settings = JSON.parse(
+      adapter.render(
+        profile({
+          extras: {
+            haikuModel: 'fast-model',
+            sonnetModel: 'balanced-model',
+            opusModel: 'strong-model',
+            subagentModel: 'cheap-model',
+          },
+        }),
+        { settings: current },
+      ).settings,
+    );
+
+    expect(settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('fast-model');
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('balanced-model');
+    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('strong-model');
+    expect(settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBeUndefined();
+    expect(settings.env.CLAUDE_CODE_SUBAGENT_MODEL).toBe('cheap-model');
+  });
+
   test('merges extra env lines and ignores comments', () => {
     const adapter = new ClaudeAdapter(environment);
     const extras = { extraEnv: '# comment\nAPI_TIMEOUT_MS=3000000\n\nbroken-line\n' };
@@ -99,7 +130,36 @@ describe('claude adapter', () => {
       baseUrl: 'https://edited',
       model: '',
       apiKey: 'sk-edited',
+      extras: {
+        haikuModel: '',
+        sonnetModel: '',
+        opusModel: '',
+        fableModel: '',
+        subagentModel: '',
+      },
     });
+  });
+
+  test('returns to official login without removing unrelated Claude settings', () => {
+    const adapter = new ClaudeAdapter(environment);
+    const current = JSON.stringify({
+      permissions: { allow: ['Bash'] },
+      env: {
+        ANTHROPIC_BASE_URL: 'https://relay.example.com',
+        ANTHROPIC_AUTH_TOKEN: 'sk-third-party',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'relay-model',
+        API_TIMEOUT_MS: '3000000',
+        UNRELATED: 'keep',
+      },
+    });
+    const rendered = adapter.renderOfficial(
+      profile({ extras: { extraEnv: 'API_TIMEOUT_MS=3000000' } }),
+      { settings: current },
+    );
+    const settings = JSON.parse(rendered.settings);
+
+    expect(settings.permissions).toEqual({ allow: ['Bash'] });
+    expect(settings.env).toEqual({ UNRELATED: 'keep' });
   });
 });
 
@@ -158,6 +218,71 @@ describe('codex adapter', () => {
       const config = parseToml(rendered.config) as CodexConfig;
       expect(config.model_provider).toBe(`${reserved}-hsw`);
     }
+  });
+
+  test('returns to official login while preserving OAuth material and other providers', () => {
+    const adapter = new CodexAdapter(environment);
+    const current = {
+      config:
+        'model = "third-party-model"\nmodel_provider = "glm-main"\n[model_providers.glm-main]\nbase_url = "https://relay"\n[model_providers.keep]\nbase_url = "https://keep"\n',
+      auth: '{"tokens":{"access_token":"official"},"OPENAI_API_KEY":"sk-third-party"}',
+    };
+    const rendered = adapter.renderOfficial(
+      profile({ extras: { authMode: 'openai_auth' } }),
+      current,
+    );
+    const config = parseToml(rendered.config) as CodexConfig;
+    const auth = JSON.parse(rendered.auth);
+
+    expect(config.model).toBeUndefined();
+    expect(config.model_provider).toBeUndefined();
+    expect(config.model_providers?.['glm-main']).toBeUndefined();
+    expect(config.model_providers?.keep?.base_url).toBe('https://keep');
+    expect(auth.tokens.access_token).toBe('official');
+    expect(auth.OPENAI_API_KEY).toBeUndefined();
+  });
+
+  test('official login also removes a drifted model_provider that is not the previous profile', () => {
+    const adapter = new CodexAdapter(environment);
+    const current = {
+      config: [
+        'model_provider = "third-party"',
+        '[model_providers.via-env]',
+        'base_url = "https://openrouter.ai/api/v1"',
+        '[model_providers.third-party]',
+        'base_url = "https://openrouter.ai/api/v1"',
+        'requires_openai_auth = true',
+        '[model_providers.keep]',
+        'base_url = "https://keep"',
+        '',
+      ].join('\n'),
+    };
+    // Previous profile was via-env, but the pointer drifted to an orphan provider.
+    const rendered = adapter.renderOfficial(profile({ name: 'via-env' }), current);
+    const config = parseToml(rendered.config) as CodexConfig;
+
+    expect(config.model_provider).toBeUndefined();
+    expect(config.model_providers?.['via-env']).toBeUndefined();
+    expect(config.model_providers?.['third-party']).toBeUndefined();
+    expect(config.model_providers?.keep?.base_url).toBe('https://keep');
+  });
+
+  test('reconciling official login with no previous profile still clears the active provider', () => {
+    const adapter = new CodexAdapter(environment);
+    const current = {
+      config: [
+        'model_provider = "third-party"',
+        '[model_providers.third-party]',
+        'base_url = "https://openrouter.ai/api/v1"',
+        'requires_openai_auth = true',
+        '',
+      ].join('\n'),
+    };
+    const rendered = adapter.renderOfficial(undefined, current);
+    const config = parseToml(rendered.config) as CodexConfig;
+
+    expect(config.model_provider).toBeUndefined();
+    expect(config.model_providers).toBeUndefined();
   });
 });
 
@@ -285,6 +410,115 @@ describe('pi adapter', () => {
     expect(parsed.providers['glm-main']).toBeUndefined();
     expect(parsed.providers.other).toBeDefined();
     expect(parseYaml(rendered.config).modelProviderOrder).toEqual(['other']);
+  });
+});
+
+describe('dsh adapter', () => {
+  const settings = [
+    '# keep this comment',
+    'ui-theme:',
+    '  theme: dark',
+    'llm-pi-ai:',
+    '  providers:',
+    '    other:',
+    '      baseURL: https://other.example/v1',
+    '',
+  ].join('\n');
+
+  test('registers and selects a route while keeping unrelated settings', () => {
+    const adapter = new DshAdapter(environment);
+    const rendered = adapter.render(
+      profile({
+        name: 'CLIProxy Main',
+        baseUrl: 'https://api.seavey.ai/cliproxy/v1',
+        model: 'gpt-5.6-sol',
+        extras: { api: 'openai-responses', contextWindow: '262144', maxTokens: '32768' },
+      }),
+      { settings, credentials: 'OTHER_API_KEY: keep\n' },
+    );
+
+    expect(rendered.settings).toContain('# keep this comment');
+    const parsedSettings = parseYaml(rendered.settings);
+    const route = parsedSettings['llm-pi-ai'].providers['cliproxy-main'];
+    expect(parsedSettings['ui-theme'].theme).toBe('dark');
+    expect(parsedSettings['llm-pi-ai'].providers.other).toBeDefined();
+    expect(parsedSettings['agent-default-model']).toEqual({
+      provider: 'cliproxy-main',
+      model: 'gpt-5.6-sol',
+    });
+    expect(route.apiKeyEnv).toBe('CLIPROXY_MAIN_API_KEY');
+    expect(route.api).toBe('openai-responses');
+    expect(route.baseURL).toBe('https://api.seavey.ai/cliproxy/v1');
+    expect(route.models[0]).toEqual({
+      id: 'gpt-5.6-sol',
+      name: 'gpt-5.6-sol',
+      contextWindow: 262144,
+      maxTokens: 32768,
+    });
+
+    expect(parseYaml(rendered.credentials)).toEqual({
+      OTHER_API_KEY: 'keep',
+      CLIPROXY_MAIN_API_KEY: 'sk-new',
+    });
+  });
+
+  test('revokes only the managed route and credential', () => {
+    const adapter = new DshAdapter(environment);
+    const selected = adapter.render(profile(), {
+      settings,
+      credentials: 'OTHER_API_KEY: keep\n',
+    });
+    const rendered = adapter.revoke(profile(), selected);
+    const parsedSettings = parseYaml(rendered.settings);
+
+    expect(parsedSettings['llm-pi-ai'].providers['glm-main']).toBeUndefined();
+    expect(parsedSettings['llm-pi-ai'].providers.other).toBeDefined();
+    expect(parsedSettings['agent-default-model']).toBeUndefined();
+    expect(parseYaml(rendered.credentials)).toEqual({ OTHER_API_KEY: 'keep' });
+  });
+
+  test('recovers hand edits from both DSH documents', () => {
+    const adapter = new DshAdapter(environment);
+    const rendered = adapter.render(profile(), {});
+    const edited = parseYaml(rendered.settings);
+    edited['llm-pi-ai'].providers['glm-main'].baseURL = 'https://edited.example/v1';
+    edited['llm-pi-ai'].providers['glm-main'].models[0].id = 'edited-model';
+    edited['llm-pi-ai'].providers['glm-main'].models[0].contextWindow = 128000;
+
+    expect(
+      adapter.backfill(profile(), {
+        settings: `${JSON.stringify(edited)}\n`,
+        credentials: 'GLM_MAIN_API_KEY: sk-edited\n',
+      }),
+    ).toMatchObject({
+      baseUrl: 'https://edited.example/v1',
+      apiKey: 'sk-edited',
+      model: 'edited-model',
+      extras: { contextWindow: '128000' },
+    });
+  });
+
+  test('rejects an empty model or key', () => {
+    const adapter = new DshAdapter(environment);
+    expect(() => adapter.render(profile({ model: '' }), {})).toThrow(/模型名称/);
+    expect(() => adapter.render(profile({ apiKey: '' }), {})).toThrow(/API key/);
+  });
+
+  test('declares selectable reasoning efforts for hand-written models', () => {
+    const adapter = new DshAdapter(environment);
+    const rendered = adapter.render(
+      profile({ extras: { reasoningEfforts: 'low,medium,high,xhigh,max' } }),
+      {},
+    );
+    const model = parseYaml(rendered.settings)['llm-pi-ai'].providers['glm-main'].models[0];
+
+    expect(model.reasoningEfforts).toEqual({
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+      xhigh: 'xhigh',
+      max: 'max',
+    });
   });
 });
 

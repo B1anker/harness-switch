@@ -4,6 +4,7 @@ import { createDecorator, inject } from '../../di';
 import { IEnvironmentService } from '../environment';
 import { ClaudeAdapter } from './claude';
 import { CodexAdapter } from './codex';
+import { DshAdapter } from './dsh';
 import { KimiAdapter } from './kimi';
 import { PiAdapter } from './pi';
 import type { HarnessAdapter } from './types';
@@ -36,6 +37,7 @@ export class AdapterRegistry implements IAdapterRegistry {
       new CodexAdapter(environment),
       new KimiAdapter(environment),
       new PiAdapter(environment),
+      new DshAdapter(environment),
     ];
     this.adapters = new Map(adapters.map((adapter) => [adapter.id, adapter]));
   }

@@ -26,4 +26,13 @@ export const PRESETS: Record<HarnessId, Preset[]> = {
   codex: OPENAI_COMPATIBLE,
   kimi: OPENAI_COMPATIBLE,
   pi: OPENAI_COMPATIBLE,
+  dsh: [
+    {
+      label: 'CLIProxy（Responses）',
+      baseUrl: 'https://api.seavey.ai/cliproxy/v1',
+      model: 'gpt-5.6-sol',
+      extras: { api: 'openai-responses', reasoningEfforts: 'low,medium,high,xhigh,max' },
+    },
+    ...OPENAI_COMPATIBLE,
+  ],
 };
