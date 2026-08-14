@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/B1anker/harness-switch/compare/v0.3.0...v0.4.0) (2026-08-14)
+
+
+### Features
+
+* add DeepSeek Harness support ([fd6b4bb](https://github.com/B1anker/harness-switch/commit/fd6b4bbd54b493b7b333b7ee6f692798cad9a536))
+
 # [0.3.0](https://github.com/B1anker/harness-switch/compare/v0.2.0...v0.3.0) (2026-08-14)
 
 
