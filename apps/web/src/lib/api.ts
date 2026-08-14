@@ -18,6 +18,10 @@ export function profilePath(harnessId: HarnessId | string, name: string): string
   return `${profilesCollectionPath(harnessId)}/${encodeURIComponent(name)}`;
 }
 
+export function backupsPath(id?: string): string {
+  return id ? `/api/backups/${encodeURIComponent(id)}` : '/api/backups';
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has('Content-Type')) {

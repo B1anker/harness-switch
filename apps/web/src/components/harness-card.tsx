@@ -1,5 +1,5 @@
-import type { HarnessSummary } from '@seaveyon/harness-switch-shared';
-import { Plus, Trash2 } from 'lucide-react';
+import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -20,9 +20,10 @@ import { useAppStore } from '@/stores/app-store';
 type HarnessCardProps = {
   harness: HarnessSummary;
   onAdd: () => void;
+  onEdit: (profile: ProfilePublic) => void;
 };
 
-export function HarnessCard({ harness, onAdd }: HarnessCardProps) {
+export function HarnessCard({ harness, onAdd, onEdit }: HarnessCardProps) {
   const activateProfile = useAppStore((state) => state.activateProfile);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
@@ -56,6 +57,9 @@ export function HarnessCard({ harness, onAdd }: HarnessCardProps) {
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{profile.name}</p>
                       {active ? <Badge variant="secondary">已激活</Badge> : null}
+                      {profile.overriddenTargets.length > 0 ? (
+                        <Badge variant="outline">手动接管</Badge>
+                      ) : null}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">{profile.baseUrl}</p>
                     {profile.model ? (
@@ -73,9 +77,20 @@ export function HarnessCard({ harness, onAdd }: HarnessCardProps) {
                     <Button
                       size="icon"
                       variant="ghost"
+                      aria-label={`编辑 ${profile.name}`}
+                      onClick={() => onEdit(profile)}
+                    >
+                      <Pencil />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={`删除 ${profile.name}`}
+                      disabled={active}
+                      title={active ? '先激活另一个配置，才能删除当前配置' : undefined}
                       onClick={() => setPendingName(profile.name)}
                     >
-                      <Trash2 className="text-destructive" />
+                      <Trash2 className={active ? undefined : 'text-destructive'} />
                     </Button>
                   </div>
                 </div>
@@ -92,7 +107,9 @@ export function HarnessCard({ harness, onAdd }: HarnessCardProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>删除配置？</AlertDialogTitle>
             <AlertDialogDescription>
-              将删除 {harness.label} / {pendingName}。此操作不可撤销。
+              将删除 {harness.label} / {pendingName}。
+              {harness.mode === 'additive' ? '它在配置文件里的 provider 条目也会被一并摘掉。' : ''}
+              此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

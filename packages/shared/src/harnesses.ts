@@ -1,13 +1,12 @@
-export const HARNESS_IDS = ['claude', 'pi', 'codex', 'zcode', 'kimi'] as const;
+export const HARNESS_IDS = ['claude', 'codex', 'kimi', 'pi'] as const;
 
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 export const HARNESS_LABELS: Record<HarnessId, string> = {
   claude: 'Claude Code',
-  pi: 'pi',
   codex: 'Codex',
-  zcode: 'zcode',
   kimi: 'Kimi Code',
+  pi: 'oh-my-pi',
 };
 
 export function isHarnessId(value: string): value is HarnessId {

@@ -11,7 +11,7 @@ export function createAuthRoutes(services: InstantiationService): Hono {
   const environment = services.get(IEnvironmentService);
 
   app.post('/login', async (c) => {
-    const body = await c.req.json<{ password?: string }>().catch(() => ({}));
+    const body: { password?: string } = await c.req.json<{ password?: string }>().catch(() => ({}));
     const token = auth.login(String(body.password ?? ''));
     if (!token) {
       throw new HttpError(401, 'invalid password');

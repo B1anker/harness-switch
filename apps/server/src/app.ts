@@ -6,6 +6,7 @@ import { HttpError } from './common/errors';
 import type { InstantiationService } from './di';
 import { createAuthGuard, createOriginGuard, createServiceMiddleware } from './http/middleware';
 import { createAuthRoutes } from './http/routes/auth';
+import { createBackupRoutes } from './http/routes/backups';
 import { createHarnessRoutes } from './http/routes/harnesses';
 import { IEnvironmentService } from './services/environment';
 import { ILogService } from './services/log';
@@ -25,6 +26,9 @@ export function createApp(services: InstantiationService): Hono {
   api.use('/harnesses/*', createAuthGuard(services));
   api.use('/harnesses', createAuthGuard(services));
   api.route('/harnesses', createHarnessRoutes(services));
+  api.use('/backups/*', createAuthGuard(services));
+  api.use('/backups', createAuthGuard(services));
+  api.route('/backups', createBackupRoutes(services));
   app.route('/api', api);
 
   const publicDir = environment.publicDir;

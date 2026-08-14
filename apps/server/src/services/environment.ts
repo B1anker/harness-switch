@@ -19,6 +19,15 @@ export interface IEnvironmentService {
     key: string;
     env: string;
   };
+  readonly backupsDir: string;
+  readonly backupRetainCount: number;
+  /** Config roots of the managed harnesses, honouring each tool's own override var. */
+  readonly harnessHomes: {
+    claude: string;
+    codex: string;
+    kimiCode: string;
+    piAgent: string;
+  };
   ensureDataDir(): void;
 }
 
@@ -40,6 +49,14 @@ export class EnvironmentService implements IEnvironmentService {
     password: join(this.dataDir, 'web_password'),
     key: join(this.dataDir, 'aes-256-gcm.key'),
     env: join(this.dataDir, 'env.sh'),
+  };
+  readonly backupsDir = join(this.dataDir, 'backups');
+  readonly backupRetainCount = Math.max(1, Number(process.env.HSW_BACKUP_RETAIN || 10));
+  readonly harnessHomes = {
+    claude: join(this.homeDir, '.claude'),
+    codex: process.env.CODEX_HOME || join(this.homeDir, '.codex'),
+    kimiCode: process.env.KIMI_CODE_HOME || join(this.homeDir, '.kimi-code'),
+    piAgent: process.env.PI_CODING_AGENT_DIR || join(this.homeDir, '.omp', 'agent'),
   };
 
   ensureDataDir(): void {

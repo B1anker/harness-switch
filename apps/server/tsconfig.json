@@ -6,7 +6,7 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "types": ["bun"],
-    "lib": ["ES2022"]
+    "lib": ["ES2023"]
   },
   "include": ["src", "test"]
 }

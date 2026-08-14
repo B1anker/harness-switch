@@ -1,5 +1,6 @@
-import type { HarnessId } from '@seaveyon/harness-switch-shared';
+import type { HarnessId, ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { useState } from 'react';
+import { BackupPanel } from '@/components/backup-panel';
 import { HarnessCard } from '@/components/harness-card';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { Button } from '@/components/ui/button';
@@ -14,14 +15,19 @@ import {
 } from '@/components/ui/dialog';
 import { useAppStore } from '@/stores/app-store';
 
+type Editing = {
+  harnessId: HarnessId;
+  profile: ProfilePublic | null;
+};
+
 export function DashboardPage() {
   const harnesses = useAppStore((state) => state.harnesses);
   const envFile = useAppStore((state) => state.envFile);
   const notice = useAppStore((state) => state.notice);
   const logout = useAppStore((state) => state.logout);
   const clearNotice = useAppStore((state) => state.clearNotice);
-  const [creating, setCreating] = useState<HarnessId | null>(null);
-  const creatingLabel = harnesses.find((item) => item.id === creating)?.label ?? '';
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
 
   return (
     <div className="min-h-svh">
@@ -46,50 +52,61 @@ export function DashboardPage() {
               把 API 路由切换变成一个动作。
             </h2>
             <p className="max-w-2xl text-muted-foreground">
-              配置档案按 harness 独立管理。激活后会更新相应配置，并生成可在 SSH shell 中 source
-              的环境文件。
+              激活时直接写入各工具自己的配置文件，因此常驻进程 spawn 出来的 CLI
+              也能拿到新配置，不依赖你在某个 shell 里 source 过什么。
             </p>
           </div>
           <Card>
             <CardHeader>
               <CardTitle>安全提示</CardTitle>
               <CardDescription>
-                API key 仅在服务器本地加密保存，列表和页面不会回显明文。
+                API key
+                在服务器本地加密保存，列表不会回显明文；写入原生配置文件时会保留文件原有权限。
               </CardDescription>
             </CardHeader>
           </Card>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           {harnesses.map((harness) => (
-            <HarnessCard key={harness.id} harness={harness} onAdd={() => setCreating(harness.id)} />
+            <HarnessCard
+              key={harness.id}
+              harness={harness}
+              onAdd={() => setEditing({ harnessId: harness.id, profile: null })}
+              onEdit={(profile) => setEditing({ harnessId: harness.id, profile })}
+            />
           ))}
         </section>
+        <BackupPanel />
         <Card>
           <CardHeader>
-            <CardTitle>Shell 使用方式</CardTitle>
-            <CardDescription>激活后，在运行 harness 的同一个 shell 执行：</CardDescription>
+            <CardTitle>环境文件（兼容层）</CardTitle>
+            <CardDescription>
+              切换本身不需要它。只有 Codex 选择「环境变量」认证方式时才需要在对应 shell 执行：
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <code className="block rounded-md border bg-muted px-3 py-2 text-sm">
               source {envFile || '~/.harness-switch/env.sh'}
             </code>
             <p className="text-sm text-muted-foreground">
-              Claude Code 与 Kimi Code 会额外写入各自的原生配置文件；pi、Codex、zcode
-              使用统一环境文件，避免覆盖你现有的复杂配置。
+              文件里只会写入对应工具确实认识的变量。Kimi Code 与 oh-my-pi 不从 shell
+              读取凭据，所以它们只有一行注释。
             </p>
           </CardContent>
         </Card>
       </main>
-      <ProfileDialog
-        open={creating !== null}
-        harnessId={creating}
-        harnessLabel={creatingLabel}
-        onOpenChange={(open) => !open && setCreating(null)}
-      />
+      {editing && editingHarness ? (
+        <ProfileDialog
+          key={`${editing.harnessId}-${editing.profile?.name ?? 'new'}`}
+          harness={editingHarness}
+          profile={editing.profile}
+          onOpenChange={(open) => !open && setEditing(null)}
+        />
+      ) : null}
       <Dialog open={notice !== null} onOpenChange={(open) => !open && clearNotice()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>激活成功</DialogTitle>
+            <DialogTitle>操作完成</DialogTitle>
             <DialogDescription className="whitespace-pre-wrap">{notice}</DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -1,13 +1,17 @@
 import type {
   ActivateResponse,
+  BackupEntry,
+  BackupsResponse,
   CreateProfileRequest,
   HarnessesResponse,
   HarnessId,
   HarnessSummary,
+  PreviewResponse,
+  PreviewTarget,
   UpdateProfileRequest,
 } from '@seaveyon/harness-switch-shared';
 import { create } from 'zustand';
-import { ApiError, api, profilePath, profilesCollectionPath } from '@/lib/api';
+import { ApiError, api, backupsPath, profilePath, profilesCollectionPath } from '@/lib/api';
 
 type AppState = {
   sessionChecked: boolean;
@@ -16,6 +20,7 @@ type AppState = {
   error: string | null;
   envFile: string;
   harnesses: HarnessSummary[];
+  backups: BackupEntry[];
   notice: string | null;
   loadSession: () => Promise<void>;
   login: (password: string) => Promise<void>;
@@ -25,6 +30,9 @@ type AppState = {
   updateProfile: (harnessId: HarnessId, name: string, input: UpdateProfileRequest) => Promise<void>;
   deleteProfile: (harnessId: HarnessId, name: string) => Promise<void>;
   activateProfile: (harnessId: HarnessId, name: string) => Promise<void>;
+  previewProfile: (harnessId: HarnessId, name: string) => Promise<PreviewTarget[]>;
+  loadBackups: () => Promise<void>;
+  restoreBackup: (id: string) => Promise<void>;
   clearNotice: () => void;
 };
 
@@ -35,6 +43,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   error: null,
   envFile: '',
   harnesses: [],
+  backups: [],
   notice: null,
 
   loadSession: async () => {
@@ -68,7 +77,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   logout: async () => {
     await api('/api/auth/logout', { method: 'POST' });
-    set({ authenticated: false, harnesses: [], envFile: '' });
+    set({ authenticated: false, harnesses: [], backups: [], envFile: '' });
   },
 
   loadHarnesses: async () => {
@@ -110,7 +119,35 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await api<ActivateResponse>(`${profilePath(harnessId, name)}/activate`, {
       method: 'POST',
     });
-    set({ notice: `已激活。请在 SSH shell 执行：\nsource ${result.envFile}` });
+    const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
+    const lines = [
+      `${label} 已切换到「${name}」，原生配置文件已写入。`,
+      'Claude Code 会立即生效；Codex、Kimi Code、oh-my-pi 需要重新启动进程。',
+      ...result.warnings.map((warning) => `注意：${warning}`),
+    ];
+    set({ notice: lines.join('\n') });
+    await get().loadHarnesses();
+  },
+
+  previewProfile: async (harnessId, name) => {
+    const result = await api<PreviewResponse>(`${profilePath(harnessId, name)}/preview`);
+    return result.targets;
+  },
+
+  loadBackups: async () => {
+    try {
+      const data = await api<BackupsResponse>(backupsPath());
+      set({ backups: data.items });
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 401)) {
+        set({ error: (error as Error).message });
+      }
+    }
+  },
+
+  restoreBackup: async (id) => {
+    await api(`${backupsPath(id)}/restore`, { method: 'POST' });
+    set({ notice: '已把备份中的原始文件写回磁盘。' });
     await get().loadHarnesses();
   },
 

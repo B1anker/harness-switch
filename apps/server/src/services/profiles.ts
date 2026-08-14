@@ -1,6 +1,8 @@
 import type { HarnessId, ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
+import type { AdapterProfile } from './adapters';
+import { IAdapterRegistry } from './adapters';
 import { type EncryptedValue, ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
@@ -11,6 +13,13 @@ export type StoredProfile = {
   api_key: EncryptedValue;
   model: string;
   notes: string;
+  /** Harness-specific structured fields, as declared by the adapter's FieldSpec list. */
+  extras?: Record<string, string>;
+  /**
+   * Target key to verbatim file content. Present only for files the user took over in
+   * the advanced editor, which then win over anything the form fields would render.
+   */
+  overrides?: Record<string, string>;
   updated_at: string;
 };
 
@@ -22,13 +31,12 @@ export type ProfileInput = {
   apiKey?: string;
   model?: string;
   notes?: string;
+  extras?: Record<string, string>;
+  overrides?: Record<string, string>;
 };
 
-export type DecryptedProfile = {
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
+export type DecryptedProfile = AdapterProfile & {
+  overrides: Record<string, string>;
 };
 
 export interface IProfileService {
@@ -38,11 +46,13 @@ export interface IProfileService {
   upsert(harness: HarnessId, input: ProfileInput, isCreate: boolean): ProfilePublic;
   remove(harness: HarnessId, name: string): void;
   decrypt(harness: HarnessId, name: string): DecryptedProfile;
+  /** Used by the pre-switch backfill to persist values recovered from a live file. */
+  applyBackfill(harness: HarnessId, name: string, values: Partial<AdapterProfile>): void;
 }
 
 export const IProfileService = createDecorator<IProfileService>('profileService');
 
-@inject(IEnvironmentService, IFileService, ICryptoService, IHarnessRegistry)
+@inject(IEnvironmentService, IFileService, ICryptoService, IHarnessRegistry, IAdapterRegistry)
 export class ProfileService implements IProfileService {
   declare readonly _serviceBrand: undefined;
 
@@ -51,6 +61,7 @@ export class ProfileService implements IProfileService {
     private readonly files: IFileService,
     private readonly crypto: ICryptoService,
     private readonly harnesses: IHarnessRegistry,
+    private readonly adapters: IAdapterRegistry,
   ) {}
 
   list(harness: HarnessId): ProfilePublic[] {
@@ -82,15 +93,28 @@ export class ProfileService implements IProfileService {
     if (isCreate && !apiKey) {
       throw new HttpError(400, 'apiKey is required');
     }
-    store[harness][name] = {
+
+    const next: StoredProfile = {
       base_url: (input.baseUrl ?? prior?.base_url ?? '').trim(),
       api_key: this.crypto.encrypt(apiKey),
       model: (input.model ?? prior?.model ?? '').trim(),
       notes: input.notes ?? prior?.notes ?? '',
+      extras: input.extras ?? prior?.extras ?? {},
+      overrides: input.overrides ?? prior?.overrides ?? {},
       updated_at: new Date().toISOString(),
     };
+
+    this.adapters.get(harness).validate?.({
+      name,
+      baseUrl: next.base_url,
+      apiKey,
+      model: next.model,
+      extras: next.extras ?? {},
+    });
+
+    store[harness][name] = next;
     this.files.writeJson(this.environment.files.profiles, store);
-    return this.toPublic(harness, name, store[harness][name]);
+    return this.toPublic(harness, name, next);
   }
 
   remove(harness: HarnessId, name: string): void {
@@ -112,7 +136,32 @@ export class ProfileService implements IProfileService {
       baseUrl: stored.base_url || '',
       apiKey: this.crypto.decrypt(stored.api_key),
       model: stored.model || '',
+      extras: stored.extras ?? {},
+      overrides: stored.overrides ?? {},
     };
+  }
+
+  /**
+   * Only touches the three values a live file can carry. Anything we own, such as notes
+   * and the harness-specific fields, is left alone: overwriting those with values a live
+   * file cannot express would silently erase them on the next save.
+   */
+  applyBackfill(harness: HarnessId, name: string, values: Partial<AdapterProfile>): void {
+    const store = this.read();
+    const stored = store[harness]?.[name];
+    if (!stored) {
+      return;
+    }
+    if (values.baseUrl !== undefined) {
+      stored.base_url = values.baseUrl;
+    }
+    if (values.model !== undefined) {
+      stored.model = values.model;
+    }
+    if (values.apiKey) {
+      stored.api_key = this.crypto.encrypt(values.apiKey);
+    }
+    this.files.writeJson(this.environment.files.profiles, store);
   }
 
   private read(): ProfileStore {
@@ -126,6 +175,8 @@ export class ProfileService implements IProfileService {
       baseUrl: profile.base_url || '',
       model: profile.model || '',
       notes: profile.notes || '',
+      extras: profile.extras ?? {},
+      overriddenTargets: Object.keys(profile.overrides ?? {}),
       updatedAt: profile.updated_at || '',
     };
   }

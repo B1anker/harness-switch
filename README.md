@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/%40seaveyon%2Fharness-switch.svg)](https://www.npmjs.com/package/@seaveyon/harness-switch)
 
-**harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **pi**, **Codex**, **zcode**, and **Kimi Code**.
+**harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **Codex**, **Kimi Code**, and **oh-my-pi**.
 
 It is a configuration manager, not an API proxy: it does not route or inspect model traffic.
 
@@ -33,29 +33,58 @@ Then open <http://127.0.0.1:8787> in your local browser.
 
 ## Configuration
 
-Create one or more profiles per harness in the web UI. A profile contains a display name, API Base URL, API key, model, and notes. Select **Activate** to make a profile current.
+Create one or more profiles per harness in the web UI. A profile holds a display name, API Base URL, API key, model, notes, and whatever extra fields that harness needs. Select **Activate** to make a profile current.
 
-Every activation writes `~/.harness-switch/env.sh`. In the exact SSH shell that launches a harness, load it with:
+Activation writes each tool's own configuration file. Nothing depends on you having sourced a shell script, which is what makes it work for long-lived processes that spawn a CLI as a child.
+
+| Harness | File written | Write mode | Takes effect |
+|---|---|---|---|
+| Claude Code | `~/.claude/settings.json` (`env` block) | replace | Immediately; Claude Code re-reads the file and its `env` values win over inherited shell variables |
+| Codex | `$CODEX_HOME/config.toml`, plus `auth.json` only if you pick that auth mode | replace | Next `codex` start |
+| Kimi Code | `$KIMI_CODE_HOME/config.toml` (`~/.kimi-code`) | additive | Next `kimi` start |
+| oh-my-pi | `~/.omp/agent/models.yml` and `config.yml` | additive | Next `omp` start |
+
+**Replace mode** means the file holds exactly one provider, so activating replaces it. **Additive mode** means the file holds many providers plus a pointer to the current one, so activating only moves that pointer and leaves providers you wrote by hand alone.
+
+Notes on individual harnesses:
+
+- **Claude Code** defaults to `ANTHROPIC_AUTH_TOKEN`, which is what most third-party relays require. Switch the profile to `ANTHROPIC_API_KEY` for the official API.
+- **Codex** defaults to putting the token in `config.toml` as `experimental_bearer_token`. The alternative that writes `auth.json` will overwrite your ChatGPT login cache, so it is opt-in; the previous `auth.json` is captured in a backup first either way.
+- **Kimi Code** (`~/.kimi-code`) is a different product from Kimi CLI (`~/.kimi`), even though both provide a `kimi` command. This project targets Kimi Code, which does not read credentials from the shell at all.
+- **oh-my-pi** has no single "current provider" key. Activating registers the provider in `models.yml` and moves it to the front of `modelProviderOrder`, which is what breaks ties between providers offering the same model id. A `--model` flag still overrides it at runtime.
+
+`~/.harness-switch/env.sh` remains as a compatibility layer and only contains variables the corresponding tool genuinely honours. It is needed only when a Codex profile uses the environment-variable auth mode:
 
 ```bash
 source ~/.harness-switch/env.sh
 ```
 
-| Harness | Activation behaviour | Environment variables |
-|---|---|---|
-| Claude Code | Updates `~/.claude/settings.json` and the shared env file | `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` |
-| Codex | Writes the shared env file without overwriting complex native config | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `CODEX_MODEL` |
-| pi | Writes the shared env file without overwriting custom provider files | `PI_API_BASE`, `PI_API_KEY`, `PI_MODEL` |
-| zcode | Writes the shared env file; variable names are a portable bridge | `ZCODE_BASE_URL`, `ZCODE_API_KEY`, `ZCODE_MODEL` |
-| Kimi Code | Updates `~/.kimi/config.toml` and the shared env file | `KIMI_BASE_URL`, `KIMI_API_KEY`, `KIMI_MODEL` |
+Two known limitations:
 
-> The web UI changes files on the **server**; it cannot modify an existing parent shell or the browser computer. Source the generated file again after changing profiles, or use a new shell session.
+- Writing TOML goes through parse and re-serialize, so comments and layout in `config.toml` are lost. YAML and JSON keep their comments and key order.
+- The web UI changes files on the **server**. It cannot touch an already-running shell or your local machine.
+
+### Advanced: taking over the raw file
+
+Any field the form does not expose can be set by editing the raw file content in the profile's **高级：原始配置** section. Once edited, that file is generated from your text instead of the form fields until you select **恢复为自动生成**. Content that cannot be parsed back is rejected before it reaches disk.
+
+### Backups and rollback
+
+Before every write, the previous content of each target file is snapshotted into `~/.harness-switch/backups/`, keeping the most recent 10. The backup panel restores a snapshot verbatim, comments included. Snapshots never land next to the live file, because tools like Claude Code scan their own config directory.
+
+A write either lands completely or not at all: content is validated first, and a failure part way through restores the previous state, deleting files that did not exist before rather than leaving them empty.
+
+Switching away from a profile first reads the live file back into that profile's record, so edits you made directly in the CLI tool are not lost on the next switch.
 
 ## Security
 
 The service defaults to loopback only. Do **not** expose the management port directly to the public Internet. Use SSH port forwarding or a TLS-enabled reverse proxy with additional access control.
 
-API keys are encrypted with AES-256-GCM in `~/.harness-switch/profiles.json`; the local encryption key lives in `~/.harness-switch/aes-256-gcm.key`. Both files, the generated password, and `env.sh` are stored with permissions set to `0600` on POSIX systems. This protects against accidental plaintext disclosure in profile storage, but does not replace host-level controls such as disk encryption and a secure Unix account.
+API keys are encrypted with AES-256-GCM in `~/.harness-switch/profiles.json`; the local encryption key lives in `~/.harness-switch/aes-256-gcm.key`. Those files, the generated password, and `env.sh` are stored with permissions set to `0600` on POSIX systems. When writing a harness's own configuration file, existing permissions are preserved and newly created files start at `0600`.
+
+Two places deliberately expose a key to an authenticated session: the raw config preview and the generated files themselves must contain the credential to be useful. Profile listings never echo it.
+
+This protects against accidental plaintext disclosure in profile storage, but does not replace host-level controls such as disk encryption and a secure Unix account.
 
 ## Environment variables
 
@@ -63,9 +92,12 @@ API keys are encrypted with AES-256-GCM in `~/.harness-switch/profiles.json`; th
 |---|---:|---|
 | `HOST` | `127.0.0.1` | Bind address. Keep the default when using SSH tunnelling. |
 | `PORT` | `8787` | Listening port. |
-| `HSW_DATA_DIR` | `~/.harness-switch` | Directory for encrypted profiles, active state, key, password, and env file. |
-| `HSW_HOME_DIR` | `$HOME` | Home directory used when writing native Claude/Kimi configs. |
+| `HSW_DATA_DIR` | `~/.harness-switch` | Directory for encrypted profiles, active state, key, password, backups, and env file. |
+| `HSW_HOME_DIR` | `$HOME` | Home directory used to locate the harness config directories. |
+| `HSW_BACKUP_RETAIN` | `10` | Number of snapshots to keep. |
 | `HSW_PUBLIC_DIR` | auto | Optional override for the built frontend directory. |
+
+The tools' own overrides are honoured when locating their config: `CODEX_HOME`, `KIMI_CODE_HOME`, and `PI_CODING_AGENT_DIR`.
 
 ## HTTP API
 
@@ -77,12 +109,15 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `POST` | `/api/auth/login` | `{ "password": "..." }` |
 | `POST` | `/api/auth/logout` | Clears the session cookie |
 | `GET` | `/api/auth/session` | `401` when unauthenticated |
-| `GET` | `/api/harnesses` | Collection with nested profiles |
+| `GET` | `/api/harnesses` | Collection with nested profiles, form field specs, and live file paths |
 | `GET` | `/api/harnesses/:id` | One harness |
 | `POST` | `/api/harnesses/:id/profiles` | Create |
-| `PATCH` | `/api/harnesses/:id/profiles/:name` | Update; omit `apiKey` to keep the stored secret |
-| `DELETE` | `/api/harnesses/:id/profiles/:name` | Delete |
-| `POST` | `/api/harnesses/:id/profiles/:name/activate` | Activate and rewrite env/native config |
+| `PATCH` | `/api/harnesses/:id/profiles/:name` | Update; omit `apiKey` to keep the stored secret. Rewrites the live files when the profile is active |
+| `DELETE` | `/api/harnesses/:id/profiles/:name` | Delete; `409` for the active profile |
+| `GET` | `/api/harnesses/:id/profiles/:name/preview` | The exact content that would be written |
+| `POST` | `/api/harnesses/:id/profiles/:name/activate` | Write the native config, then commit the switch |
+| `GET` | `/api/backups` | Snapshots, newest first |
+| `POST` | `/api/backups/:id/restore` | Restore a snapshot verbatim |
 
 ## systemd
 
