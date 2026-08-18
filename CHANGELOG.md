@@ -1,3 +1,10 @@
+# [0.5.0](https://github.com/B1anker/harness-switch/compare/v0.4.0...v0.5.0) (2026-08-18)
+
+
+### Features
+
+* write official Pi configs and turn backups into config history ([f20a7c4](https://github.com/B1anker/harness-switch/commit/f20a7c47b2ebd6087c42efc1599f934c7b3b0077))
+
 # [0.4.0](https://github.com/B1anker/harness-switch/compare/v0.3.0...v0.4.0) (2026-08-14)
 
 
