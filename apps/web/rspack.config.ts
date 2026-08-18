@@ -62,6 +62,11 @@ export default defineConfig({
   devServer: {
     port: 5173,
     historyApiFallback: true,
+    // `bun run dev` serves the UI from :8787 (the port people actually open / tunnel).
+    // Write compiled assets to apps/server/public so that process sees each rebuild.
+    devMiddleware: {
+      writeToDisk: true,
+    },
     proxy: [
       {
         context: ['/api', '/healthz'],

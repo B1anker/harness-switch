@@ -2,7 +2,15 @@ import { join } from 'node:path';
 import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
-import { parseYamlDocument, slugify } from './serialize';
+import {
+  ensureObject,
+  isPlainObject,
+  type JsonObject,
+  parseJsonObject,
+  readString,
+  slugify,
+  stringifyJson,
+} from './serialize';
 import type {
   AdapterProfile,
   AdapterTarget,
@@ -12,24 +20,23 @@ import type {
 } from './types';
 
 const MODELS = 'models';
-const CONFIG = 'config';
+const SETTINGS = 'settings';
 const DEFAULT_CONTEXT = 200000;
 const DEFAULT_MAX_TOKENS = 8192;
 
 /**
- * oh-my-pi (command `omp`) declares custom providers in `models.yml`. Its `apiKey` field
- * is resolved as an environment variable name first and as a literal token second, so
- * writing the key itself keeps the profile self-contained.
+ * Pi (command `pi`) loads custom providers from `~/.pi/agent/models.json`. A model stays
+ * hidden until the provider has an `apiKey` (or auth.json / `--api-key`), which is why
+ * an empty auth.json produces "No models available" even after a profile is activated.
  *
- * There is no single "current provider" key; `modelProviderOrder` in `config.yml` breaks
- * ties between providers offering the same model id, earliest entry winning. Activating
- * therefore registers the provider and moves it to the front of that order.
+ * There is no provider-order list; `defaultProvider` / `defaultModel` in `settings.json`
+ * select the active route. `PI_CODING_AGENT_DIR` overrides the config directory.
  */
 export class PiAdapter implements HarnessAdapter {
   readonly id = 'pi' as const;
   readonly mode: HarnessMode = 'additive';
   readonly envVarNames: string[] = [];
-  readonly envNote = 'API key 直接写入 models.yml，无需环境变量；运行时仍可用 --model 覆盖。';
+  readonly envNote = 'API key 直接写入 models.json，无需环境变量；运行时仍可用 --model 覆盖。';
 
   readonly fields: FieldSpec[] = [
     {
@@ -47,6 +54,7 @@ export class PiAdapter implements HarnessAdapter {
       options: [
         { value: 'openai-completions', label: 'openai-completions' },
         { value: 'openai-responses', label: 'openai-responses' },
+        { value: 'anthropic-messages', label: 'anthropic-messages' },
       ],
     },
     {
@@ -72,6 +80,17 @@ export class PiAdapter implements HarnessAdapter {
       kind: 'text',
       defaultValue: String(DEFAULT_MAX_TOKENS),
     },
+    {
+      key: 'reasoning',
+      label: '推理能力',
+      kind: 'select',
+      defaultValue: 'false',
+      help: '对应 models.json 的 reasoning。GPT / Claude 思考模型需要开启。',
+      options: [
+        { value: 'false', label: '关闭' },
+        { value: 'true', label: '开启' },
+      ],
+    },
   ];
 
   constructor(private readonly environment: IEnvironmentService) {}
@@ -80,15 +99,15 @@ export class PiAdapter implements HarnessAdapter {
     return [
       {
         key: MODELS,
-        label: 'models.yml',
-        path: join(this.environment.harnessHomes.piAgent, 'models.yml'),
-        format: 'yaml',
+        label: 'models.json',
+        path: join(this.environment.harnessHomes.piAgent, 'models.json'),
+        format: 'json',
       },
       {
-        key: CONFIG,
-        label: 'config.yml',
-        path: join(this.environment.harnessHomes.piAgent, 'config.yml'),
-        format: 'yaml',
+        key: SETTINGS,
+        label: 'settings.json',
+        path: join(this.environment.harnessHomes.piAgent, 'settings.json'),
+        format: 'json',
       },
     ];
   }
@@ -99,39 +118,41 @@ export class PiAdapter implements HarnessAdapter {
 
   validate(profile: AdapterProfile): void {
     if (!profile.model.trim()) {
-      throw new HttpError(400, 'oh-my-pi 需要填写模型名称，否则无法生成 models 条目');
+      throw new HttpError(400, 'Pi 需要填写模型名称，否则无法生成 models 条目');
+    }
+    if (!profile.apiKey.trim()) {
+      throw new HttpError(400, 'Pi 需要填写 API key，否则模型不会出现在 /model 列表里');
     }
   }
 
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     this.validate(profile);
     const id = this.providerId(profile);
+    const models = parseJsonObject(current[MODELS]);
+    const provider = ensureObject(ensureObject(models, 'providers'), id);
+    const model: JsonObject = {
+      id: profile.model,
+      name: profile.model,
+      contextWindow: this.numeric(profile.extras.contextWindow, DEFAULT_CONTEXT),
+      maxTokens: this.numeric(profile.extras.maxTokens, DEFAULT_MAX_TOKENS),
+    };
+    if (profile.extras.reasoning === 'true') {
+      model.reasoning = true;
+    }
 
-    // The Document API is used instead of parse/stringify so the comments and layout in
-    // a hand-maintained models.yml survive the merge.
-    const models = parseYamlDocument(current[MODELS]);
-    models.setIn(['providers', id, 'baseUrl'], profile.baseUrl);
-    models.setIn(['providers', id, 'apiKey'], profile.apiKey);
-    models.setIn(['providers', id, 'api'], profile.extras.api || 'openai-completions');
-    models.setIn(['providers', id, 'authHeader'], profile.extras.authHeader !== 'false');
-    models.setIn(
-      ['providers', id, 'models'],
-      [
-        {
-          id: profile.model,
-          name: profile.model,
-          contextWindow: this.numeric(profile.extras.contextWindow, DEFAULT_CONTEXT),
-          maxTokens: this.numeric(profile.extras.maxTokens, DEFAULT_MAX_TOKENS),
-        },
-      ],
-    );
+    provider.baseUrl = profile.baseUrl;
+    provider.apiKey = profile.apiKey;
+    provider.api = profile.extras.api || 'openai-completions';
+    provider.authHeader = profile.extras.authHeader !== 'false';
+    provider.models = [model];
 
-    const config = parseYamlDocument(current[CONFIG]);
-    config.setIn(['modelProviderOrder'], this.promote(config.getIn(['modelProviderOrder']), id));
+    const settings = parseJsonObject(current[SETTINGS]);
+    settings.defaultProvider = id;
+    settings.defaultModel = profile.model;
 
     return {
-      [MODELS]: models.toString(),
-      [CONFIG]: config.toString(),
+      [MODELS]: stringifyJson(models),
+      [SETTINGS]: stringifyJson(settings),
     };
   }
 
@@ -139,30 +160,27 @@ export class PiAdapter implements HarnessAdapter {
     const id = this.providerId(profile);
     const rendered: RenderedFiles = {};
 
-    // A file that does not exist has nothing to revoke, and creating an empty one would
-    // be worse than leaving it absent.
     if (current[MODELS] !== undefined) {
       try {
-        const models = parseYamlDocument(current[MODELS]);
-        models.deleteIn(['providers', id]);
-        rendered[MODELS] = models.toString();
+        const models = parseJsonObject(current[MODELS]);
+        const providers = models.providers;
+        if (isPlainObject(providers)) {
+          delete providers[id];
+        }
+        rendered[MODELS] = stringifyJson(models);
       } catch {
-        // A models.yml we cannot parse is left untouched rather than clobbered.
+        // A models.json we cannot parse is left untouched rather than clobbered.
       }
     }
 
-    if (current[CONFIG] !== undefined) {
+    if (current[SETTINGS] !== undefined) {
       try {
-        const config = parseYamlDocument(current[CONFIG]);
-        const order = this.toStringArray(config.getIn(['modelProviderOrder'])).filter(
-          (entry) => entry !== id,
-        );
-        if (order.length > 0) {
-          config.setIn(['modelProviderOrder'], order);
-        } else {
-          config.deleteIn(['modelProviderOrder']);
+        const settings = parseJsonObject(current[SETTINGS]);
+        if (settings.defaultProvider === id) {
+          delete settings.defaultProvider;
+          delete settings.defaultModel;
         }
-        rendered[CONFIG] = config.toString();
+        rendered[SETTINGS] = stringifyJson(settings);
       } catch {
         // Same reasoning as above.
       }
@@ -173,13 +191,28 @@ export class PiAdapter implements HarnessAdapter {
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
     try {
-      const models = parseYamlDocument(current[MODELS]);
+      const models = parseJsonObject(current[MODELS]);
       const id = this.providerId(profile);
-      const baseUrl = models.getIn(['providers', id, 'baseUrl']);
-      const apiKey = models.getIn(['providers', id, 'apiKey']);
+      const providers = models.providers;
+      const provider = isPlainObject(providers) ? providers[id] : undefined;
+      if (!isPlainObject(provider)) {
+        return {};
+      }
+      const firstModel = Array.isArray(provider.models)
+        ? provider.models.find((entry) => isPlainObject(entry))
+        : undefined;
+      const apiKey = readString(provider, 'apiKey');
       return {
-        baseUrl: typeof baseUrl === 'string' ? baseUrl : profile.baseUrl,
-        apiKey: typeof apiKey === 'string' && apiKey ? apiKey : profile.apiKey,
+        baseUrl: readString(provider, 'baseUrl') || profile.baseUrl,
+        apiKey: apiKey || profile.apiKey,
+        model: readString(firstModel, 'id') || profile.model,
+        extras: {
+          ...profile.extras,
+          api: readString(provider, 'api') || profile.extras.api || '',
+          contextWindow: valueString(firstModel?.contextWindow, profile.extras.contextWindow),
+          maxTokens: valueString(firstModel?.maxTokens, profile.extras.maxTokens),
+          reasoning: firstModel?.reasoning === true ? 'true' : profile.extras.reasoning || 'false',
+        },
       };
     } catch {
       return {};
@@ -190,23 +223,12 @@ export class PiAdapter implements HarnessAdapter {
     return slugify(profile.extras.providerId || profile.name, 'provider');
   }
 
-  private promote(existing: unknown, id: string): string[] {
-    return [id, ...this.toStringArray(existing).filter((entry) => entry !== id)];
-  }
-
-  private toStringArray(value: unknown): string[] {
-    const plain = isYamlNode(value) ? value.toJSON() : value;
-    return Array.isArray(plain)
-      ? plain.filter((entry): entry is string => typeof entry === 'string')
-      : [];
-  }
-
   private numeric(raw: string | undefined, fallback: number): number {
     const parsed = Number(raw);
     return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
   }
 }
 
-function isYamlNode(value: unknown): value is { toJSON(): unknown } {
-  return typeof value === 'object' && value !== null && 'toJSON' in value;
+function valueString(value: unknown, fallback: string | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback || '';
 }

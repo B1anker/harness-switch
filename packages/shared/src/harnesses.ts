@@ -6,7 +6,7 @@ export const HARNESS_LABELS: Record<HarnessId, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   kimi: 'Kimi Code',
-  pi: 'oh-my-pi',
+  pi: 'Pi',
   dsh: 'DeepSeek Harness',
 };
 

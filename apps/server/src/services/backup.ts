@@ -1,5 +1,5 @@
 import { basename, join } from 'node:path';
-import type { BackupEntry } from '@seaveyon/harness-switch-shared';
+import type { BackupDetail, BackupEntry } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IEnvironmentService } from './environment';
@@ -30,6 +30,7 @@ export interface IBackupService {
   readonly _serviceBrand: undefined;
   create(harness: string, profile: string, snapshots: FileSnapshot[]): string | null;
   list(): BackupEntry[];
+  detail(id: string): BackupDetail;
   restore(id: string): void;
 }
 
@@ -76,26 +77,47 @@ export class BackupService implements IBackupService {
   }
 
   list(): BackupEntry[] {
+    const liveCache = new Map<string, string | null>();
+    const readLive = (path: string): string | null => {
+      if (!liveCache.has(path)) {
+        liveCache.set(path, this.files.readOptional(path) ?? null);
+      }
+      return liveCache.get(path) ?? null;
+    };
+
     return this.readManifests()
-      .map((manifest) => ({
-        id: manifest.id,
-        createdAt: manifest.createdAt,
-        harness: manifest.harness,
-        profile: manifest.profile,
-        files: manifest.files.map((file) => ({ path: file.path, existed: file.existed })),
-      }))
+      .map((manifest) => {
+        const dir = join(this.environment.backupsDir, manifest.id);
+        return {
+          id: manifest.id,
+          createdAt: manifest.createdAt,
+          harness: manifest.harness,
+          profile: manifest.profile,
+          files: manifest.files.map((file) => ({ path: file.path, existed: file.existed })),
+          current: this.matchesLive(dir, manifest.files, readLive),
+        };
+      })
       .toSorted((left, right) => right.id.localeCompare(left.id));
   }
 
+  detail(id: string): BackupDetail {
+    const { dir, manifest } = this.requireManifest(id);
+    return {
+      id: manifest.id,
+      createdAt: manifest.createdAt,
+      harness: manifest.harness,
+      profile: manifest.profile,
+      files: manifest.files.map((file) => ({
+        path: file.path,
+        existed: file.existed,
+        content: this.storedContent(dir, file),
+        currentContent: this.files.readOptional(file.path) ?? null,
+      })),
+    };
+  }
+
   restore(id: string): void {
-    if (id.includes('/') || id.includes('\\') || id.includes('..')) {
-      throw new HttpError(400, 'invalid backup id');
-    }
-    const dir = join(this.environment.backupsDir, id);
-    const manifest = this.files.readJson<BackupManifest | null>(join(dir, MANIFEST), null);
-    if (!manifest) {
-      throw new HttpError(404, 'backup not found');
-    }
+    const { dir, manifest } = this.requireManifest(id);
     for (const file of manifest.files) {
       if (!file.existed || !file.stored) {
         this.files.remove(file.path);
@@ -107,6 +129,37 @@ export class BackupService implements IBackupService {
       }
       this.files.writeUserFile(file.path, content);
     }
+  }
+
+  private requireManifest(id: string): { dir: string; manifest: BackupManifest } {
+    if (id.includes('/') || id.includes('\\') || id.includes('..')) {
+      throw new HttpError(400, 'invalid backup id');
+    }
+    const dir = join(this.environment.backupsDir, id);
+    const manifest = this.files.readJson<BackupManifest | null>(join(dir, MANIFEST), null);
+    if (!manifest) {
+      throw new HttpError(404, 'backup not found');
+    }
+    return { dir, manifest };
+  }
+
+  private matchesLive(
+    dir: string,
+    files: StoredFile[],
+    readLive: (path: string) => string | null,
+  ): boolean {
+    return files.every((file) => this.storedContent(dir, file) === readLive(file.path));
+  }
+
+  private storedContent(dir: string, file: StoredFile): string | null {
+    if (!file.existed || !file.stored) {
+      return null;
+    }
+    const content = this.files.readOptional(join(dir, file.stored));
+    if (content === undefined) {
+      throw new HttpError(500, `backup payload missing for ${file.path}`);
+    }
+    return content;
   }
 
   private readManifests(): BackupManifest[] {

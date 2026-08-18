@@ -1,6 +1,6 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { CircleUserRound, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,9 +21,10 @@ type HarnessCardProps = {
   harness: HarnessSummary;
   onAdd: () => void;
   onEdit: (profile: ProfilePublic) => void;
+  extraActions?: ReactNode;
 };
 
-export function HarnessCard({ harness, onAdd, onEdit }: HarnessCardProps) {
+export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCardProps) {
   const activateProfile = useAppStore((state) => state.activateProfile);
   const activateOfficial = useAppStore((state) => state.activateOfficial);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
@@ -39,10 +40,13 @@ export function HarnessCard({ harness, onAdd, onEdit }: HarnessCardProps) {
           <CardTitle>{harness.label}</CardTitle>
           <CardDescription>当前：{harness.active ? harness.active.name : '未激活'}</CardDescription>
         </div>
-        <Button size="sm" onClick={onAdd}>
-          <Plus />
-          新增
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {extraActions}
+          <Button size="sm" onClick={onAdd}>
+            <Plus />
+            新增
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {harness.supportsOfficialAuth ? (

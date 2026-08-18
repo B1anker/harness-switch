@@ -145,6 +145,25 @@ export type BackupEntry = {
   harness: string;
   profile: string;
   files: BackupFileEntry[];
+  /** True when every file in the snapshot already matches what is on disk. */
+  current: boolean;
+};
+
+export type BackupFileDetail = {
+  path: string;
+  existed: boolean;
+  /** Snapshot content; null when the file did not exist at backup time. */
+  content: string | null;
+  /** Live file content now; null when the file is absent on disk. */
+  currentContent: string | null;
+};
+
+export type BackupDetail = {
+  id: string;
+  createdAt: string;
+  harness: string;
+  profile: string;
+  files: BackupFileDetail[];
 };
 
 export type BackupsResponse = {

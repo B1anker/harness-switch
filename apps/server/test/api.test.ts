@@ -221,6 +221,45 @@ describe('rest api', () => {
     // Kimi Code never reads credentials from the shell, so env.sh must not pretend it does.
     expect(kimi.envVars).toEqual([]);
     expect(kimi.envNote).toBeString();
+
+    const pi = await summary(context, 'pi');
+    expect(pi.label).toBe('Pi');
+    expect(pi.mode).toBe('additive');
+    expect(pi.targets.map((target) => target.path)).toEqual([
+      join(homeDir, '.pi', 'agent', 'models.json'),
+      join(homeDir, '.pi', 'agent', 'settings.json'),
+    ]);
+  });
+
+  test('activating pi writes models.json so the official agent can see the provider', async () => {
+    const context = await createTestApp();
+    expect(
+      (
+        await createProfile(context, 'pi', {
+          name: 'main',
+          baseUrl: 'https://api.seavey.ai/cliproxy/v1',
+          apiKey: 'sk-test',
+          model: 'gpt-5.6-sol',
+          extras: { api: 'openai-responses', reasoning: 'true' },
+        })
+      ).status,
+    ).toBe(201);
+
+    expect((await activate(context, 'pi', 'main')).status).toBe(200);
+
+    const models = JSON.parse(
+      await readFile(join(homeDir, '.pi', 'agent', 'models.json'), 'utf8'),
+    ) as {
+      providers: Record<string, { apiKey: string; models: Array<{ reasoning?: boolean }> }>;
+    };
+    expect(models.providers.main.apiKey).toBe('sk-test');
+    expect(models.providers.main.models[0]?.reasoning).toBe(true);
+
+    const settings = JSON.parse(
+      await readFile(join(homeDir, '.pi', 'agent', 'settings.json'), 'utf8'),
+    ) as { defaultProvider: string; defaultModel: string };
+    expect(settings.defaultProvider).toBe('main');
+    expect(settings.defaultModel).toBe('gpt-5.6-sol');
   });
 
   test('creates, activates and switches a claude profile', async () => {
@@ -661,6 +700,17 @@ describe('rest api', () => {
       await context.app.request('/api/backups', { headers: { Cookie: context.cookie } })
     ).json()) as { items: Array<{ id: string }> };
     expect(listed.items).not.toBeEmpty();
+
+    const detail = await context.app.request(
+      `/api/backups/${encodeURIComponent(listed.items[0]?.id ?? '')}`,
+      { headers: { Cookie: context.cookie } },
+    );
+    expect(detail.status).toBe(200);
+    const body = (await detail.json()) as {
+      files: Array<{ content: string | null; currentContent: string | null }>;
+    };
+    expect(body.files[0]?.content).toBe('{"env":{"ORIGINAL":"1"}}\n');
+    expect(body.files[0]?.currentContent).toContain('ANTHROPIC_BASE_URL');
 
     const restored = await context.app.request(
       `/api/backups/${encodeURIComponent(listed.items[0]?.id ?? '')}/restore`,

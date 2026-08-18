@@ -83,13 +83,13 @@ export function DashboardPage() {
             >
               <HarnessCard
                 harness={selectedHarness}
+                extraActions={<BackupPanel harnessId={selectedHarness.id} />}
                 onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
                 onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
               />
             </div>
           ) : null}
         </section>
-        <BackupPanel />
         <Card>
           <CardHeader>
             <CardTitle>环境文件（兼容层）</CardTitle>
@@ -102,7 +102,7 @@ export function DashboardPage() {
               source {envFile || '~/.harness-switch/env.sh'}
             </code>
             <p className="text-sm text-muted-foreground">
-              文件里只会写入对应工具确实认识的变量。Kimi Code 与 oh-my-pi 不从 shell
+              文件里只会写入对应工具确实认识的变量。Kimi Code 与 Pi 不从 shell
               读取凭据，所以它们只有一行注释。
             </p>
           </CardContent>

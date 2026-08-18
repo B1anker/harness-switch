@@ -10,7 +10,7 @@
 - 更要紧的是，五个工具里只有 Claude Code 真的把凭据环境变量当作一等公民。其余几个当时用的变量名要么是猜的，要么根本不存在，等于给了用户一个完全不生效的开关：
   - Codex 认的是 `config.toml` 里的 `model_provider` 与 `[model_providers.x].base_url`，`OPENAI_BASE_URL` / `CODEX_MODEL` 不是它的开关。
   - Kimi Code 的官方文档明确说它不从 shell 读取凭据，`KIMI_BASE_URL` / `KIMI_API_KEY` 是空转。
-  - pi 实际是 oh-my-pi（命令 `omp`），配置在 `~/.omp/agent/models.yml`，`PI_API_BASE` / `PI_API_KEY` / `PI_MODEL` 不存在。
+  - pi 认的是 `~/.pi/agent/models.json` 与 `settings.json`，`PI_API_BASE` / `PI_API_KEY` / `PI_MODEL` 不存在。没有写进 provider 的 `apiKey` 时，Pi 会提示 No models available 并要求 `/login`。
 
 所以现在的做法是直接写各工具自己的配置文件，`env.sh` 降级为兼容层，且只输出对应工具确实认识的变量。
 
@@ -40,7 +40,7 @@ Codex 的 `auth.json` **就是登录缓存本身**，里面有 `tokens.refresh_t
 
 ## 替换模式与追加模式
 
-Claude 和 Codex 的配置文件里只存当前那一个 provider，切换即整段替换。Kimi 和 oh-my-pi 的配置文件天然是"多 provider 共存 + 一个当前指针"：Kimi 的指针是 `default_model`，oh-my-pi 是 `config.yml` 的 `modelProviderOrder`（同一个 model id 由多个 provider 提供时，靠前的胜出）。
+Claude 和 Codex 的配置文件里只存当前那一个 provider，切换即整段替换。Kimi 和 Pi 的配置文件天然是"多 provider 共存 + 一个当前指针"：Kimi 的指针是 `default_model`，Pi 是 `settings.json` 的 `defaultProvider` / `defaultModel`。
 
 对追加模式的文件做整段替换，就会摧毁用户手写的其他 provider——第一版的 Kimi 适配就是这个 bug。所以适配器要声明自己属于哪种模式，追加模式只增改自己那一条并移动指针。
 
@@ -65,7 +65,7 @@ zcode 是智谱自研 Agent 的桌面 ADE，不是 Claude Code 系。它没有�
 
 [cc-switch-web](https://github.com/Laliet/cc-switch-web) 和 [cc-switch-cli](https://github.com/SaladDay/cc-switch-cli) 都是成熟的 headless 方案，覆盖 Claude Code、Codex、Gemini CLI、OpenCode 等。如果你要管的就是这些工具，直接用它们更划算，功能面更广。
 
-本项目的存在理由是覆盖 Kimi Code 与 oh-my-pi，并且把"写完即生效"这件事做实。写入机制、两种模式的区分、备份与回填的顺序都参考了 cc-switch 的实现。
+本项目的存在理由是覆盖 Kimi Code 与 Pi，并且把"写完即生效"这件事做实。写入机制、两种模式的区分、备份与回填的顺序都参考了 cc-switch 的实现。
 
 ## 安全模型
 

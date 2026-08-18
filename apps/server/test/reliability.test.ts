@@ -129,6 +129,32 @@ describe('backups', () => {
     expect(readFileSync(target, 'utf8')).toBe(original);
   });
 
+  test('detail compares the snapshot with the live file', () => {
+    const live = services.get(ILiveWriteService);
+    const backups = services.get(IBackupService);
+    const target = join(homeDir, 'config.toml');
+    writeFileSync(target, 'model = "old"\n');
+
+    live.apply('codex', 'demo', [{ path: target, format: 'toml', content: 'model = "new"\n' }]);
+
+    const detail = backups.detail(backups.list()[0]?.id ?? '');
+    expect(detail.files[0]?.content).toBe('model = "old"\n');
+    expect(detail.files[0]?.currentContent).toBe('model = "new"\n');
+  });
+
+  test('list marks a snapshot as current only when it already matches the live files', () => {
+    const live = services.get(ILiveWriteService);
+    const backups = services.get(IBackupService);
+    const target = join(homeDir, 'config.toml');
+    writeFileSync(target, 'model = "old"\n');
+
+    live.apply('codex', 'demo', [{ path: target, format: 'toml', content: 'model = "new"\n' }]);
+    expect(backups.list()[0]?.current).toBe(false);
+
+    backups.restore(backups.list()[0]?.id ?? '');
+    expect(backups.list()[0]?.current).toBe(true);
+  });
+
   test('restoring deletes files that did not exist when the backup was taken', () => {
     const files = services.get(IFileService);
     const live = services.get(ILiveWriteService);

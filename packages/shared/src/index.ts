@@ -8,7 +8,9 @@ export {
 export type {
   ActivateResponse,
   ActivePublic,
+  BackupDetail,
   BackupEntry,
+  BackupFileDetail,
   BackupFileEntry,
   BackupsResponse,
   ConfigFormat,
