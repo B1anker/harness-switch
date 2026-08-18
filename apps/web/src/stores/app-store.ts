@@ -1,5 +1,6 @@
 import type {
   ActivateResponse,
+  BackupDetail,
   BackupEntry,
   BackupsResponse,
   CreateProfileRequest,
@@ -33,6 +34,7 @@ type AppState = {
   activateOfficial: (harnessId: HarnessId) => Promise<void>;
   previewProfile: (harnessId: HarnessId, name: string) => Promise<PreviewTarget[]>;
   loadBackups: () => Promise<void>;
+  loadBackupDetail: (id: string) => Promise<BackupDetail>;
   restoreBackup: (id: string) => Promise<void>;
   clearNotice: () => void;
 };
@@ -123,7 +125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
     const lines = [
       `${label} 已切换到「${name}」，原生配置文件已写入。`,
-      'Claude Code 会立即生效；Codex、Kimi Code、oh-my-pi 需要重新启动进程。',
+      'Claude Code 会立即生效；Codex、Kimi Code、Pi 需要重新启动进程。',
       ...result.warnings.map((warning) => `注意：${warning}`),
     ];
     set({ notice: lines.join('\n') });
@@ -160,10 +162,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  loadBackupDetail: async (id) => {
+    return api<BackupDetail>(backupsPath(id));
+  },
+
   restoreBackup: async (id) => {
     await api(`${backupsPath(id)}/restore`, { method: 'POST' });
-    set({ notice: '已把备份中的原始文件写回磁盘。' });
-    await get().loadHarnesses();
+    set({ notice: '已把该历史快照的文件写回磁盘。' });
+    await Promise.all([get().loadHarnesses(), get().loadBackups()]);
   },
 
   clearNotice: () => set({ notice: null }),

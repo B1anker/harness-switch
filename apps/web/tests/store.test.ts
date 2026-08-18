@@ -139,6 +139,22 @@ test('previewing returns the rendered targets without storing them', async () =>
   expect(requests[0]?.path).toBe('/api/harnesses/claude/profiles/main/preview');
 });
 
+test('loading backup detail fetches the snapshot against live files', async () => {
+  responder = () => ({
+    status: 200,
+    body: {
+      id: '2026-08-13T00-00-00-000Z-claude-main',
+      files: [{ path: '/s.json', existed: true, content: '{}', currentContent: '{"a":1}' }],
+    },
+  });
+
+  const detail = await useAppStore
+    .getState()
+    .loadBackupDetail('2026-08-13T00-00-00-000Z-claude-main');
+  expect(requests[0]?.path).toBe('/api/backups/2026-08-13T00-00-00-000Z-claude-main');
+  expect(detail.files[0]?.currentContent).toBe('{"a":1}');
+});
+
 test('restoring a backup reports it and reloads the harnesses', async () => {
   responder = (path) =>
     path === '/api/harnesses'
@@ -148,7 +164,7 @@ test('restoring a backup reports it and reloads the harnesses', async () => {
   await useAppStore.getState().restoreBackup('2026-08-13T00-00-00-000Z-claude-main');
 
   expect(requests[0]?.path).toBe('/api/backups/2026-08-13T00-00-00-000Z-claude-main/restore');
-  expect(useAppStore.getState().notice).toContain('备份');
+  expect(useAppStore.getState().notice).toContain('历史');
 });
 
 test('logging out clears everything the session loaded', async () => {

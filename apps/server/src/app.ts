@@ -44,6 +44,7 @@ export function createApp(services: InstantiationService): Hono {
       }
       const index = join(publicDir, 'index.html');
       if (existsSync(index)) {
+        c.header('Cache-Control', 'no-store');
         return c.html(await Bun.file(index).text());
       }
       return c.text('frontend not built', 503);

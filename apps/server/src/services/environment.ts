@@ -57,7 +57,7 @@ export class EnvironmentService implements IEnvironmentService {
     claude: join(this.homeDir, '.claude'),
     codex: process.env.CODEX_HOME || join(this.homeDir, '.codex'),
     kimiCode: process.env.KIMI_CODE_HOME || join(this.homeDir, '.kimi-code'),
-    piAgent: process.env.PI_CODING_AGENT_DIR || join(this.homeDir, '.omp', 'agent'),
+    piAgent: process.env.PI_CODING_AGENT_DIR || join(this.homeDir, '.pi', 'agent'),
     dsh: process.env.DSH_HOME || join(this.homeDir, '.dsh'),
   };
 

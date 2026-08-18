@@ -14,7 +14,7 @@ const environment = {
     claude: '/home/tester/.claude',
     codex: '/home/tester/.codex',
     kimiCode: '/home/tester/.kimi-code',
-    piAgent: '/home/tester/.omp/agent',
+    piAgent: '/home/tester/.pi/agent',
     dsh: '/home/tester/.dsh',
   },
 } as IEnvironmentService;
@@ -346,39 +346,67 @@ describe('kimi adapter', () => {
 });
 
 describe('pi adapter', () => {
-  const models = [
-    '# hand written',
-    'providers:',
-    '  other:',
-    '    baseUrl: https://other',
-    '',
-  ].join('\n');
+  const models = JSON.stringify(
+    {
+      providers: {
+        other: { baseUrl: 'https://other' },
+      },
+    },
+    null,
+    2,
+  );
 
-  test('merges into models.yml while keeping comments and other providers', () => {
+  test('targets the official pi agent JSON files', () => {
     const adapter = new PiAdapter(environment);
-    const rendered = adapter.render(profile(), { models, config: 'theme: dark\n' });
+    expect(adapter.targets().map((target) => [target.key, target.path, target.format])).toEqual([
+      ['models', '/home/tester/.pi/agent/models.json', 'json'],
+      ['settings', '/home/tester/.pi/agent/settings.json', 'json'],
+    ]);
+  });
 
-    expect(rendered.models).toContain('# hand written');
-    const parsed = parseYaml(rendered.models);
+  test('merges into models.json while keeping other providers', () => {
+    const adapter = new PiAdapter(environment);
+    const rendered = adapter.render(profile(), {
+      models,
+      settings: JSON.stringify({ lastChangelogVersion: '0.84.2', theme: 'dark' }),
+    });
+
+    const parsed = JSON.parse(rendered.models);
     expect(parsed.providers.other.baseUrl).toBe('https://other');
     expect(parsed.providers['glm-main'].apiKey).toBe('sk-new');
     expect(parsed.providers['glm-main'].authHeader).toBe(true);
     expect(parsed.providers['glm-main'].models[0].id).toBe('glm-4.6');
+    expect(parsed.providers['glm-main'].models[0].reasoning).toBeUndefined();
 
-    const config = parseYaml(rendered.config);
-    expect(config.theme).toBe('dark');
-    expect(config.modelProviderOrder).toEqual(['glm-main']);
+    const settings = JSON.parse(rendered.settings);
+    expect(settings.lastChangelogVersion).toBe('0.84.2');
+    expect(settings.theme).toBe('dark');
+    expect(settings.defaultProvider).toBe('glm-main');
+    expect(settings.defaultModel).toBe('glm-4.6');
   });
 
-  test('writes block style yaml when the file does not exist yet', () => {
+  test('writes json when the file does not exist yet', () => {
     const adapter = new PiAdapter(environment);
     const rendered = adapter.render(profile(), {});
 
-    // Seeding an empty document as `{}` would make every key flow style, which is
-    // unreadable in a file people maintain by hand.
-    expect(rendered.models).toContain('providers:');
-    expect(rendered.models).not.toContain('{');
-    expect(rendered.config).toBe('modelProviderOrder:\n  - glm-main\n');
+    expect(JSON.parse(rendered.models).providers['glm-main'].baseUrl).toBe(
+      'https://api.z.ai/api/anthropic',
+    );
+    expect(JSON.parse(rendered.settings)).toEqual({
+      defaultProvider: 'glm-main',
+      defaultModel: 'glm-4.6',
+    });
+  });
+
+  test('marks reasoning models so pi exposes thinking levels', () => {
+    const adapter = new PiAdapter(environment);
+    const rendered = adapter.render(
+      profile({ extras: { api: 'openai-responses', reasoning: 'true' } }),
+      {},
+    );
+    const parsed = JSON.parse(rendered.models);
+    expect(parsed.providers['glm-main'].api).toBe('openai-responses');
+    expect(parsed.providers['glm-main'].models[0].reasoning).toBe(true);
   });
 
   test('revoking leaves absent files absent instead of creating empty ones', () => {
@@ -386,30 +414,27 @@ describe('pi adapter', () => {
     expect(adapter.revoke(profile(), {})).toEqual({});
   });
 
-  test('moves itself to the front of the provider order without dropping the rest', () => {
-    const adapter = new PiAdapter(environment);
-    const rendered = adapter.render(profile(), {
-      models,
-      config: 'modelProviderOrder:\n  - other\n  - glm-main\n',
-    });
-    expect(parseYaml(rendered.config).modelProviderOrder).toEqual(['glm-main', 'other']);
-  });
-
-  test('revoking drops its provider and its place in the order', () => {
+  test('revoking drops its provider and clears the default when it was selected', () => {
     const adapter = new PiAdapter(environment);
     const activated = adapter.render(profile(), {
       models,
-      config: 'modelProviderOrder:\n  - other\n',
+      settings: JSON.stringify({ defaultProvider: 'other', defaultModel: 'keep-me' }),
     });
     const rendered = adapter.revoke(profile(), {
       models: activated.models,
-      config: activated.config,
+      settings: activated.settings,
     });
 
-    const parsed = parseYaml(rendered.models);
+    const parsed = JSON.parse(rendered.models);
     expect(parsed.providers['glm-main']).toBeUndefined();
     expect(parsed.providers.other).toBeDefined();
-    expect(parseYaml(rendered.config).modelProviderOrder).toEqual(['other']);
+    expect(JSON.parse(rendered.settings).defaultProvider).toBeUndefined();
+    expect(JSON.parse(rendered.settings).defaultModel).toBeUndefined();
+  });
+
+  test('requires an api key because pi hides keyless custom models', () => {
+    const adapter = new PiAdapter(environment);
+    expect(() => adapter.render(profile({ apiKey: '' }), {})).toThrow(/API key/);
   });
 });
 

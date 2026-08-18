@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(rootDir, 'src'),
+      '@pierre/diffs/react': path.resolve(rootDir, 'tests/stubs/pierre-diffs-react.tsx'),
     },
   },
 });
