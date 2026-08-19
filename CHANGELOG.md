@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/B1anker/harness-switch/compare/v0.5.0...v0.6.0) (2026-08-19)
+
+
+### Features
+
+* persist web sessions, add profile transfer and refresh the UI ([e338147](https://github.com/B1anker/harness-switch/commit/e338147c762fa5b366004e2f9c7e41a62276047d))
+
 # [0.5.0](https://github.com/B1anker/harness-switch/compare/v0.4.0...v0.5.0) (2026-08-18)
 
 
