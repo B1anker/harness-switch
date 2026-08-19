@@ -535,6 +535,63 @@ describe('rest api', () => {
     );
   });
 
+  test('an edit that fails to reach the live files rolls the profile store back', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'claude', {
+      name: 'main',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-test',
+    });
+    await activate(context, 'claude', 'main');
+
+    // Block every read/write of the live file by replacing its directory with a
+    // regular file, so the reconcile step must fail.
+    const claudeDir = join(homeDir, '.claude');
+    await rm(claudeDir, { recursive: true, force: true });
+    await writeFile(claudeDir, 'not a directory');
+
+    const patched = await context.app.request('/api/harnesses/claude/profiles/main', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ baseUrl: 'https://edited.example.com/v1' }),
+    });
+    expect(patched.status).toBeGreaterThanOrEqual(400);
+
+    await rm(claudeDir, { force: true });
+
+    // The persisted profile and the active pointer must be exactly as before.
+    const claude = await summary(context, 'claude');
+    expect(profileOf(claude, 'main').baseUrl).toBe('https://api.example.com/v1');
+    expect(claude.active?.name).toBe('main');
+  });
+
+  test('refuses to delete an additive profile when its live provider cannot be cleaned up', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'kimi', {
+      name: 'victim',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-test',
+      model: 'kimi-k2',
+    });
+
+    // Block the live config so revoking the provider must fail.
+    const kimiHome = join(homeDir, '.kimi-code');
+    await writeFile(kimiHome, 'not a directory');
+
+    const deleted = await context.app.request('/api/harnesses/kimi/profiles/victim', {
+      method: 'DELETE',
+      headers: { Cookie: context.cookie },
+    });
+    expect(deleted.status).toBeGreaterThanOrEqual(400);
+
+    await rm(kimiHome, { force: true });
+
+    // The profile is still there: deletion failed closed instead of leaving an
+    // orphan provider entry behind with no record left to clean it up.
+    const kimi = await summary(context, 'kimi');
+    expect(profileOf(kimi, 'victim').name).toBe('victim');
+  });
+
   test('switching away saves hand edits without wiping fields the live file cannot hold', async () => {
     const context = await createTestApp();
     await createProfile(context, 'claude', {

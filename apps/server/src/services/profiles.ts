@@ -174,7 +174,9 @@ export class ProfileService implements IProfileService {
   }
 
   private read(): ProfileStore {
-    return this.files.readJson<ProfileStore>(this.environment.files.profiles, {});
+    // Strict: a corrupt profile store must never be mistaken for an empty one,
+    // or a later write would overwrite the user's encrypted profiles.
+    return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
   }
 
   private toPublic(harness: HarnessId, name: string, profile: StoredProfile): ProfilePublic {

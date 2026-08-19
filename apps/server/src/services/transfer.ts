@@ -242,7 +242,7 @@ export class TransferService implements ITransferService {
   }
 
   private readStore(): ProfileStore {
-    return this.files.readJson<ProfileStore>(this.environment.files.profiles, {});
+    return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
   }
 
   private assertPassphrase(passphrase: string): void {

@@ -189,11 +189,12 @@ bun run dev:server
 bun run dev:web
 ```
 
-Linting and formatting are split: **Oxlint** for diagnostics, **Biome** for format and import organization.
+Quality gates are three-layered: **tsc** for type checking, **Oxlint** for diagnostics, **Biome** for format and import organization. `bun run check` runs all three.
 
 ```bash
 bun run lint
 bun run lint:fix
+bun run typecheck
 bun run format
 bun run format:check
 bun run check
@@ -217,7 +218,7 @@ The web dev server listens on `http://127.0.0.1:5173` and proxies `/api` to the 
 
 ## Release
 
-Pushes to `main` run [semantic-release](https://semantic-release.gitbook.io/). It reads conventional commits, bumps `@seaveyon/harness-switch`, tags `v*`, and publishes to npm via Trusted Publishing.
+Pushes to `main` run [semantic-release](https://semantic-release.gitbook.io/). It reads conventional commits, bumps `@seaveyon/harness-switch`, tags `v*`, and publishes to npm via Trusted Publishing. The tarball is published to the npm registry **before** the `v*` tag and GitHub release are created, so a failed registry publish never leaves a tag without a matching npm version, and a re-run skips versions that are already on the registry.
 
 | Commit | Version bump |
 |---|---|

@@ -10,7 +10,8 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname } from 'node:path';
+import { basename, dirname } from 'node:path';
+import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IEnvironmentService } from './environment';
 
@@ -20,6 +21,13 @@ export interface IFileService {
   readText(file: string): string;
   /** Returns undefined when the file does not exist, so callers can tell it apart from an empty file. */
   readOptional(file: string): string | undefined;
+  /**
+   * Reads a JSON document that may be absent but must be valid when present.
+   * A corrupt file is quarantined aside (so a later write can never overwrite
+   * the user's data) and a clear error is thrown; the next read then sees the
+   * file as missing and uses the fallback.
+   */
+  readJsonStrict<T>(file: string, fallback: T): T;
   writeSecure(file: string, text: string): void;
   /**
    * Writes a file owned by the user (a harness config) without changing its permissions.
@@ -52,8 +60,40 @@ export class FileService implements IFileService {
   readOptional(file: string): string | undefined {
     try {
       return readFileSync(file, 'utf8');
+    } catch (error) {
+      // Only a truly absent file means "no content". Permission or I/O errors
+      // must surface: treating them as absent could make a write path replace
+      // a live config it never even managed to read.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
+  readJsonStrict<T>(file: string, fallback: T): T {
+    if (!existsSync(file)) {
+      return fallback;
+    }
+    let text: string;
+    try {
+      text = this.readText(file);
     } catch {
-      return undefined;
+      throw new HttpError(500, `数据存储不可读：${file}`);
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      const quarantine = `${file}.corrupt-${Date.now()}`;
+      try {
+        renameSync(file, quarantine);
+      } catch {
+        throw new HttpError(500, `数据存储损坏且无法隔离：${file}`);
+      }
+      throw new HttpError(
+        500,
+        `数据存储已损坏，原文件已隔离为 ${basename(quarantine)}，请从备份恢复后再继续`,
+      );
     }
   }
 
