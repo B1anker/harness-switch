@@ -57,6 +57,15 @@ export default defineConfig({
     new rspack.HtmlRspackPlugin({
       template: './index.html',
     }),
+    // Static assets (favicon etc.) land next to the built bundle.
+    new rspack.CopyRspackPlugin({
+      patterns: [
+        {
+          from: path.resolve(rootDir, 'public'),
+          to: path.resolve(rootDir, '../server/public'),
+        },
+      ],
+    }),
     isDev ? new ReactRefreshPlugin() : undefined,
   ].filter(Boolean),
   devServer: {
