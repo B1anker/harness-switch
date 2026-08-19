@@ -109,6 +109,15 @@ describe('rest api', () => {
     }
   });
 
+  test('reports its version without authentication', async () => {
+    const { app } = await createTestApp();
+    const response = await app.request('/api/version');
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { name: string; version: string };
+    expect(payload.name).toBe('harness-switch');
+    expect(payload.version).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
   test('rejects unauthenticated harness access', async () => {
     const { app } = await createTestApp();
     const response = await app.request('/api/harnesses');
