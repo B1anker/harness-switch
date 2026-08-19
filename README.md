@@ -137,36 +137,36 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `POST` | `/api/transfer/preview` | Decrypt and report profile counts and conflicts without writing |
 | `POST` | `/api/transfer/import` | Import with `skip` or `overwrite` conflict handling |
 
-## systemd
+## Background daemon (bunx / npx)
 
-Create `/etc/systemd/system/harness-switch.service`:
-
-```ini
-[Unit]
-Description=Harness Switch Web Control Plane
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-Environment=HOST=127.0.0.1
-Environment=PORT=8787
-ExecStart=/usr/bin/env harness-switch
-Restart=on-failure
-RestartSec=3
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Then run:
+The published CLI runs as a background daemon by default: the command returns
+immediately, the server keeps running after the terminal is closed, and
+re-running after a release restarts the daemon on the newest version.
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now harness-switch
-sudo journalctl -u harness-switch -f
+bunx @seaveyon/harness-switch@latest             # start, or update + restart the daemon
+bunx @seaveyon/harness-switch@latest status      # pid, url, log path
+bunx @seaveyon/harness-switch@latest stop        # stop the daemon
+bunx @seaveyon/harness-switch@latest server      # run in the foreground instead
+```
+
+`npx -y @seaveyon/harness-switch@latest` works the same way. Append `@latest`
+so `bunx`/`npx` fetch the newest release before running.
+
+The daemon writes its pid to `~/.harness-switch/daemon.pid` and its log to
+`~/.harness-switch/daemon.log` (a fresh log per start). The first run creates
+the web password in `~/.harness-switch/web_password` and prints it to the log.
+When a daemon is already running, a new invocation stops it before starting the
+new process, so the port never conflicts and the newest code wins.
+
+Under systemd (or any supervisor), run the CLI in the foreground instead:
+
+```ini
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/harness-switch server
+Restart=on-failure
+RestartSec=3
 ```
 
 ## Development
@@ -206,7 +206,7 @@ bun run check
 bun run precommit
 ```
 
-Production build (frontend assets are copied into `apps/server/public`, then the CLI is bundled):
+Production build (frontend assets are copied into `apps/server/public`, then the CLI is bundled). `bun run start` starts the daemon; use `bun run start:foreground` for the foreground server:
 
 ```bash
 bun run build
