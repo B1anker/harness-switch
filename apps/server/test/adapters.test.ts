@@ -220,7 +220,7 @@ describe('codex adapter', () => {
     }
   });
 
-  test('returns to official login while preserving OAuth material and other providers', () => {
+  test('returns to official login by dropping every custom provider and third-party key', () => {
     const adapter = new CodexAdapter(environment);
     const current = {
       config:
@@ -236,13 +236,12 @@ describe('codex adapter', () => {
 
     expect(config.model).toBeUndefined();
     expect(config.model_provider).toBeUndefined();
-    expect(config.model_providers?.['glm-main']).toBeUndefined();
-    expect(config.model_providers?.keep?.base_url).toBe('https://keep');
+    expect(config.model_providers).toBeUndefined();
     expect(auth.tokens.access_token).toBe('official');
     expect(auth.OPENAI_API_KEY).toBeUndefined();
   });
 
-  test('official login also removes a drifted model_provider that is not the previous profile', () => {
+  test('official login removes leftover OpenRouter providers even if they were not the previous profile', () => {
     const adapter = new CodexAdapter(environment);
     const current = {
       config: [
@@ -257,14 +256,24 @@ describe('codex adapter', () => {
         '',
       ].join('\n'),
     };
-    // Previous profile was via-env, but the pointer drifted to an orphan provider.
     const rendered = adapter.renderOfficial(profile({ name: 'via-env' }), current);
     const config = parseToml(rendered.config) as CodexConfig;
 
     expect(config.model_provider).toBeUndefined();
-    expect(config.model_providers?.['via-env']).toBeUndefined();
-    expect(config.model_providers?.['third-party']).toBeUndefined();
-    expect(config.model_providers?.keep?.base_url).toBe('https://keep');
+    expect(config.model_providers).toBeUndefined();
+  });
+
+  test('strips OPENAI_API_KEY from auth.json even without a previous openai_auth profile', () => {
+    const adapter = new CodexAdapter(environment);
+    const rendered = adapter.renderOfficial(undefined, {
+      config: 'model_provider = "via-env"\n',
+      auth: '{"tokens":{"refresh_token":"keep"},"OPENAI_API_KEY":"sk-or"}',
+    });
+    const auth = JSON.parse(rendered.auth ?? '{}');
+
+    expect(auth.tokens.refresh_token).toBe('keep');
+    expect(auth.OPENAI_API_KEY).toBeUndefined();
+    expect(Object.keys(rendered)).toEqual(['config', 'auth']);
   });
 
   test('reconciling official login with no previous profile still clears the active provider', () => {

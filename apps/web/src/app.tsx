@@ -14,7 +14,7 @@ export function App() {
 
   if (!sessionChecked) {
     return (
-      <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
+      <div className="flex min-h-[100dvh] items-center justify-center text-sm text-muted-foreground">
         正在检查会话…
       </div>
     );

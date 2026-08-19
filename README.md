@@ -78,11 +78,21 @@ A write either lands completely or not at all: content is validated first, and a
 
 Switching away from a profile first reads the live file back into that profile's record, so edits you made directly in the CLI tool are not lost on the next switch.
 
+### Moving every profile to another machine
+
+Use **导入 / 导出** in the top bar to create one `.hsw-backup` file containing every Harness profile, API key, raw-file override, and current activation choice. The bundle is encrypted with a migration password you choose, so it does not depend on the source machine's `aes-256-gcm.key`.
+
+On the destination machine, select the bundle and enter the migration password. The UI shows profile counts and same-name conflicts before it writes anything. Import keeps destination profiles by default; overwriting is an explicit choice. Restoring the exported activation state is optional.
+
+Keep the migration password separately from the bundle. It cannot be recovered from the export file.
+
 ## Security
 
 The service defaults to loopback only. Do **not** expose the management port directly to the public Internet. Use SSH port forwarding or a TLS-enabled reverse proxy with additional access control.
 
 API keys are encrypted with AES-256-GCM in `~/.harness-switch/profiles.json`; the local encryption key lives in `~/.harness-switch/aes-256-gcm.key`. Those files, the generated password, and `env.sh` are stored with permissions set to `0600` on POSIX systems. When writing a harness's own configuration file, existing permissions are preserved and newly created files start at `0600`.
+
+Web sessions live in `~/.harness-switch/sessions.json` (also `0600`) so restarting the service does not log you out. Only a SHA-256 digest of each session token is stored, so the file cannot be replayed as a cookie, and the table is tied to a fingerprint of the password that issued it: replacing `web_password` invalidates every existing session.
 
 Two places deliberately expose a key to an authenticated session: the raw config preview and the generated files themselves must contain the credential to be useful. Profile listings never echo it.
 
@@ -94,8 +104,9 @@ This protects against accidental plaintext disclosure in profile storage, but do
 |---|---:|---|
 | `HOST` | `127.0.0.1` | Bind address. Keep the default when using SSH tunnelling. |
 | `PORT` | `8787` | Listening port. |
-| `HSW_DATA_DIR` | `~/.harness-switch` | Directory for encrypted profiles, active state, key, password, backups, and env file. |
+| `HSW_DATA_DIR` | `~/.harness-switch` | Directory for encrypted profiles, active state, key, password, sessions, backups, and env file. |
 | `HSW_HOME_DIR` | `$HOME` | Home directory used to locate the harness config directories. |
+| `HSW_SESSION_TTL_HOURS` | `24` | How long a Web login stays valid. Sessions survive a service restart. |
 | `HSW_BACKUP_RETAIN` | `10` | Number of snapshots to keep. |
 | `HSW_PUBLIC_DIR` | auto | Optional override for the built frontend directory. |
 
@@ -120,6 +131,9 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `POST` | `/api/harnesses/:id/profiles/:name/activate` | Write the native config, then commit the switch |
 | `GET` | `/api/backups` | Snapshots, newest first |
 | `POST` | `/api/backups/:id/restore` | Restore a snapshot verbatim |
+| `POST` | `/api/transfer/export` | Create a passphrase-encrypted portable bundle |
+| `POST` | `/api/transfer/preview` | Decrypt and report profile counts and conflicts without writing |
+| `POST` | `/api/transfer/import` | Import with `skip` or `overwrite` conflict handling |
 
 ## systemd
 

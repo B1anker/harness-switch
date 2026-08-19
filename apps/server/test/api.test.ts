@@ -6,6 +6,7 @@ import type {
   HarnessSummary,
   PreviewResponse,
   ProfilePublic,
+  TransferPreview,
 } from '@seaveyon/harness-switch-shared';
 import { createApp } from '../src/app';
 import { createServices } from '../src/bootstrap';
@@ -43,6 +44,14 @@ async function createTestApp(): Promise<TestApp> {
     password,
     dataDir: process.env.HSW_DATA_DIR,
   };
+}
+
+/** Rebuilds the services and app over the same data directory, as a process restart would. */
+function restartApp(): ReturnType<typeof createApp> {
+  const services = createServices();
+  services.get(IEnvironmentService).ensureDataDir();
+  services.get(IAuthService).ensurePassword();
+  return createApp(services);
 }
 
 function claudeSettings(): string {
@@ -105,6 +114,14 @@ describe('rest api', () => {
     const response = await app.request('/api/harnesses');
     expect(response.status).toBe(401);
     expect((await app.request('/api/backups')).status).toBe(401);
+    expect(
+      (
+        await app.request('/api/transfer/export', {
+          method: 'POST',
+          body: JSON.stringify({ passphrase: 'portable-secret' }),
+        })
+      ).status,
+    ).toBe(401);
   });
 
   test('issues a session cookie the browser cannot read from script', async () => {
@@ -153,6 +170,86 @@ describe('rest api', () => {
       (await context.app.request('/api/auth/session', { headers: { Cookie: context.cookie } }))
         .status,
     ).toBe(401);
+  });
+
+  test('keeps a session valid across a restart', async () => {
+    const context = await createTestApp();
+
+    expect(
+      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
+        .status,
+    ).toBe(200);
+  });
+
+  test('does not persist the raw token, so a leaked store cannot be replayed', async () => {
+    const context = await createTestApp();
+    const token = /hsw_session=([^;]+)/.exec(context.cookie)?.[1] ?? '';
+    expect(token).not.toBe('');
+
+    const stored = await readFile(join(context.dataDir, 'sessions.json'), 'utf8');
+    expect(stored).not.toContain(token);
+    expect(
+      (
+        await restartApp().request('/api/auth/session', {
+          headers: { Cookie: `hsw_session=${Object.keys(JSON.parse(stored).sessions)[0]}` },
+        })
+      ).status,
+    ).toBe(401);
+  });
+
+  test('a logout survives the restart it outlived', async () => {
+    const context = await createTestApp();
+    await context.app.request('/api/auth/logout', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+
+    expect(
+      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
+        .status,
+    ).toBe(401);
+  });
+
+  test('changing the web password invalidates sessions that outlived it', async () => {
+    const context = await createTestApp();
+    await writeFile(join(context.dataDir, 'web_password'), 'rotated-password\n', { mode: 0o600 });
+
+    expect(
+      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
+        .status,
+    ).toBe(401);
+  });
+
+  test('an expired session is rejected after a restart', async () => {
+    const context = await createTestApp();
+    const file = join(context.dataDir, 'sessions.json');
+    const store = JSON.parse(await readFile(file, 'utf8'));
+    for (const key of Object.keys(store.sessions)) {
+      store.sessions[key].expires = Date.now() - 1000;
+    }
+    await writeFile(file, JSON.stringify(store), { mode: 0o600 });
+
+    expect(
+      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
+        .status,
+    ).toBe(401);
+  });
+
+  test('survives a corrupt session store instead of crashing', async () => {
+    const context = await createTestApp();
+    await writeFile(join(context.dataDir, 'sessions.json'), 'not json', { mode: 0o600 });
+
+    const app = restartApp();
+    expect(
+      (await app.request('/api/auth/session', { headers: { Cookie: context.cookie } })).status,
+    ).toBe(401);
+
+    const login = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: context.password }),
+    });
+    expect(login.status).toBe(200);
   });
 
   test('denies a state-changing request from another origin', async () => {
@@ -718,5 +815,66 @@ describe('rest api', () => {
     );
     expect(restored.status).toBe(200);
     expect(await readFile(claudeSettings(), 'utf8')).toBe('{"env":{"ORIGINAL":"1"}}\n');
+  });
+
+  test('exports secrets in a portable encrypted bundle and imports them again', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'claude', {
+      name: 'portable',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-portable-secret',
+      model: 'claude-sonnet-4-5',
+      extras: { authVar: 'ANTHROPIC_AUTH_TOKEN' },
+      overrides: { settings: '{"env":{"FROM_EXPORT":"1"}}\n' },
+    });
+
+    const exported = await context.app.request('/api/transfer/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ passphrase: 'portable-secret' }),
+    });
+    expect(exported.status).toBe(200);
+    const envelope = await exported.json();
+    expect(JSON.stringify(envelope)).not.toContain('sk-portable-secret');
+
+    const conflictPreview = await context.app.request('/api/transfer/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ envelope, passphrase: 'portable-secret' }),
+    });
+    expect(conflictPreview.status).toBe(200);
+    expect(((await conflictPreview.json()) as TransferPreview).conflicts).toEqual([
+      { harness: 'claude', name: 'portable' },
+    ]);
+
+    const wrongPassword = await context.app.request('/api/transfer/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ envelope, passphrase: 'wrong-password' }),
+    });
+    expect(wrongPassword.status).toBe(400);
+
+    await context.app.request('/api/harnesses/claude/profiles/portable', {
+      method: 'DELETE',
+      headers: { Cookie: context.cookie },
+    });
+    const imported = await context.app.request('/api/transfer/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'skip',
+        restoreActive: false,
+      }),
+    });
+    expect(imported.status).toBe(200);
+    expect(await imported.json()).toMatchObject({ imported: 1, overwritten: 0, skipped: 0 });
+
+    expect((await activate(context, 'claude', 'portable')).status).toBe(200);
+    expect(await readFile(claudeSettings(), 'utf8')).toContain('FROM_EXPORT');
+    expect(await readFile(join(context.dataDir, 'env.sh'), 'utf8')).toContain(
+      "ANTHROPIC_AUTH_TOKEN='sk-portable-secret'",
+    );
   });
 });

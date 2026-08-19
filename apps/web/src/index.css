@@ -1,9 +1,15 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --font-sans:
+    "IBM Plex Sans Variable", ui-sans-serif, system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -23,88 +29,73 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-xl: calc(var(--radius) * 2);
 }
 
 :root {
   color-scheme: light;
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --radius: 0.75rem;
+  --background: #f6f7fb;
+  --foreground: #17182b;
+  --card: #ffffff;
+  --card-foreground: #17182b;
+  --popover: #ffffff;
+  --popover-foreground: #17182b;
+  --primary: #635bff;
+  --primary-foreground: #ffffff;
+  --secondary: #eeeff8;
+  --secondary-foreground: #343650;
+  --muted: #f0f1f7;
+  --muted-foreground: #6f7285;
+  --accent: #eeedff;
+  --accent-foreground: #4f46e5;
+  --destructive: #dc3545;
+  --destructive-foreground: #ffffff;
+  --border: #e7e8f0;
+  --input: #dedfea;
+  --ring: #635bff;
 }
 
 .dark {
   color-scheme: dark;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: #11131f;
+  --foreground: #f4f4fa;
+  --card: #1a1d2c;
+  --card-foreground: #f4f4fa;
+  --popover: #1a1d2c;
+  --popover-foreground: #f4f4fa;
+  --primary: #8b83ff;
+  --primary-foreground: #ffffff;
+  --secondary: #292c40;
+  --secondary-foreground: #f1f1f7;
+  --muted: #232638;
+  --muted-foreground: #a5a8ba;
+  --accent: #2c2b50;
+  --accent-foreground: #c7c4ff;
+  --destructive: #ff6b78;
+  --destructive-foreground: #1a1d2c;
+  --border: rgb(231 232 240 / 10%);
+  --input: rgb(231 232 240 / 16%);
+  --ring: #8b83ff;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    @apply font-sans;
+  }
   body {
     @apply bg-background text-foreground antialiased;
+    min-width: 320px;
   }
 
   * {
     scrollbar-color: var(--muted-foreground) var(--muted);
     scrollbar-width: thin;
-  }
-
-  *::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-  }
-
-  *::-webkit-scrollbar-track {
-    background: var(--muted);
-  }
-
-  *::-webkit-scrollbar-thumb {
-    border: 2px solid var(--muted);
-    border-radius: 999px;
-    background: var(--muted-foreground);
-  }
-
-  *::-webkit-scrollbar-thumb:hover {
-    background: var(--foreground);
   }
 }

@@ -18,7 +18,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { PRESETS, type Preset } from '@/lib/presets';
 import { useAppStore } from '@/stores/app-store';
@@ -211,11 +217,11 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             </div>
           </div>
 
-          <div className="rounded-md border">
+          <div className="rounded-xl border">
             <button
               type="button"
               onClick={toggleAdvanced}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-t-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:bg-accent/80"
+              className="flex w-full cursor-pointer items-center gap-2 rounded-t-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground active:bg-accent/80"
             >
               {advanced ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
               高级：原始配置
@@ -359,12 +365,17 @@ function ExtraField({
     <div className={field.kind === 'textarea' ? 'space-y-2 sm:col-span-2' : 'space-y-2'}>
       <Label htmlFor={id}>{field.label}</Label>
       {field.kind === 'select' ? (
-        <Select id={id} value={value} onChange={(event) => onChange(event.target.value)}>
-          {field.options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+        <Select value={value} onValueChange={onChange} required={field.required}>
+          <SelectTrigger id={id} aria-label={field.label}>
+            <SelectValue placeholder={field.placeholder ?? '请选择'} />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options?.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       ) : field.kind === 'textarea' ? (
         <Textarea

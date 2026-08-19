@@ -1,5 +1,5 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { CircleUserRound, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CircleUserRound, Pencil, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import {
   AlertDialog,
@@ -13,8 +13,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 type HarnessCardProps = {
@@ -31,29 +31,61 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
   const [pendingName, setPendingName] = useState<string | null>(null);
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between space-y-0">
-        <div className="space-y-1">
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground">
-            {harness.id.toUpperCase()}
-          </p>
-          <CardTitle>{harness.label}</CardTitle>
-          <CardDescription>当前：{harness.active ? harness.active.name : '未激活'}</CardDescription>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <div className="space-y-6">
+      <Card className="overflow-hidden border-primary/10">
+        <CardContent className="p-5 sm:p-6">
+          <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(15rem,0.85fr)] sm:divide-x">
+            <div className="min-w-0 sm:pr-5">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="size-2 rounded-full bg-primary shadow-[0_0_0_4px_rgb(99_91_255/0.1)]" />
+                当前生效配置
+              </div>
+              <CardTitle className="mt-3 truncate text-xl">
+                {harness.active ? `当前激活 · ${harness.active.name}` : '未激活'}
+              </CardTitle>
+              <CardDescription className="mt-1">
+                当前：{harness.active ? harness.active.name : '未激活'}
+              </CardDescription>
+            </div>
+            <div className="min-w-0 sm:pl-5">
+              <p className="text-xs text-muted-foreground">写入目标</p>
+              <p className="mt-3 truncate font-mono text-sm">
+                {harness.targets[0]?.path ?? '未配置目标文件'}
+              </p>
+              {harness.targets.length > 1 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  以及另外 {harness.targets.length - 1} 个文件
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className="mt-5 flex items-start gap-3 border-t pt-4 text-sm text-muted-foreground">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/[0.08] text-primary">
+              <ShieldCheck className="size-4" />
+            </span>
+            <p className="pt-1 leading-relaxed">
+              配置将直接覆盖目标文件。写入前会自动备份，切换后请验证服务连通性与模型可用性。
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">配置档案</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {harness.profiles.length} 个自定义配置
+            </p>
+          </div>
           {extraActions}
-          <Button size="sm" onClick={onAdd}>
-            <Plus />
-            新增
-          </Button>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {harness.supportsOfficialAuth ? (
-          <>
-            <div className="flex items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3">
+
+        <div className="space-y-3">
+          {harness.supportsOfficialAuth ? (
+            <div className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-4 shadow-[0_10px_28px_-26px_rgb(36_39_70/0.38)]">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground shadow-sm ring-1 ring-border">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
                   <CircleUserRound className="size-4" />
                 </span>
                 <div className="min-w-0">
@@ -61,7 +93,7 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     <p className="font-medium">官方登录</p>
                     {harness.active?.official ? <Badge variant="secondary">已激活</Badge> : null}
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="mt-0.5 text-xs text-muted-foreground">
                     {harness.id === 'claude'
                       ? '使用 Claude Code 自身的 Anthropic 账号登录'
                       : '使用 Codex 自身的 ChatGPT / OpenAI 账号登录'}
@@ -77,37 +109,60 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                 {harness.active?.official ? '已使用' : '切回官方'}
               </Button>
             </div>
-            <Separator />
-          </>
-        ) : null}
-        {harness.profiles.length === 0 ? (
-          <p className="py-4 text-sm text-muted-foreground">还没有配置档案</p>
-        ) : (
-          harness.profiles.map((profile, index) => {
-            const active = harness.active?.name === profile.name;
-            return (
-              <div key={profile.name}>
-                {index > 0 ? <Separator className="mb-3" /> : null}
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">{profile.name}</p>
-                      {active ? <Badge variant="secondary">已激活</Badge> : null}
-                      {profile.overriddenTargets.length > 0 ? (
-                        <Badge variant="outline">手动接管</Badge>
+          ) : null}
+          {harness.profiles.length === 0 ? (
+            <div className="rounded-xl border border-dashed bg-card/60 px-5 py-8 text-center">
+              <p className="text-sm text-muted-foreground">还没有配置档案</p>
+              <Button className="mt-4" size="sm" onClick={onAdd}>
+                <Plus />
+                新增配置
+              </Button>
+            </div>
+          ) : (
+            harness.profiles.map((profile) => {
+              const active = harness.active?.name === profile.name;
+              return (
+                <div
+                  key={profile.name}
+                  className={cn(
+                    'flex flex-col gap-4 rounded-xl border bg-card px-4 py-4 shadow-[0_10px_28px_-26px_rgb(36_39_70/0.38)] transition-[border-color,background-color,box-shadow] sm:flex-row sm:items-center sm:justify-between',
+                    active
+                      ? 'border-primary/20 bg-primary/[0.035] shadow-[0_12px_30px_-24px_rgb(99_91_255/0.35)]'
+                      : 'hover:border-primary/15 hover:bg-card/85',
+                  )}
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span
+                      className={cn(
+                        'mt-2 size-2 shrink-0 rounded-full',
+                        active ? 'bg-primary' : 'bg-muted-foreground/30',
+                      )}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{profile.name}</p>
+                        {active ? <Badge>已激活</Badge> : null}
+                        {profile.overriddenTargets.length > 0 ? (
+                          <Badge variant="outline">手动接管</Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
+                        {profile.baseUrl}
+                      </p>
+                      {profile.model ? (
+                        <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                          {profile.model}
+                        </p>
                       ) : null}
                     </div>
-                    <p className="truncate text-xs text-muted-foreground">{profile.baseUrl}</p>
-                    {profile.model ? (
-                      <p className="text-xs text-muted-foreground">{profile.model}</p>
-                    ) : null}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
                     <Button
                       size="sm"
-                      variant={active ? 'secondary' : 'default'}
+                      variant={active ? 'secondary' : 'outline'}
                       onClick={() => activateProfile(harness.id, profile.name)}
                     >
+                      {!active ? <Play /> : null}
                       {active ? '已激活' : '激活'}
                     </Button>
                     <Button
@@ -130,11 +185,11 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     </Button>
                   </div>
                 </div>
-              </div>
-            );
-          })
-        )}
-      </CardContent>
+              );
+            })
+          )}
+        </div>
+      </section>
       <AlertDialog
         open={pendingName !== null}
         onOpenChange={(open) => !open && setPendingName(null)}
@@ -162,6 +217,6 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Card>
+    </div>
   );
 }

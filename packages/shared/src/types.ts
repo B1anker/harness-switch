@@ -170,6 +170,50 @@ export type BackupsResponse = {
   items: BackupEntry[];
 };
 
+export type TransferEnvelope = {
+  format: 'harness-switch-encrypted-export';
+  version: 1;
+  kdf: {
+    name: 'scrypt';
+    salt: string;
+  };
+  cipher: {
+    name: 'aes-256-gcm';
+    iv: string;
+    tag: string;
+    data: string;
+  };
+};
+
+export type TransferConflict = {
+  harness: HarnessId;
+  name: string;
+};
+
+export type TransferHarnessCount = {
+  harness: HarnessId;
+  profiles: number;
+};
+
+export type TransferPreview = {
+  exportedAt: string;
+  profileCount: number;
+  harnesses: TransferHarnessCount[];
+  conflicts: TransferConflict[];
+  activeCount: number;
+};
+
+export type TransferConflictPolicy = 'skip' | 'overwrite';
+
+export type TransferImportResponse = {
+  ok: true;
+  imported: number;
+  overwritten: number;
+  skipped: number;
+  activeRestored: number;
+  warnings: string[];
+};
+
 export type OkResponse = {
   ok: true;
 };

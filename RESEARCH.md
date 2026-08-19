@@ -29,6 +29,8 @@ Codex 的 `auth.json` **就是登录缓存本身**，里面有 `tokens.refresh_t
 - `env_key` 最符合官方推荐，但密钥来自进程环境变量，正好踩在本项目要解决的问题上。
 - `requires_openai_auth = true` + `auth.json` 兼容性最好，写之前会先把旧 `auth.json` 完整快照进备份。注意此模式下 Codex 会忽略 `env_key`，两者不能同设。
 
+切回官方登录时必须删掉整个 `model_providers` 表，而不是只删当前那一条。Codex UI 会把残留的第三方 provider 重新选中；若那条还指着 OpenRouter，ChatGPT OAuth 不会作为 `Authorization` 发出去，就会 401 Missing Authentication header。`auth.json` 里残留的 `OPENAI_API_KEY` 也一并清掉，OAuth tokens 保留。
+
 还有两个约束：只能写用户级 `$CODEX_HOME/config.toml`，因为项目级 `.codex/config.toml` 里的 `model_provider` / `model_providers` 会被忽略并告警；provider id 不能撞上 `openai` / `ollama` / `lmstudio` / `amazon-bedrock` 以及历史别名 `oss` / `ollama-chat`。
 
 ## Kimi Code 不是 Kimi CLI

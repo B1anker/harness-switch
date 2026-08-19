@@ -28,5 +28,11 @@ export type {
   ProfilePublic,
   SessionResponse,
   TargetSpec,
+  TransferConflict,
+  TransferConflictPolicy,
+  TransferEnvelope,
+  TransferHarnessCount,
+  TransferImportResponse,
+  TransferPreview,
   UpdateProfileRequest,
 } from './types';

@@ -29,14 +29,32 @@ test('renders the harness specific fields the server described', () => {
   setup();
   render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
 
-  const select = screen.getByLabelText('凭据变量') as HTMLSelectElement;
+  const select = screen.getByRole('combobox', { name: '凭据变量' });
   // The form is driven by the server's field specs, so the schema lives in one place.
-  expect(select.value).toBe('ANTHROPIC_AUTH_TOKEN');
-  expect([...select.options].map((option) => option.value)).toEqual([
-    'ANTHROPIC_AUTH_TOKEN',
-    'ANTHROPIC_API_KEY',
-  ]);
+  expect(select).toHaveTextContent('ANTHROPIC_AUTH_TOKEN');
+  fireEvent.pointerDown(select, { button: 0, pointerType: 'mouse' });
+  expect(screen.getByRole('option', { name: /^ANTHROPIC_AUTH_TOKEN/ })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: /^ANTHROPIC_API_KEY/ })).toBeInTheDocument();
   expect(screen.getByText(/settings\.json/)).toBeInTheDocument();
+});
+
+test('selecting an option updates the controlled extra field', async () => {
+  const recorded = setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  const select = screen.getByRole('combobox', { name: '凭据变量' });
+  fireEvent.pointerDown(select, { button: 0, pointerType: 'mouse' });
+  fireEvent.click(screen.getByRole('option', { name: /^ANTHROPIC_API_KEY/ }));
+
+  fill('配置名称', 'component-select');
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-test');
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  await waitFor(() => expect(recorded.created).toHaveLength(1));
+  expect(recorded.created[0]?.[1]).toMatchObject({
+    extras: { authVar: 'ANTHROPIC_API_KEY' },
+  });
 });
 
 test('creating submits the core fields together with the field defaults', async () => {
@@ -95,7 +113,7 @@ test('editing can rename the profile and keeps the stored key when left blank', 
 
   expect(screen.getByLabelText('配置名称')).toHaveValue('openrouter-main');
   expect(screen.getByLabelText('API Base URL')).toHaveValue('https://api.example.com/v1');
-  expect(screen.getByLabelText('凭据变量')).toHaveValue('ANTHROPIC_API_KEY');
+  expect(screen.getByRole('combobox', { name: '凭据变量' })).toHaveTextContent('ANTHROPIC_API_KEY');
   expect(screen.getByLabelText('API Key')).toHaveAttribute('placeholder', '留空表示保持不变');
 
   fill('配置名称', 'renamed-main');
