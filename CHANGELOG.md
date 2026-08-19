@@ -1,3 +1,10 @@
+# [0.11.0](https://github.com/B1anker/harness-switch/compare/v0.10.0...v0.11.0) (2026-08-19)
+
+
+### Features
+
+* confirm profile activation with a diff against live files ([a7cfaa8](https://github.com/B1anker/harness-switch/commit/a7cfaa84903d5834ff8674ef94dc16e6be49cb11))
+
 # [0.10.0](https://github.com/B1anker/harness-switch/compare/v0.9.0...v0.10.0) (2026-08-19)
 
 
