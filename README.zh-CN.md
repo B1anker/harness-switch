@@ -137,36 +137,29 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `POST` | `/api/transfer/preview` | 解密并报告配置数量与冲突，不写入任何内容 |
 | `POST` | `/api/transfer/import` | 导入，冲突处理方式为 `skip` 或 `overwrite` |
 
-## systemd
+## 后台守护进程（bunx / npx）
 
-创建 `/etc/systemd/system/harness-switch.service`：
-
-```ini
-[Unit]
-Description=Harness Switch Web Control Plane
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-Environment=HOST=127.0.0.1
-Environment=PORT=8787
-ExecStart=/usr/bin/env harness-switch
-Restart=on-failure
-RestartSec=3
-NoNewPrivileges=true
-PrivateTmp=true
-
-[Install]
-WantedBy=multi-user.target
-```
-
-然后执行：
+发布的 CLI 默认以后台守护进程方式运行：命令立即返回，关闭终端后服务依然在跑；发布新版本后重新运行，会重启守护进程并切换到最新版本。
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now harness-switch
-sudo journalctl -u harness-switch -f
+bunx @seaveyon/harness-switch@latest             # 启动，或更新并重启守护进程
+bunx @seaveyon/harness-switch@latest status      # 查看 pid、地址、日志路径
+bunx @seaveyon/harness-switch@latest stop        # 停止守护进程
+bunx @seaveyon/harness-switch@latest server      # 改为前台运行
+```
+
+`npx -y @seaveyon/harness-switch@latest` 效果相同。加上 `@latest` 可以保证 `bunx`/`npx` 每次先拉取最新发布版本。
+
+守护进程把 pid 写入 `~/.harness-switch/daemon.pid`，把日志写入 `~/.harness-switch/daemon.log`（每次启动重新生成）。首次运行会创建 Web 登录密码 `~/.harness-switch/web_password` 并打印到日志。如果已有守护进程在运行，再次调用会先停掉旧进程再启动新进程，因此端口不会冲突，最新代码总是生效。
+
+如果要在 systemd（或其他进程守护工具）下运行，请改用前台模式：
+
+```ini
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/harness-switch server
+Restart=on-failure
+RestartSec=3
 ```
 
 ## 开发
@@ -205,7 +198,7 @@ bun run check
 bun run precommit
 ```
 
-生产构建（前端产物会被复制到 `apps/server/public`，随后打包 CLI）：
+生产构建（前端产物会被复制到 `apps/server/public`，随后打包 CLI）。`bun run start` 会启动守护进程；如需前台运行请用 `bun run start:foreground`：
 
 ```bash
 bun run build
