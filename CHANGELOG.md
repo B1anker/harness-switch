@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/B1anker/harness-switch/compare/v0.9.0...v0.10.0) (2026-08-19)
+
+
+### Features
+
+* one-click update from the dashboard when a new version is out ([febaedf](https://github.com/B1anker/harness-switch/commit/febaedf824ce57620182ce58c5342941d5853987))
+
 # [0.9.0](https://github.com/B1anker/harness-switch/compare/v0.8.0...v0.9.0) (2026-08-19)
 
 
