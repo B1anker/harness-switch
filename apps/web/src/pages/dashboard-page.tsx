@@ -1,18 +1,14 @@
 import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
+import { ArrowRightLeft, ChevronDown, LogOut, Plus, Server, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
 import { HarnessCard } from '@/components/harness-card';
+import { HarnessIcon } from '@/components/harness-icon';
+import { NoticeToast } from '@/components/notice-toast';
 import { ProfileDialog } from '@/components/profile-dialog';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { TransferDialog } from '@/components/transfer-dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -24,90 +20,98 @@ type Editing = {
 export function DashboardPage() {
   const harnesses = useAppStore((state) => state.harnesses);
   const envFile = useAppStore((state) => state.envFile);
-  const notice = useAppStore((state) => state.notice);
   const logout = useAppStore((state) => state.logout);
-  const clearNotice = useAppStore((state) => state.clearNotice);
+  const backups = useAppStore((state) => state.backups);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
 
   return (
-    <div className="min-h-svh">
-      <header className="flex h-16 items-center justify-between border-b px-6">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.18em] text-muted-foreground">
-            SERVER-SIDE CONTROL PLANE
-          </p>
-          <h1 className="text-lg font-semibold">harness-switch</h1>
-        </div>
-        <Button variant="outline" onClick={() => void logout()}>
-          退出
-        </Button>
-      </header>
-      <main className="mx-auto max-w-6xl space-y-8 px-6 py-10">
-        <section className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
-          <div className="space-y-3">
-            <p className="w-fit rounded-full border px-3 py-1 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground">
-              SSH / HEADLESS
-            </p>
-            <h2 className="max-w-2xl text-3xl font-semibold tracking-tight">
-              把 API 路由切换变成一个动作。
-            </h2>
-            <p className="max-w-2xl text-muted-foreground">
-              激活时直接写入各工具自己的配置文件，因此常驻进程 spawn 出来的 CLI
-              也能拿到新配置，不依赖你在某个 shell 里 source 过什么。
-            </p>
-          </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>安全提示</CardTitle>
-              <CardDescription>
-                API key
-                在服务器本地加密保存，列表不会回显明文；写入原生配置文件时会保留文件原有权限。
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </section>
-        <section className="space-y-4">
-          <HarnessTabs
-            harnesses={harnesses}
-            value={selectedHarness?.id}
-            onChange={setSelectedHarnessId}
-          />
-          {selectedHarness ? (
-            <div
-              role="tabpanel"
-              id={`harness-panel-${selectedHarness.id}`}
-              aria-labelledby={`harness-tab-${selectedHarness.id}`}
-            >
-              <HarnessCard
-                harness={selectedHarness}
-                extraActions={<BackupPanel harnessId={selectedHarness.id} />}
-                onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
-                onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
-              />
+    <div className="min-h-[100dvh] bg-background">
+      <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur-xl">
+        <div className="flex h-20 items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_rgb(99_91_255/0.8)]">
+              <SlidersHorizontal className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="truncate text-base font-semibold tracking-tight">harness-switch</h1>
+              <p className="truncate text-xs text-muted-foreground">写入原生配置</p>
             </div>
-          ) : null}
-        </section>
-        <Card>
-          <CardHeader>
-            <CardTitle>环境文件（兼容层）</CardTitle>
-            <CardDescription>
-              切换本身不需要它。只有 Codex 选择「环境变量」认证方式时才需要在对应 shell 执行：
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <code className="block rounded-md border bg-muted px-3 py-2 text-sm">
-              source {envFile || '~/.harness-switch/env.sh'}
-            </code>
-            <p className="text-sm text-muted-foreground">
-              文件里只会写入对应工具确实认识的变量。Kimi Code 与 Pi 不从 shell
-              读取凭据，所以它们只有一行注释。
-            </p>
-          </CardContent>
-        </Card>
-      </main>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
+              <ArrowRightLeft />
+              <span className="hidden sm:inline">导入 / 导出</span>
+            </Button>
+            <ThemeToggle />
+            <Button variant="ghost" size="sm" onClick={() => void logout()}>
+              <LogOut />
+              退出
+            </Button>
+          </div>
+        </div>
+      </header>
+      <div className="grid xl:grid-cols-[17rem_minmax(0,1fr)_18rem]">
+        <HarnessTabs
+          harnesses={harnesses}
+          value={selectedHarness?.id}
+          onChange={setSelectedHarnessId}
+        />
+        {selectedHarness ? (
+          <main
+            role="tabpanel"
+            id={`harness-panel-${selectedHarness.id}`}
+            aria-labelledby={`harness-tab-${selectedHarness.id}`}
+            className="min-w-0 space-y-6 p-4 sm:p-6 xl:p-8"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold tracking-tight">{selectedHarness.label}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  管理配置档案并安全写入该工具的原生配置文件。
+                </p>
+              </div>
+              <Button
+                className="self-start sm:self-auto"
+                onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
+              >
+                <Plus />
+                新增配置
+              </Button>
+            </div>
+            <HarnessCard
+              harness={selectedHarness}
+              onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
+              onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
+            />
+            <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+                <span className="font-mono text-[13px]">环境变量文件兼容性</span>
+                <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+              </summary>
+              <p className="mt-4 leading-relaxed text-muted-foreground">
+                切换本身不需要它。只有 Codex 选择「环境变量」认证方式时才需要在对应 shell 执行：
+              </p>
+              <code className="mt-3 block rounded-xl bg-muted/70 px-4 py-3 font-mono text-[13px]">
+                source {envFile || '~/.harness-switch/env.sh'}
+              </code>
+              <p className="mt-3 leading-relaxed text-muted-foreground">
+                文件里只会写入对应工具确实认识的变量。Kimi Code 与 Pi 不从 shell
+                读取凭据，所以它们只有一行注释。
+              </p>
+            </details>
+          </main>
+        ) : null}
+        {selectedHarness ? (
+          <ContextPanel
+            harness={selectedHarness}
+            latestBackup={backups.find((backup) => backup.harness === selectedHarness.id)}
+          />
+        ) : null}
+      </div>
       {editing && editingHarness ? (
         <ProfileDialog
           key={`${editing.harnessId}-${editing.profile?.name ?? 'new'}`}
@@ -116,17 +120,8 @@ export function DashboardPage() {
           onOpenChange={(open) => !open && setEditing(null)}
         />
       ) : null}
-      <Dialog open={notice !== null} onOpenChange={(open) => !open && clearNotice()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>操作完成</DialogTitle>
-            <DialogDescription className="whitespace-pre-wrap">{notice}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={clearNotice}>知道了</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
+      <NoticeToast />
     </div>
   );
 }
@@ -141,12 +136,21 @@ function HarnessTabs({
   onChange: (id: HarnessId) => void;
 }) {
   function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+    const backward = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
+    const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
+    if (!backward && !forward && event.key !== 'Home' && event.key !== 'End') {
       return;
     }
     event.preventDefault();
-    const offset = event.key === 'ArrowRight' ? 1 : -1;
-    const nextIndex = (index + offset + harnesses.length) % harnesses.length;
+    let nextIndex = index;
+    if (event.key === 'Home') {
+      nextIndex = 0;
+    } else if (event.key === 'End') {
+      nextIndex = harnesses.length - 1;
+    } else {
+      const offset = forward ? 1 : -1;
+      nextIndex = (index + offset + harnesses.length) % harnesses.length;
+    }
     const next = harnesses[nextIndex];
     if (next) {
       onChange(next.id);
@@ -160,7 +164,8 @@ function HarnessTabs({
     <div
       role="tablist"
       aria-label="切换 Harness"
-      className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/50 p-1.5 md:grid-cols-5"
+      aria-orientation="vertical"
+      className="flex gap-2 overflow-x-auto border-b bg-card/45 p-3 xl:min-h-[calc(100dvh-80px)] xl:flex-col xl:overflow-x-visible xl:border-b-0 xl:border-r xl:p-4"
     >
       {harnesses.map((harness, index) => {
         const selected = harness.id === value;
@@ -176,29 +181,29 @@ function HarnessTabs({
             onClick={() => onChange(harness.id)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              'group flex min-w-0 cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-[color,background-color,box-shadow,transform] hover:bg-background/70 active:translate-y-px',
+              'flex min-w-[12rem] shrink-0 cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left transition-[color,background-color,box-shadow,transform] duration-150 active:translate-y-px xl:min-w-0 xl:w-full',
               selected
-                ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                : 'text-muted-foreground hover:text-foreground',
+                ? 'bg-primary/[0.09] text-primary shadow-[inset_0_0_0_1px_rgb(99_91_255/0.13)]'
+                : 'text-muted-foreground hover:bg-card hover:text-foreground',
             )}
           >
             <span
               className={cn(
-                'flex size-8 shrink-0 items-center justify-center rounded-md border bg-background font-mono text-[11px] font-bold uppercase transition-colors',
-                selected && 'border-primary/30 bg-primary text-primary-foreground',
+                'flex size-10 shrink-0 items-center justify-center rounded-xl border bg-card shadow-[0_4px_12px_-8px_rgb(36_39_70/0.28)]',
+                selected ? 'border-primary/20' : 'border-border',
               )}
             >
-              {tabMark(harness.id)}
+              <HarnessIcon id={harness.id} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium text-current">
                 {harness.label}
               </span>
-              <span className="block truncate text-[11px] text-muted-foreground">
+              <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
                 {harness.active ? `当前：${harness.active.name}` : '当前：未激活'}
               </span>
             </span>
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-secondary-foreground">
+            <span className="font-mono text-[11px] text-muted-foreground">
               {harness.profiles.length}
             </span>
           </button>
@@ -208,13 +213,68 @@ function HarnessTabs({
   );
 }
 
-function tabMark(id: HarnessId): string {
-  const marks: Record<HarnessId, string> = {
-    claude: 'CL',
-    codex: 'CX',
-    kimi: 'KM',
-    pi: 'PI',
-    dsh: 'DS',
-  };
-  return marks[id];
+function ContextPanel({
+  harness,
+  latestBackup,
+}: {
+  harness: HarnessSummary;
+  latestBackup:
+    | {
+        profile: string;
+        createdAt: string;
+        files: { path: string }[];
+      }
+    | undefined;
+}) {
+  return (
+    <aside className="border-t bg-card/35 p-4 sm:p-6 xl:min-h-[calc(100dvh-80px)] xl:border-l xl:border-t-0 xl:p-5">
+      <div className="space-y-4 xl:sticky xl:top-[100px]">
+        <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
+          <div className="flex items-center gap-2">
+            <Server className="size-4 text-primary" />
+            <h3 className="font-semibold">写入目标</h3>
+          </div>
+          <div className="mt-5 space-y-4">
+            <div>
+              <p className="text-xs text-muted-foreground">应用</p>
+              <p className="mt-1 text-sm font-medium">{harness.label}</p>
+            </div>
+            {harness.targets.map((target) => (
+              <div key={target.key}>
+                <p className="text-xs text-muted-foreground">{target.label}</p>
+                <p className="mt-1 break-all font-mono text-xs leading-relaxed">{target.path}</p>
+              </div>
+            ))}
+            <div>
+              <p className="text-xs text-muted-foreground">写入模式</p>
+              <p className="mt-1 text-sm">
+                {harness.mode === 'replace' ? '替换当前配置' : '保留并切换指针'}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
+          <h3 className="font-semibold">最近备份</h3>
+          {latestBackup ? (
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">配置档案</p>
+                <p className="mt-1 truncate text-sm font-medium">{latestBackup.profile}</p>
+              </div>
+              <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">
+                {new Date(latestBackup.createdAt).toLocaleString()} · {latestBackup.files.length}{' '}
+                个文件
+              </p>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">还没有历史快照</p>
+          )}
+          <div className="mt-4 border-t pt-4">
+            <BackupPanel harnessId={harness.id} />
+          </div>
+        </section>
+      </div>
+    </aside>
+  );
 }

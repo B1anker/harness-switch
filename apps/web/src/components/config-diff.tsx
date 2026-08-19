@@ -42,7 +42,7 @@ export function ConfigDiffs({ files }: { files: BackupFileDetail[] }) {
 function ConfigFileDiff({ file }: { file: BackupFileDetail }) {
   const kind = changeKind(file);
   return (
-    <div className="overflow-hidden rounded-md border">
+    <div className="overflow-hidden rounded-xl border">
       <div className="flex items-center justify-between gap-2 border-b bg-muted/40 px-3 py-2">
         <p className="min-w-0 truncate font-mono text-xs" title={file.path}>
           {file.path}

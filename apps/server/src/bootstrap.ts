@@ -10,6 +10,7 @@ import { ILiveWriteService, LiveWriteService } from './services/live-write';
 import { ILogService, LogService } from './services/log';
 import { IProfileService, ProfileService } from './services/profiles';
 import { HarnessRegistry, IHarnessRegistry } from './services/registry';
+import { ITransferService, TransferService } from './services/transfer';
 
 export function createServices(): InstantiationService {
   const collection = new ServiceCollection();
@@ -24,5 +25,6 @@ export function createServices(): InstantiationService {
   collection.set(ILiveWriteService, new SyncDescriptor(LiveWriteService));
   collection.set(IProfileService, new SyncDescriptor(ProfileService));
   collection.set(IActivationService, new SyncDescriptor(ActivationService));
+  collection.set(ITransferService, new SyncDescriptor(TransferService));
   return new InstantiationService(collection);
 }

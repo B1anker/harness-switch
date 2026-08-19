@@ -31,6 +31,10 @@ test('switches the visible harness with the app tabs', () => {
 
   render(<DashboardPage />);
 
+  fireEvent.click(screen.getByRole('button', { name: '导入 / 导出' }));
+  expect(screen.getByRole('heading', { name: '全局配置迁移' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
   const claudeTab = screen.getByRole('tab', { name: /Claude Code/ });
   const codexTab = screen.getByRole('tab', { name: /Codex/ });
   expect(claudeTab).toHaveAttribute('aria-selected', 'true');

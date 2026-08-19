@@ -160,34 +160,23 @@ export class CodexAdapter implements HarnessAdapter {
     return rendered;
   }
 
-  renderOfficial(profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles {
+  renderOfficial(_profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles {
     const config = parseTomlObject(current[CONFIG]);
-    // Codex UI (or a stale leftover) can re-point `model_provider` at an orphan
-    // provider that is not the previous profile id. Clear both so official login
-    // cannot keep routing to a third-party base_url with ChatGPT OAuth.
-    const activeProviderId = readString(config, 'model_provider');
-
+    // Official login is Codex's built-in ChatGPT provider. Leftover custom
+    // model_providers stay selectable in the UI; if one still points at
+    // OpenRouter, ChatGPT OAuth is not sent there and the request 401s.
     delete config.model_provider;
     delete config.model;
     delete config.model_reasoning_effort;
-
-    if (isPlainObject(config.model_providers)) {
-      if (profile) {
-        delete config.model_providers[this.providerId(profile)];
-      }
-      if (activeProviderId) {
-        delete config.model_providers[activeProviderId];
-      }
-      if (Object.keys(config.model_providers).length === 0) {
-        delete config.model_providers;
-      }
-    }
+    delete config.model_providers;
 
     const rendered: RenderedFiles = { [CONFIG]: stringifyToml(config) };
-    if (profile && this.authMode(profile) === 'openai_auth') {
+    if (current[AUTH] !== undefined) {
       const auth = parseJsonObject(current[AUTH]);
-      delete auth[DEFAULT_ENV_KEY];
-      rendered[AUTH] = stringifyJson(auth);
+      if (DEFAULT_ENV_KEY in auth) {
+        delete auth[DEFAULT_ENV_KEY];
+        rendered[AUTH] = stringifyJson(auth);
+      }
     }
     return rendered;
   }

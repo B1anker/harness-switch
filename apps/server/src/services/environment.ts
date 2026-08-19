@@ -18,6 +18,7 @@ export interface IEnvironmentService {
     password: string;
     key: string;
     env: string;
+    sessions: string;
   };
   readonly backupsDir: string;
   readonly backupRetainCount: number;
@@ -42,7 +43,7 @@ export class EnvironmentService implements IEnvironmentService {
   readonly homeDir = process.env.HSW_HOME_DIR || homedir();
   readonly dataDir = process.env.HSW_DATA_DIR || join(this.homeDir, '.harness-switch');
   readonly publicDir = process.env.HSW_PUBLIC_DIR || resolvePublicDir();
-  readonly sessionTtlMs = 24 * 60 * 60 * 1000;
+  readonly sessionTtlMs = resolveSessionTtlMs();
   readonly cookieName = 'hsw_session';
   readonly files = {
     profiles: join(this.dataDir, 'profiles.json'),
@@ -50,6 +51,7 @@ export class EnvironmentService implements IEnvironmentService {
     password: join(this.dataDir, 'web_password'),
     key: join(this.dataDir, 'aes-256-gcm.key'),
     env: join(this.dataDir, 'env.sh'),
+    sessions: join(this.dataDir, 'sessions.json'),
   };
   readonly backupsDir = join(this.dataDir, 'backups');
   readonly backupRetainCount = Math.max(1, Number(process.env.HSW_BACKUP_RETAIN || 10));
@@ -64,6 +66,12 @@ export class EnvironmentService implements IEnvironmentService {
   ensureDataDir(): void {
     mkdirSync(this.dataDir, { recursive: true, mode: 0o700 });
   }
+}
+
+/** Falls back to a day when the override is missing or not a positive number. */
+function resolveSessionTtlMs(): number {
+  const hours = Number(process.env.HSW_SESSION_TTL_HOURS || 24);
+  return (Number.isFinite(hours) && hours > 0 ? hours : 24) * 60 * 60 * 1000;
 }
 
 function resolvePublicDir(): string {

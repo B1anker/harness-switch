@@ -75,7 +75,12 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+      <Button
+        className="w-full justify-between"
+        size="sm"
+        variant="outline"
+        onClick={() => setOpen(true)}
+      >
         <History />
         配置历史
         {items.length > 0 ? <Badge variant="secondary">{items.length}</Badge> : null}
@@ -92,9 +97,12 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
           {items.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">还没有历史快照</p>
           ) : (
-            <ul className="max-h-80 divide-y overflow-y-auto rounded-md border">
+            <ul className="max-h-80 divide-y overflow-y-auto rounded-xl border">
               {items.map((backup) => (
-                <li key={backup.id} className="flex items-center gap-3 px-3 py-2">
+                <li
+                  key={backup.id}
+                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/30"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <p className="truncate text-sm font-medium">{backup.profile}</p>
