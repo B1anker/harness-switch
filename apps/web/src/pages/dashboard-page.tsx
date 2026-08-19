@@ -33,21 +33,23 @@ export function DashboardPage() {
   return (
     <div className="min-h-[100dvh] bg-background">
       <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur-xl">
-        <div className="flex h-20 items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="flex min-h-20 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_rgb(99_91_255/0.8)]">
               <SlidersHorizontal className="size-5" />
             </span>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-base font-semibold tracking-tight">harness-switch</h1>
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">
+                  harness-switch
+                </h1>
                 <VersionBadge />
                 <UpdateButton />
               </div>
               <p className="truncate text-xs text-muted-foreground">写入原生配置</p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft />
               <span className="hidden sm:inline">导入 / 导出</span>

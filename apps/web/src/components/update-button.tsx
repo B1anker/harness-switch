@@ -59,8 +59,8 @@ export function UpdateButton() {
 
   if (phase === 'updating') {
     return (
-      <span className="flex h-6 items-center gap-1.5 rounded-md bg-muted/70 px-2 font-mono text-[11px] text-muted-foreground">
-        <Loader2 className="size-3 animate-spin" />
+      <span className="flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-muted/70 px-2 font-mono text-[11px] text-muted-foreground">
+        <Loader2 className="size-3 shrink-0 animate-spin" />
         更新中…
       </span>
     );
@@ -69,7 +69,7 @@ export function UpdateButton() {
     return (
       <span
         title="手动运行 bunx @seaveyon/harness-switch@latest"
-        className="flex h-6 items-center rounded-md bg-destructive/10 px-2 font-mono text-[11px] text-destructive"
+        className="flex h-6 shrink-0 items-center whitespace-nowrap rounded-md bg-destructive/10 px-2 font-mono text-[11px] text-destructive"
       >
         更新失败
       </span>
@@ -82,11 +82,13 @@ export function UpdateButton() {
     <Button
       variant="outline"
       size="sm"
-      className="h-6 gap-1 px-2 font-mono text-[11px]"
+      aria-label={`更新到 v${latest}`}
+      className="h-6 shrink-0 gap-1 whitespace-nowrap px-2 font-mono text-[11px]"
       onClick={() => void update()}
     >
-      <Sparkles className="size-3" />
-      更新到 v{latest}
+      <Sparkles className="size-3 shrink-0" />
+      <span className="sm:hidden">更新</span>
+      <span className="hidden sm:inline">更新到 v{latest}</span>
     </Button>
   );
 }

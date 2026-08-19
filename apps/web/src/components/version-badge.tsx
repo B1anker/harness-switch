@@ -21,7 +21,7 @@ export function VersionBadge() {
     return null;
   }
   return (
-    <span className="rounded-md bg-muted/70 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+    <span className="shrink-0 whitespace-nowrap rounded-md bg-muted/70 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
       v{version}
     </span>
   );
