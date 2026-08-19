@@ -17,9 +17,10 @@
     "test": "bun run --filter @seaveyon/harness-switch test && bun run --filter @seaveyon/harness-switch-web test",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
+    "typecheck": "bunx tsc -p apps/server/tsconfig.json && bunx tsc -p apps/web/tsconfig.json",
     "format": "biome check --write .",
     "format:check": "biome check .",
-    "check": "oxlint . && biome check .",
+    "check": "bun run typecheck && oxlint . && biome check .",
     "precommit": "bun run check && bun run test",
     "prepare": "bun scripts/install-git-hooks.ts",
     "pack:check": "bun run build && bun scripts/npm-pack.ts --dry-run"

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServices } from '../src/bootstrap';
@@ -266,5 +266,43 @@ describe('file service', () => {
 
     expect(files.readJson(file, { fallback: true })).toEqual({ fallback: true });
     expect(files.readJson(join(homeDir, 'absent.json'), null)).toBeNull();
+  });
+
+  test('readOptional rethrows non-ENOENT errors instead of reporting an absent file', () => {
+    const files = services.get(IFileService);
+    const blocked = join(homeDir, 'blocked');
+    files.writeUserFile(blocked, 'not a directory');
+
+    expect(() => files.readOptional(join(blocked, 'config.json'))).toThrow();
+  });
+
+  test('readJsonStrict returns the fallback only when the file is absent', () => {
+    const files = services.get(IFileService);
+    expect(files.readJsonStrict(join(homeDir, 'absent.json'), { fallback: true })).toEqual({
+      fallback: true,
+    });
+  });
+
+  test('readJsonStrict quarantines a corrupt store instead of silently dropping it', () => {
+    const files = services.get(IFileService);
+    const file = join(homeDir, 'store.json');
+    files.writeUserFile(file, '{ nope');
+
+    expect(() => files.readJsonStrict(file, { fallback: true })).toThrow(/已隔离/);
+    expect(files.exists(file)).toBe(false);
+    const quarantined = readdirSync(homeDir).find((name) => name.startsWith('store.json.corrupt-'));
+    expect(quarantined).toBeDefined();
+    expect(files.readOptional(join(homeDir, quarantined as string))).toBe('{ nope');
+    // The next read is clean, so the service recovers instead of bricking.
+    expect(files.readJsonStrict(file, { fallback: true })).toEqual({ fallback: true });
+  });
+
+  test('a corrupt profile store fails closed instead of being overwritten as empty', () => {
+    const profiles = services.get(IProfileService);
+    const store = join(homeDir, '.harness-switch', 'profiles.json');
+    services.get(IFileService).writeUserFile(store, '{ nope');
+
+    expect(() => profiles.list('claude')).toThrow(/已隔离/);
+    expect(services.get(IFileService).exists(store)).toBe(false);
   });
 });

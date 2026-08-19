@@ -5,6 +5,8 @@ import type { InstantiationService } from '../../di';
 import { IActivationService } from '../../services/activation';
 import { IAdapterRegistry } from '../../services/adapters';
 import { IEnvironmentService } from '../../services/environment';
+import { IFileService } from '../../services/files';
+import { ILogService } from '../../services/log';
 import { IProfileService } from '../../services/profiles';
 import { IHarnessRegistry } from '../../services/registry';
 
@@ -25,6 +27,8 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   const activation = services.get(IActivationService);
   const adapters = services.get(IAdapterRegistry);
   const environment = services.get(IEnvironmentService);
+  const files = services.get(IFileService);
+  const log = services.get(ILogService);
 
   function summary(id: HarnessId) {
     const adapter = adapters.get(id);
@@ -74,24 +78,47 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const name = decodeURIComponent(c.req.param('name'));
     const body = await readBody(c.req.json.bind(c.req));
-    const profile = profiles.upsert(
-      harnessId,
-      {
-        name: String(body.name ?? name),
-        sourceName: name,
-        baseUrl: body.baseUrl,
-        apiKey: body.apiKey,
-        model: body.model,
-        notes: body.notes,
-        extras: body.extras,
-        overrides: body.overrides,
-      },
-      false,
-    );
-    // Editing the live provider must reach the live files immediately, otherwise the UI
-    // would show the new values while the tool keeps using the old ones.
-    activation.reconcileProfileUpdate(harnessId, name, profile.name);
-    return c.json(profile);
+    const wasActive = activation.getActive(harnessId)?.name === name;
+    // Snapshot the store before touching it: a live-file rewrite that fails part
+    // way must not leave the persisted profile, the active pointer and the live
+    // files each pointing at a different state.
+    const snapshot = files.readOptional(environment.files.profiles);
+    let persisted = false;
+    try {
+      const profile = profiles.upsert(
+        harnessId,
+        {
+          name: String(body.name ?? name),
+          sourceName: name,
+          baseUrl: body.baseUrl,
+          apiKey: body.apiKey,
+          model: body.model,
+          notes: body.notes,
+          extras: body.extras,
+          overrides: body.overrides,
+        },
+        false,
+      );
+      persisted = true;
+      // Editing the live provider must reach the live files immediately, otherwise the UI
+      // would show the new values while the tool keeps using the old ones.
+      activation.reconcileProfileUpdate(harnessId, name, profile.name);
+      return c.json(profile);
+    } catch (error) {
+      if (persisted) {
+        restoreProfileStore(files, environment.files.profiles, snapshot);
+        if (wasActive) {
+          try {
+            // Put the live files and the active pointer back on the previous
+            // profile so the edit is fully undone, not half-applied.
+            activation.activate(harnessId, name);
+          } catch (rollbackError) {
+            log.error(`edit rollback: failed to re-activate ${harnessId}/${name}`, rollbackError);
+          }
+        }
+      }
+      throw error;
+    }
   });
 
   app.delete('/:harnessId/profiles/:name', (c) => {
@@ -128,4 +155,16 @@ async function readBody(read: () => Promise<ProfileBody>): Promise<ProfileBody> 
   return read().catch(() => {
     throw new HttpError(400, 'invalid json');
   });
+}
+
+function restoreProfileStore(
+  files: IFileService,
+  path: string,
+  snapshot: string | undefined,
+): void {
+  if (snapshot === undefined) {
+    files.remove(path);
+    return;
+  }
+  files.writeSecure(path, snapshot);
 }

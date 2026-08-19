@@ -208,14 +208,13 @@ export class ActivationService implements IActivationService {
     if (!adapter.revoke) {
       return;
     }
-    try {
-      const profile = this.profiles.decrypt(harness, name);
-      const targets = adapter.targets();
-      const rendered = adapter.revoke(profile, this.readCurrent(targets));
-      this.liveWrite.apply(harness, name, this.toWrites(targets, rendered));
-    } catch (error) {
-      this.log.error(`failed to revoke ${harness}/${name} from live config`, error);
-    }
+    // Fail closed: if the provider cannot be removed from the live files, do not
+    // delete the profile either, or the orphan entry would be left behind with
+    // no record left to clean it up with.
+    const profile = this.profiles.decrypt(harness, name);
+    const targets = adapter.targets();
+    const rendered = adapter.revoke(profile, this.readCurrent(targets));
+    this.liveWrite.apply(harness, name, this.toWrites(targets, rendered));
   }
 
   /**
@@ -287,7 +286,9 @@ export class ActivationService implements IActivationService {
   }
 
   private read(): ActiveStore {
-    return this.files.readJson<ActiveStore>(this.environment.files.active, {});
+    // Strict: a corrupt active store must not be mistaken for "nothing active",
+    // or a later switch could write over it and lose the record of what is live.
+    return this.files.readJsonStrict<ActiveStore>(this.environment.files.active, {});
   }
 
   private writeEnv(active: ActiveStore): void {

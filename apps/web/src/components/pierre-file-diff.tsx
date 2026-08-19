@@ -14,20 +14,21 @@ export function PierreFileDiff({ file }: { file: BackupFileDetail }) {
   const name = file.path;
   const oldFile = file.currentContent === null ? null : { name, contents: file.currentContent };
   const newFile = file.content === null ? null : { name, contents: file.content };
-  if (oldFile === null && newFile === null) {
-    return <p className="px-3 py-4 text-sm text-muted-foreground">两侧都不存在</p>;
-  }
-  if (oldFile === null) {
+
+  if (oldFile !== null && newFile !== null) {
     return (
-      <MultiFileDiff disableWorkerPool oldFile={null} newFile={newFile} options={DIFF_OPTIONS} />
+      <MultiFileDiff disableWorkerPool oldFile={oldFile} newFile={newFile} options={DIFF_OPTIONS} />
     );
   }
-  if (newFile === null) {
+  if (oldFile !== null) {
     return (
       <MultiFileDiff disableWorkerPool oldFile={oldFile} newFile={null} options={DIFF_OPTIONS} />
     );
   }
-  return (
-    <MultiFileDiff disableWorkerPool oldFile={oldFile} newFile={newFile} options={DIFF_OPTIONS} />
-  );
+  if (newFile !== null) {
+    return (
+      <MultiFileDiff disableWorkerPool oldFile={null} newFile={newFile} options={DIFF_OPTIONS} />
+    );
+  }
+  return <p className="px-3 py-4 text-sm text-muted-foreground">两侧都不存在</p>;
 }
