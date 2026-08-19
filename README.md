@@ -2,6 +2,8 @@
 
 [![npm version](https://img.shields.io/npm/v/%40seaveyon%2Fharness-switch.svg)](https://www.npmjs.com/package/@seaveyon/harness-switch)
 
+English | [简体中文](https://github.com/B1anker/harness-switch/blob/main/README.zh-CN.md)
+
 **harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **Codex**, **Kimi Code**, **Pi**, and **DeepSeek Harness (DSH)**.
 
 It is a configuration manager, not an API proxy: it does not route or inspect model traffic.
