@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/B1anker/harness-switch/compare/v0.7.0...v0.8.0) (2026-08-19)
+
+
+### Features
+
+* show the server version in the dashboard header ([0075386](https://github.com/B1anker/harness-switch/commit/0075386800c980bb628e27560269cc9843062b27))
+
 # [0.7.0](https://github.com/B1anker/harness-switch/compare/v0.6.1...v0.7.0) (2026-08-19)
 
 
