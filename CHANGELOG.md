@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/B1anker/harness-switch/compare/v0.6.1...v0.7.0) (2026-08-19)
+
+
+### Features
+
+* run the CLI as a background daemon via bunx/npx ([923cb28](https://github.com/B1anker/harness-switch/commit/923cb28b4ef250927a240cc1f2b4b98056bb73fb))
+
 ## [0.6.1](https://github.com/B1anker/harness-switch/compare/v0.6.0...v0.6.1) (2026-08-19)
 
 
