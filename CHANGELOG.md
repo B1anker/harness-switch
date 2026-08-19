@@ -1,3 +1,10 @@
+## [0.6.1](https://github.com/B1anker/harness-switch/compare/v0.6.0...v0.6.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* harden config stores and make active-profile edits transactional ([d4071cf](https://github.com/B1anker/harness-switch/commit/d4071cf22827600040d52869c457576b4b89496d))
+
 # [0.6.0](https://github.com/B1anker/harness-switch/compare/v0.5.0...v0.6.0) (2026-08-19)
 
 
