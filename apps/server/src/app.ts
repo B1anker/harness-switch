@@ -9,6 +9,7 @@ import { createAuthRoutes } from './http/routes/auth';
 import { createBackupRoutes } from './http/routes/backups';
 import { createHarnessRoutes } from './http/routes/harnesses';
 import { createTransferRoutes } from './http/routes/transfer';
+import { createUpdateRoutes } from './http/routes/update';
 import { IEnvironmentService } from './services/environment';
 import { ILogService } from './services/log';
 import { serverVersion } from './version';
@@ -36,6 +37,9 @@ export function createApp(services: InstantiationService): Hono {
   api.route('/backups', createBackupRoutes(services));
   api.use('/transfer/*', createAuthGuard(services));
   api.route('/transfer', createTransferRoutes(services));
+  api.use('/update/*', createAuthGuard(services));
+  api.use('/update', createAuthGuard(services));
+  api.route('/update', createUpdateRoutes(services));
   app.route('/api', api);
 
   const publicDir = environment.publicDir;

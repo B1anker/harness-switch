@@ -159,6 +159,11 @@ the web password in `~/.harness-switch/web_password` and prints it to the log.
 When a daemon is already running, a new invocation stops it before starting the
 new process, so the port never conflicts and the newest code wins.
 
+The dashboard polls the npm registry and shows a one-click **update button**
+next to the version badge when a newer release exists; it runs the same
+`bunx <package>@latest` restart under the hood and reloads the page once the
+new version is up. Update logs land in `~/.harness-switch/update.log`.
+
 Under systemd (or any supervisor), run the CLI in the foreground instead:
 
 ```ini

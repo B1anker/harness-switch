@@ -152,6 +152,8 @@ bunx @seaveyon/harness-switch@latest server      # 改为前台运行
 
 守护进程把 pid 写入 `~/.harness-switch/daemon.pid`，把日志写入 `~/.harness-switch/daemon.log`（每次启动重新生成）。首次运行会创建 Web 登录密码 `~/.harness-switch/web_password` 并打印到日志。如果已有守护进程在运行，再次调用会先停掉旧进程再启动新进程，因此端口不会冲突，最新代码总是生效。
 
+Dashboard 会轮询 npm registry：当有新版本发布时，版本徽标旁会出现一键**更新按钮**，点击后内部执行与 `bunx <package>@latest` 相同的重启流程，新版本就绪后页面自动刷新。更新日志在 `~/.harness-switch/update.log`。
+
 如果要在 systemd（或其他进程守护工具）下运行，请改用前台模式：
 
 ```ini

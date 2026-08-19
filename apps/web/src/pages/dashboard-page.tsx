@@ -9,6 +9,7 @@ import { ProfileDialog } from '@/components/profile-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TransferDialog } from '@/components/transfer-dialog';
 import { Button } from '@/components/ui/button';
+import { UpdateButton } from '@/components/update-button';
 import { VersionBadge } from '@/components/version-badge';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -41,6 +42,7 @@ export function DashboardPage() {
               <div className="flex items-center gap-2">
                 <h1 className="truncate text-base font-semibold tracking-tight">harness-switch</h1>
                 <VersionBadge />
+                <UpdateButton />
               </div>
               <p className="truncate text-xs text-muted-foreground">写入原生配置</p>
             </div>
