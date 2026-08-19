@@ -1,8 +1,22 @@
-import { expect, test } from '@rstest/core';
+import { afterEach, beforeEach, expect, test } from '@rstest/core';
 import type { ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { HarnessCard } from '@/components/harness-card';
 import { harnessFixture, profileFixture, stubStoreActions } from './fixtures';
+
+const realFetch = globalThis.fetch;
+
+beforeEach(() => {
+  // The activation dialog fetches a preview on open; keep it offline in unit tests.
+  globalThis.fetch = (async () => ({
+    ok: false,
+    json: async () => ({ error: 'offline' }),
+  })) as unknown as typeof fetch;
+});
+
+afterEach(() => {
+  globalThis.fetch = realFetch;
+});
 
 test('shows the active profile and marks the one taken over by hand', () => {
   stubStoreActions(['activateProfile', 'deleteProfile']);
@@ -35,8 +49,7 @@ test('says so when there is nothing configured yet', () => {
   expect(screen.getByText('还没有配置档案')).toBeInTheDocument();
 });
 
-test('activating asks the store to switch that exact profile', () => {
-  const calls = stubStoreActions(['activateProfile']);
+test('activating opens the diff confirmation before switching', () => {
   render(
     <HarnessCard
       harness={harnessFixture({ profiles: [profileFixture()] })}
@@ -46,7 +59,9 @@ test('activating asks the store to switch that exact profile', () => {
   );
 
   fireEvent.click(screen.getByRole('button', { name: '激活' }));
-  expect(calls.activateProfile).toEqual([['claude', 'openrouter-main']]);
+  expect(screen.getByRole('heading', { name: '激活配置？' })).toBeInTheDocument();
+  expect(screen.getByText(/将把 Claude Code 切换到「openrouter-main」/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '确认激活' })).toBeInTheDocument();
 });
 
 test('offers a built-in official login and asks the store to restore it', () => {

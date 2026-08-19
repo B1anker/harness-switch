@@ -1,6 +1,7 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { CircleUserRound, Pencil, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { ActivateDialog } from '@/components/activate-dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,10 +26,10 @@ type HarnessCardProps = {
 };
 
 export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCardProps) {
-  const activateProfile = useAppStore((state) => state.activateProfile);
   const activateOfficial = useAppStore((state) => state.activateOfficial);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
+  const [activating, setActivating] = useState<ProfilePublic | null>(null);
 
   return (
     <div className="space-y-6">
@@ -160,7 +161,7 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     <Button
                       size="sm"
                       variant={active ? 'secondary' : 'outline'}
-                      onClick={() => activateProfile(harness.id, profile.name)}
+                      onClick={() => setActivating(profile)}
                     >
                       {!active ? <Play /> : null}
                       {active ? '已激活' : '激活'}
@@ -190,6 +191,14 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
           )}
         </div>
       </section>
+      {activating ? (
+        <ActivateDialog
+          harness={harness}
+          profile={activating}
+          open
+          onOpenChange={(open) => !open && setActivating(null)}
+        />
+      ) : null}
       <AlertDialog
         open={pendingName !== null}
         onOpenChange={(open) => !open && setPendingName(null)}

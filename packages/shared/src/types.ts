@@ -121,6 +121,8 @@ export type PreviewTarget = {
   content: string;
   /** True when the content comes from a user override instead of the form fields. */
   overridden: boolean;
+  /** The live file content right now; null when the file is absent on disk. */
+  currentContent: string | null;
 };
 
 export type PreviewResponse = {

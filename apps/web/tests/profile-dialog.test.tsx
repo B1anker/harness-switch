@@ -144,6 +144,7 @@ test('editing the raw content takes the file over and submits it verbatim', asyn
       format: 'json',
       content: '{\n  "env": {}\n}\n',
       overridden: false,
+      currentContent: null,
     },
   ]);
   render(
@@ -175,6 +176,7 @@ test('handing a file back clears its override', async () => {
       format: 'json',
       content: '{"env":{"HAND":"1"}}',
       overridden: true,
+      currentContent: null,
     },
   ]);
   render(

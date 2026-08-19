@@ -644,6 +644,7 @@ describe('rest api', () => {
     ).json()) as PreviewResponse;
     expect(preview.targets[0]?.overridden).toBe(false);
     expect(preview.targets[0]?.content).toContain('sk-test');
+    expect(preview.targets[0]?.currentContent).toBeNull();
 
     await context.app.request('/api/harnesses/claude/profiles/main', {
       method: 'PATCH',
@@ -668,6 +669,33 @@ describe('rest api', () => {
 
     const regenerated = JSON.parse(await readFile(claudeSettings(), 'utf8'));
     expect(regenerated.env.ANTHROPIC_BASE_URL).toBe('https://api.example.com/v1');
+  });
+
+  test('preview reports the live file content so the UI can diff before activating', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'claude', {
+      name: 'main',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-test',
+    });
+
+    const before = (await (
+      await context.app.request('/api/harnesses/claude/profiles/main/preview', {
+        headers: { Cookie: context.cookie },
+      })
+    ).json()) as PreviewResponse;
+    expect(before.targets[0]?.currentContent).toBeNull();
+
+    await activate(context, 'claude', 'main');
+    const live = await readFile(claudeSettings(), 'utf8');
+
+    const after = (await (
+      await context.app.request('/api/harnesses/claude/profiles/main/preview', {
+        headers: { Cookie: context.cookie },
+      })
+    ).json()) as PreviewResponse;
+    expect(after.targets[0]?.currentContent).toBe(live);
+    expect(after.targets[0]?.currentContent).toContain('sk-test');
   });
 
   test('rejects an override that the harness could not parse back', async () => {

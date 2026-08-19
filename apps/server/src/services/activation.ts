@@ -177,6 +177,7 @@ export class ActivationService implements IActivationService {
         format: target.format,
         content: override ?? content,
         overridden: override !== undefined,
+        currentContent: current[key] ?? null,
       };
     });
   }
