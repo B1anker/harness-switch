@@ -1,3 +1,10 @@
+## [0.11.1](https://github.com/B1anker/harness-switch/compare/v0.11.0...v0.11.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* keep the dashboard header tidy on small screens ([38e1540](https://github.com/B1anker/harness-switch/commit/38e1540876c2b282207efeabdaa03c6a6ad82051))
+
 # [0.11.0](https://github.com/B1anker/harness-switch/compare/v0.10.0...v0.11.0) (2026-08-19)
 
 
