@@ -7,7 +7,10 @@ import type { InstantiationService } from './di';
 import { createAuthGuard, createOriginGuard, createServiceMiddleware } from './http/middleware';
 import { createAuthRoutes } from './http/routes/auth';
 import { createBackupRoutes } from './http/routes/backups';
+import { createDoctorRoutes } from './http/routes/doctor';
+import { createDriftRoutes } from './http/routes/drift';
 import { createHarnessRoutes } from './http/routes/harnesses';
+import { createProviderRoutes } from './http/routes/providers';
 import { createTransferRoutes } from './http/routes/transfer';
 import { createUpdateRoutes } from './http/routes/update';
 import { IEnvironmentService } from './services/environment';
@@ -40,6 +43,15 @@ export function createApp(services: InstantiationService): Hono {
   api.use('/update/*', createAuthGuard(services));
   api.use('/update', createAuthGuard(services));
   api.route('/update', createUpdateRoutes(services));
+  api.use('/providers/*', createAuthGuard(services));
+  api.use('/providers', createAuthGuard(services));
+  api.route('/providers', createProviderRoutes(services));
+  api.use('/doctor/*', createAuthGuard(services));
+  api.use('/doctor', createAuthGuard(services));
+  api.route('/doctor', createDoctorRoutes(services));
+  api.use('/drift/*', createAuthGuard(services));
+  api.use('/drift', createAuthGuard(services));
+  api.route('/drift', createDriftRoutes(services));
   app.route('/api', api);
 
   const publicDir = environment.publicDir;

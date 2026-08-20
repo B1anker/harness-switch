@@ -16,6 +16,7 @@ import { ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import type { ProfileStore, StoredProfile } from './profiles';
+import { IVaultService } from './vault';
 
 const FORMAT = 'harness-switch-encrypted-export' as const;
 const VERSION = 1 as const;
@@ -60,7 +61,14 @@ export interface ITransferService {
 
 export const ITransferService = createDecorator<ITransferService>('transferService');
 
-@inject(IEnvironmentService, IFileService, ICryptoService, IAdapterRegistry, IActivationService)
+@inject(
+  IEnvironmentService,
+  IFileService,
+  ICryptoService,
+  IAdapterRegistry,
+  IActivationService,
+  IVaultService,
+)
 export class TransferService implements ITransferService {
   declare readonly _serviceBrand: undefined;
 
@@ -70,6 +78,7 @@ export class TransferService implements ITransferService {
     private readonly crypto: ICryptoService,
     private readonly adapters: IAdapterRegistry,
     private readonly activation: IActivationService,
+    private readonly vault: IVaultService,
   ) {}
 
   exportAll(passphrase: string): TransferEnvelope {
@@ -82,7 +91,7 @@ export class TransferService implements ITransferService {
           harness,
           name,
           baseUrl: stored.base_url || '',
-          apiKey: this.crypto.decrypt(stored.api_key),
+          apiKey: this.resolveKey(stored),
           model: stored.model || '',
           notes: stored.notes || '',
           extras: stored.extras ?? {},
@@ -243,6 +252,18 @@ export class TransferService implements ITransferService {
 
   private readStore(): ProfileStore {
     return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
+  }
+
+  /** Exports flatten vault references into the inline key the destination can decrypt. */
+  private resolveKey(stored: StoredProfile): string {
+    if (!stored.provider_id) {
+      return this.crypto.decrypt(stored.api_key);
+    }
+    try {
+      return this.vault.decrypt(stored.provider_id);
+    } catch {
+      return this.crypto.decrypt(stored.api_key);
+    }
   }
 
   private assertPassphrase(passphrase: string): void {

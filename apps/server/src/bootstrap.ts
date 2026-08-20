@@ -4,6 +4,8 @@ import { AdapterRegistry, IAdapterRegistry } from './services/adapters';
 import { AuthService, IAuthService } from './services/auth';
 import { BackupService, IBackupService } from './services/backup';
 import { CryptoService, ICryptoService } from './services/crypto';
+import { DoctorService, IDoctorService } from './services/doctor';
+import { DriftService, IDriftService } from './services/drift';
 import { EnvironmentService, IEnvironmentService } from './services/environment';
 import { FileService, IFileService } from './services/files';
 import { ILiveWriteService, LiveWriteService } from './services/live-write';
@@ -11,6 +13,7 @@ import { ILogService, LogService } from './services/log';
 import { IProfileService, ProfileService } from './services/profiles';
 import { HarnessRegistry, IHarnessRegistry } from './services/registry';
 import { ITransferService, TransferService } from './services/transfer';
+import { IVaultService, VaultService } from './services/vault';
 
 export function createServices(): InstantiationService {
   const collection = new ServiceCollection();
@@ -23,8 +26,11 @@ export function createServices(): InstantiationService {
   collection.set(IAdapterRegistry, new SyncDescriptor(AdapterRegistry));
   collection.set(IBackupService, new SyncDescriptor(BackupService));
   collection.set(ILiveWriteService, new SyncDescriptor(LiveWriteService));
+  collection.set(IVaultService, new SyncDescriptor(VaultService));
   collection.set(IProfileService, new SyncDescriptor(ProfileService));
   collection.set(IActivationService, new SyncDescriptor(ActivationService));
   collection.set(ITransferService, new SyncDescriptor(TransferService));
+  collection.set(IDriftService, new SyncDescriptor(DriftService));
+  collection.set(IDoctorService, new SyncDescriptor(DoctorService));
   return new InstantiationService(collection);
 }

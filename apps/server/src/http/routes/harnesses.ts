@@ -18,6 +18,8 @@ type ProfileBody = {
   notes?: string;
   extras?: Record<string, string>;
   overrides?: Record<string, string>;
+  providerId?: string;
+  providerEndpoint?: string;
 };
 
 export function createHarnessRoutes(services: InstantiationService): Hono {
@@ -68,6 +70,8 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
         notes: body.notes,
         extras: body.extras,
         overrides: body.overrides,
+        providerId: body.providerId,
+        providerEndpoint: body.providerEndpoint,
       },
       true,
     );
@@ -96,6 +100,8 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
           notes: body.notes,
           extras: body.extras,
           overrides: body.overrides,
+          providerId: body.providerId,
+          providerEndpoint: body.providerEndpoint,
         },
         false,
       );

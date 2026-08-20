@@ -19,6 +19,7 @@ export interface IEnvironmentService {
     key: string;
     env: string;
     sessions: string;
+    vault: string;
   };
   readonly backupsDir: string;
   readonly backupRetainCount: number;
@@ -52,6 +53,7 @@ export class EnvironmentService implements IEnvironmentService {
     key: join(this.dataDir, 'aes-256-gcm.key'),
     env: join(this.dataDir, 'env.sh'),
     sessions: join(this.dataDir, 'sessions.json'),
+    vault: join(this.dataDir, 'vault.json'),
   };
   readonly backupsDir = join(this.dataDir, 'backups');
   readonly backupRetainCount = Math.max(1, Number(process.env.HSW_BACKUP_RETAIN || 10));
