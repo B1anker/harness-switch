@@ -1,3 +1,11 @@
+# [0.15.0](https://github.com/B1anker/harness-switch/compare/v0.14.0...v0.15.0) (2026-08-20)
+
+
+### Features
+
+* migrate Codex login cache safely ([e4bcb41](https://github.com/B1anker/harness-switch/commit/e4bcb415bac6c15d15e74b260e1957fba010f184))
+* refine user config sync and align form controls ([df79afd](https://github.com/B1anker/harness-switch/commit/df79afd8f9ca72d3ec4915ba2af53db789777849))
+
 # [0.14.0](https://github.com/B1anker/harness-switch/compare/v0.13.0...v0.14.0) (2026-08-20)
 
 
