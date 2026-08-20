@@ -1,6 +1,8 @@
 #!/usr/bin/env bun
 import { createApp } from './app';
 import { createServices } from './bootstrap';
+import { parseArgs } from './cli/args';
+import { runCli } from './cli/commands';
 import { daemonize, printStatus, stopDaemon, usage } from './daemon';
 import { IAuthService } from './services/auth';
 import { IEnvironmentService } from './services/environment';
@@ -27,7 +29,7 @@ async function runServer(): Promise<void> {
   log.info(`listening on http://${server.hostname}:${server.port}`);
 }
 
-const command = process.argv[2];
+const [command, ...rest] = process.argv.slice(2);
 
 if (command === 'server') {
   await runServer();
@@ -35,6 +37,15 @@ if (command === 'server') {
   await stopDaemon();
 } else if (command === 'status') {
   printStatus();
+} else if (
+  command === 'list' ||
+  command === 'providers' ||
+  command === 'doctor' ||
+  command === 'plan' ||
+  command === 'activate'
+) {
+  const { flags, positional } = parseArgs(rest);
+  process.exitCode = await runCli(command, positional, flags);
 } else if (command === undefined || command === 'daemon') {
   await daemonize();
 } else {

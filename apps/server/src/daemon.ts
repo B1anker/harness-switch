@@ -146,5 +146,9 @@ export async function daemonize(): Promise<void> {
 }
 
 export function usage(): string {
-  return 'usage: harness-switch [server|daemon|status|stop]';
+  return [
+    'usage: harness-switch [server|daemon|status|stop]',
+    '       harness-switch [list|providers|doctor|plan|activate] [options]',
+    '       CLI commands run against the local data directory; add --json for machine output',
+  ].join('\n');
 }

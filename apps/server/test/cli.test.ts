@@ -1,0 +1,208 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createApp } from '../src/app';
+import { createServices } from '../src/bootstrap';
+import { parseArgs } from '../src/cli/args';
+import { runCli } from '../src/cli/commands';
+import { IAuthService } from '../src/services/auth';
+import { IEnvironmentService } from '../src/services/environment';
+import { IProfileService } from '../src/services/profiles';
+import { IVaultService } from '../src/services/vault';
+
+let homeDir = '';
+let dataDir = '';
+let server: ReturnType<typeof Bun.serve>;
+let baseUrl = '';
+let services: ReturnType<typeof createServices>;
+let originalUrl: string | undefined;
+let originalPort: string | undefined;
+let originalFetch: typeof globalThis.fetch;
+
+beforeEach(() => {
+  homeDir = mkdtempSync(join(tmpdir(), 'hsw-cli-'));
+  dataDir = join(homeDir, '.harness-switch');
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  process.env.HSW_HOME_DIR = homeDir;
+  process.env.HSW_DATA_DIR = dataDir;
+  process.env.CODEX_HOME = join(homeDir, '.codex');
+  services = createServices();
+  services.get(IEnvironmentService).ensureDataDir();
+  const password = services.get(IAuthService).ensurePassword();
+  // The CLI logs in with the same password file the daemon would have written.
+  writeFileSync(join(dataDir, 'web_password'), `${password}\n`, { mode: 0o600 });
+
+  const app = createApp(services);
+  server = Bun.serve({ port: 0, fetch: app.fetch });
+  baseUrl = `http://127.0.0.1:${server.port}`;
+
+  originalUrl = process.env.HSW_URL;
+  originalPort = process.env.PORT;
+  process.env.HSW_URL = baseUrl;
+  delete process.env.PORT;
+
+  // The doctor update check must never hit the real network in tests, but the
+  // CLI itself talks to the local test server over fetch, so only block
+  // non-localhost requests.
+  originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!url.startsWith('http://127.0.0.1:') && !url.startsWith('http://localhost:')) {
+      throw new Error('offline');
+    }
+    return originalFetch(input, init);
+  }) as typeof globalThis.fetch;
+});
+
+afterEach(() => {
+  server.stop();
+  delete process.env.HSW_HOME_DIR;
+  delete process.env.HSW_DATA_DIR;
+  delete process.env.CODEX_HOME;
+  if (originalUrl === undefined) {
+    delete process.env.HSW_URL;
+  } else {
+    process.env.HSW_URL = originalUrl;
+  }
+  if (originalPort === undefined) {
+    delete process.env.PORT;
+  } else {
+    process.env.PORT = originalPort;
+  }
+  globalThis.fetch = originalFetch;
+  rmSync(homeDir, { recursive: true, force: true });
+});
+
+async function run(command: string, argv: string[]): Promise<{ code: number; logs: string[] }> {
+  const logs: string[] = [];
+  const original = console.log;
+  console.log = (message?: unknown) => logs.push(String(message));
+  try {
+    const { flags, positional } = parseArgs(argv);
+    const code = await runCli(command, positional, flags);
+    return { code, logs };
+  } finally {
+    console.log = original;
+  }
+}
+
+function createClaudeProfile(name = 'main', apiKey = 'sk-test') {
+  services.get(IProfileService).upsert(
+    'claude',
+    {
+      name,
+      baseUrl: 'https://api.example.com/v1',
+      apiKey,
+      model: 'claude-sonnet-4-5',
+    },
+    true,
+  );
+}
+
+describe('cli', () => {
+  test('list --json mirrors the harnesses API response shape', async () => {
+    const { code, logs } = await run('list', ['--json']);
+    expect(code).toBe(0);
+    const payload = JSON.parse(logs.join('\n')) as {
+      envFile: string;
+      items: Array<{ id: string; profiles: unknown[] }>;
+    };
+    expect(typeof payload.envFile).toBe('string');
+    expect(payload.items.map((item) => item.id)).toEqual(['claude', 'codex', 'kimi', 'pi', 'dsh']);
+    expect(JSON.stringify(payload)).not.toContain('apiKey');
+  });
+
+  test('providers --json lists vault entries without secrets', async () => {
+    services.get(IVaultService).create({
+      name: 'acme',
+      apiKey: 'sk-acme',
+      endpoints: [{ key: 'default', label: 'Default', baseUrl: 'https://api.acme.example/v1' }],
+    });
+    const { code, logs } = await run('providers', ['--json']);
+    expect(code).toBe(0);
+    const payload = JSON.parse(logs.join('\n')) as {
+      items: Array<{ id: string; apiKeyConfigured: boolean }>;
+    };
+    const acme = payload.items.find((item) => item.id === 'acme');
+    expect(acme?.apiKeyConfigured).toBe(true);
+    expect(JSON.stringify(payload)).not.toContain('sk-acme');
+  });
+
+  test('plan <harness> <profile> --json returns the exact content activation would write', async () => {
+    createClaudeProfile();
+    const { code, logs } = await run('plan', ['claude', 'main', '--json']);
+    expect(code).toBe(0);
+    const payload = JSON.parse(logs.join('\n')) as {
+      harness: string;
+      profile: string;
+      targets: Array<{ content: string; currentContent: string | null }>;
+    };
+    expect(payload.harness).toBe('claude');
+    expect(payload.targets[0]?.content).toContain('sk-test');
+    expect(payload.targets[0]?.currentContent).toBeNull();
+  });
+
+  test('activate --yes --json writes the live file', async () => {
+    createClaudeProfile();
+    const { code, logs } = await run('activate', ['claude', 'main', '--yes', '--json']);
+    expect(code).toBe(0);
+    const payload = JSON.parse(logs.join('\n')) as { harness: string; warnings: string[] };
+    expect(payload.harness).toBe('claude');
+    expect(payload.warnings).toEqual([]);
+    const settings = JSON.parse(
+      await Bun.file(join(homeDir, '.claude', 'settings.json')).text(),
+    ) as { env: Record<string, string> };
+    expect(settings.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-test');
+  });
+
+  test('activate without --yes is refused on a non-interactive terminal', async () => {
+    createClaudeProfile();
+    const { code, logs } = await run('activate', ['claude', 'main', '--json']);
+    expect(code).toBe(1);
+    const payload = JSON.parse(logs.join('\n')) as { error: { code: number; message: string } };
+    expect(payload.error.code).toBe(1);
+    expect(payload.error.message).toContain('--yes');
+  });
+
+  test('doctor --json returns a stable report shape', async () => {
+    const { code, logs } = await run('doctor', ['--json']);
+    expect(code).toBe(0);
+    const payload = JSON.parse(logs.join('\n')) as {
+      updatedAvailable: boolean;
+      items: Array<{ harness: string; checks: Array<{ id: string; status: string }> }>;
+    };
+    expect(payload.updatedAvailable).toBe(false);
+    expect(payload.items.map((item) => item.harness)).toEqual([
+      'claude',
+      'codex',
+      'kimi',
+      'pi',
+      'dsh',
+    ]);
+    expect(payload.items[0]?.checks.length).toBeGreaterThan(0);
+    expect(payload.items[0]?.checks[0]?.status).toBeOneOf(['ok', 'warn', 'error', 'unknown']);
+  });
+
+  test('unknown commands exit non-zero', async () => {
+    const { code } = await run('bogus', ['--json']);
+    expect(code).toBe(1);
+  });
+
+  test('the bundled entry dispatches new commands', async () => {
+    // Async spawn: a synchronous spawn would block this process's event loop and
+    // starve the in-process server the child talks to.
+    const child = Bun.spawn({
+      cmd: [process.execPath, 'src/main.ts', 'list', '--json'],
+      cwd: join(import.meta.dir, '..'),
+      env: { ...process.env, HSW_URL: baseUrl, HSW_DATA_DIR: dataDir, HSW_HOME_DIR: homeDir },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const stdout = await new Response(child.stdout).text();
+    const exitCode = await child.exited;
+    expect(exitCode).toBe(0);
+    const payload = JSON.parse(stdout) as { items: unknown[] };
+    expect(Array.isArray(payload.items)).toBe(true);
+  });
+});
