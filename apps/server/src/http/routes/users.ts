@@ -1,4 +1,9 @@
-import type { UserSyncRequest, UsersResponse } from '@seaveyon/harness-switch-shared';
+import {
+  type HarnessId,
+  isHarnessId,
+  type UserSyncRequest,
+  type UsersResponse,
+} from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { HttpError } from '../../common/errors';
@@ -35,6 +40,7 @@ export function createUserRoutes(services: InstantiationService): Hono {
         String(body.sourceUser ?? ''),
         body.conflictPolicy ?? 'skip',
         body.migrateCodexLoginCache === true,
+        parseOverwriteHarnesses(body.overwriteHarnesses),
       ),
     );
   });
@@ -54,4 +60,12 @@ async function readBody(read: () => Promise<UserSyncRequest>): Promise<UserSyncR
   return read().catch(() => {
     throw new HttpError(400, 'invalid json');
   });
+}
+
+function parseOverwriteHarnesses(value: UserSyncRequest['overwriteHarnesses']): HarnessId[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((item) => !isHarnessId(item))) {
+    throw new HttpError(400, 'invalid overwrite harnesses');
+  }
+  return [...new Set(value)];
 }

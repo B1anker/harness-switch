@@ -141,11 +141,15 @@ test('creating submits the core fields together with the field defaults', async 
         haikuModelName: 'Fast',
         sonnetModel: 'claude-sonnet-4-5',
         sonnetModelName: 'Balanced',
+        sonnetModel1m: 'false',
         opusModel: 'claude-opus-4-5',
         opusModelName: 'Powerful',
+        opusModel1m: 'false',
         fableModel: '',
         fableModelName: '',
+        fableModel1m: 'false',
         subagentModel: '',
+        subagentModel1m: 'false',
       },
     },
   ]);
@@ -179,7 +183,7 @@ test('keeps the title and close action outside the scroll area and puts Provider
   expect(scroll?.firstElementChild).toBe(provider);
 });
 
-test('groups Claude model mappings into a wide role, display name and model grid', () => {
+test('groups Claude model mappings into a wide role, display name, model and 1M grid', () => {
   setup();
   render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
 
@@ -188,6 +192,7 @@ test('groups Claude model mappings into a wide role, display name and model grid
   expect(mapping).toHaveTextContent('模型角色');
   expect(mapping).toHaveTextContent('显示名称');
   expect(mapping).toHaveTextContent('实际请求模型');
+  expect(mapping).toHaveTextContent('1M 上下文');
   expect(mapping).toHaveTextContent('Sonnet');
   expect(mapping).toHaveTextContent('Opus');
   expect(mapping).toHaveTextContent('Fable');
@@ -199,6 +204,114 @@ test('groups Claude model mappings into a wide role, display name and model grid
     'placeholder',
     '默认：gpt-5.6-terra',
   );
+});
+
+test('puts every 1M checkbox in the mapping grid beside the tier it belongs to', () => {
+  setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  const mapping = screen.getByText('模型映射').closest('[data-slot="claude-model-mapping"]');
+
+  for (const [role, modelLabel, oneMLabel] of [
+    ['Sonnet', 'Sonnet 模型映射', 'Sonnet 声明支持 1M'],
+    ['Opus', 'Opus 模型映射', 'Opus 声明支持 1M'],
+    ['Fable', 'Fable 模型映射（可选）', 'Fable 声明支持 1M'],
+    ['Subagent', '子代理模型（可选）', '子代理 声明支持 1M'],
+  ]) {
+    const toggle = screen.getByRole('checkbox', { name: oneMLabel });
+    expect(toggle).toHaveAttribute('data-slot', 'checkbox');
+    expect(mapping?.contains(toggle)).toBe(true);
+    // Same row as its own model input, which is what "one line per tier" means here.
+    const row = screen.getByLabelText(modelLabel).closest('.grid');
+    expect(row?.contains(toggle)).toBe(true);
+    // The FieldSpec default of 'false' must read as unchecked, not as indeterminate.
+    expect(toggle).toHaveAttribute('data-state', 'unchecked');
+    expect(row).toHaveTextContent(role);
+  }
+});
+
+test('Haiku states it has no 1M variant instead of offering a checkbox', () => {
+  setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  expect(screen.queryByRole('checkbox', { name: /Haiku 声明支持 1M/ })).toBeNull();
+  const row = screen.getByLabelText('Haiku 模型映射').closest('.grid');
+  expect(row?.querySelector('[role="checkbox"]')).toBeNull();
+  expect(row).toHaveTextContent('Haiku 不支持 1M');
+});
+
+test('does not repeat the 1M fields as generic fields outside the mapping grid', () => {
+  setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  const mapping = screen.getByText('模型映射').closest('[data-slot="claude-model-mapping"]');
+  for (const label of [
+    'Sonnet 声明支持 1M',
+    'Opus 声明支持 1M',
+    'Fable 声明支持 1M',
+    '子代理 声明支持 1M',
+  ]) {
+    // A duplicate render outside the section would make this an ambiguous-match throw.
+    const toggles = screen.getAllByRole('checkbox', { name: label });
+    expect(toggles).toHaveLength(1);
+    expect(mapping?.contains(toggles[0])).toBe(true);
+  }
+  // The old select-based control must be gone entirely.
+  expect(screen.queryByRole('combobox', { name: /声明支持 1M/ })).toBeNull();
+});
+
+test('checking a 1M box submits the string the adapter reads', async () => {
+  const recorded = setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  fill('配置名称', 'one-m-main');
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-test');
+  fill('Sonnet 模型映射', 'gateway-sonnet');
+  fill('Opus 模型映射', 'gateway-opus');
+
+  const sonnet = screen.getByRole('checkbox', { name: 'Sonnet 声明支持 1M' });
+  fireEvent.click(sonnet);
+  expect(sonnet).toHaveAttribute('data-state', 'checked');
+
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  await waitFor(() => expect(recorded.created).toHaveLength(1));
+  expect(recorded.created[0]?.[1]).toMatchObject({
+    extras: {
+      sonnetModel: 'gateway-sonnet',
+      // A checked box must serialise to 'true', not to boolean true or 'on'.
+      sonnetModel1m: 'true',
+      // Untouched tiers still submit the FieldSpec default rather than an empty string.
+      opusModel: 'gateway-opus',
+      opusModel1m: 'false',
+      fableModel1m: 'false',
+      subagentModel1m: 'false',
+    },
+  });
+});
+
+test('unchecking a stored 1M flag turns it back off', async () => {
+  const recorded = setup();
+  render(
+    <ProfileDialog
+      harness={harnessFixture()}
+      profile={profileFixture({ extras: { sonnetModel: 'gateway-sonnet', sonnetModel1m: 'true' } })}
+      onOpenChange={() => {}}
+    />,
+  );
+
+  const sonnet = screen.getByRole('checkbox', { name: 'Sonnet 声明支持 1M' });
+  expect(sonnet).toHaveAttribute('data-state', 'checked');
+
+  fireEvent.click(sonnet);
+  expect(sonnet).toHaveAttribute('data-state', 'unchecked');
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  await waitFor(() => expect(recorded.updated).toHaveLength(1));
+  expect(recorded.updated[0]?.[2]).toMatchObject({
+    extras: { sonnetModel1m: 'false' },
+  });
 });
 
 test('editing can rename the profile and keeps the stored key when left blank', async () => {

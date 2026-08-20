@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,7 @@ type TransferDialogProps = {
 
 export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
   const loadHarnesses = useAppStore((state) => state.loadHarnesses);
+  const setNotice = useAppStore((state) => state.setNotice);
   const fileInput = useRef<HTMLInputElement>(null);
   const [exportPassphrase, setExportPassphrase] = useState('');
   const [exportConfirmation, setExportConfirmation] = useState('');
@@ -195,10 +197,13 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
           : '未迁移导出包内的 Codex 登录缓存',
       );
       const warning = result.warnings.length > 0 ? ` ${result.warnings.join('；')}` : '';
-      setMessage(`导入完成：${parts.join('，')}。${warning}`);
+      // Importing is the last step in this dialog, so report it in the toast and get out of
+      // the way rather than leaving a finished form open.
+      setNotice(`导入完成：${parts.join('，')}。${warning}`);
       setPreview(null);
       setPreviewStale(false);
       setMigrateCodexLoginCache(false);
+      onOpenChange(false);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -269,11 +274,10 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
           {exportPreview?.codexLoginCacheAvailable ? (
             <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
               <span className="flex cursor-pointer items-start gap-3">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeCodexLoginCache}
-                  onChange={(event) => setIncludeCodexLoginCache(event.target.checked)}
-                  className="mt-0.5 size-4 accent-primary"
+                  onCheckedChange={(checked) => setIncludeCodexLoginCache(checked === true)}
+                  className="mt-0.5"
                 />
                 <span>
                   <span className="block font-medium">
@@ -385,11 +389,10 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
               {preview.codexLoginCache?.available ? (
                 <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
                   <span className="flex cursor-pointer items-start gap-3">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={migrateCodexLoginCache}
-                      onChange={(event) => setMigrateCodexLoginCache(event.target.checked)}
-                      className="mt-0.5 size-4 accent-primary"
+                      onCheckedChange={(checked) => setMigrateCodexLoginCache(checked === true)}
+                      className="mt-0.5"
                     />
                     <span>
                       <span className="block font-medium">
@@ -439,15 +442,13 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                   </Select>
                 </div>
                 <label className="flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={restoreActive}
-                    onChange={(event) => {
-                      setRestoreActive(event.target.checked);
+                    onCheckedChange={(checked) => {
+                      setRestoreActive(checked === true);
                       setPreviewStale(true);
                       setConfirmingImport(false);
                     }}
-                    className="size-4 accent-primary"
                   />
                   恢复导出时的激活状态
                 </label>

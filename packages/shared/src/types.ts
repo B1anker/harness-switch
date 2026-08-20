@@ -118,7 +118,13 @@ export type CodexLoginCacheState = {
 
 export type UserSyncRequest = {
   sourceUser: string;
+  /**
+   * Legacy all-or-nothing conflict behavior. New clients should keep this at `skip`
+   * and opt individual harnesses into replacement with `overwriteHarnesses`.
+   */
   conflictPolicy?: TransferConflictPolicy;
+  /** Overwrite same-name profiles only for these harnesses. Defaults to none. */
+  overwriteHarnesses?: HarnessId[];
   /** Explicitly copy the source user's Codex official-login cache. Defaults to false. */
   migrateCodexLoginCache?: boolean;
 };

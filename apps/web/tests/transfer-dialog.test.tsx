@@ -24,6 +24,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
   URL.createObjectURL = realCreateObjectUrl;
   URL.revokeObjectURL = realRevokeObjectUrl;
+  useAppStore.setState({ notice: null });
 });
 
 test('exports all profiles only after the migration password is confirmed', async () => {
@@ -265,4 +266,60 @@ test('re-checks activation effects before importing and requires final acknowled
   );
   const importRequest = requests.find((item) => item.path === '/api/transfer/import');
   expect(JSON.parse(importRequest?.body ?? '{}')).toMatchObject({ restoreActive: false });
+});
+
+test('closes on a successful import and reports the result in the toast', async () => {
+  globalThis.fetch = (async (path: string) => {
+    const body =
+      path === '/api/transfer/export/preview'
+        ? { codexLoginCacheAvailable: false }
+        : path === '/api/transfer/preview'
+          ? {
+              exportedAt: '2026-08-18T00:00:00.000Z',
+              profileCount: 2,
+              harnesses: [{ harness: 'claude', profiles: 2 }],
+              conflicts: [],
+              activeCount: 0,
+              conflictPolicy: 'skip',
+              restoreActive: true,
+              codexActivationAuthEffect: 'none',
+              codexLoginCache: { available: false, targetExists: false },
+            }
+          : {
+              ok: true,
+              imported: 2,
+              overwritten: 0,
+              skipped: 1,
+              activeRestored: 0,
+              codexLoginCacheMigrated: false,
+              warnings: [],
+            };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof globalThis.fetch;
+
+  const closes: boolean[] = [];
+  render(<TransferDialog open onOpenChange={(open) => closes.push(open)} />);
+  const file = new File(['ignored'], 'portable.hsw-backup', { type: 'application/json' });
+  Object.defineProperty(file, 'text', { value: async () => JSON.stringify(envelope) });
+  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+    target: { files: [file] },
+  });
+  await screen.findByText('portable.hsw-backup');
+  fireEvent.change(screen.getByLabelText('迁移密码', { selector: '#import-passphrase' }), {
+    target: { value: 'portable-secret' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '检查导入内容' }));
+  fireEvent.click(await screen.findByRole('button', { name: '确认导入' }));
+  fireEvent.click(await screen.findByRole('button', { name: '安全导入' }));
+
+  // Import is the end of this flow, so the dialog gets out of the way instead of
+  // leaving a finished form that looks like it still needs attention.
+  await waitFor(() => expect(closes).toEqual([false]));
+  const notice = useAppStore.getState().notice;
+  expect(notice).toContain('导入完成：新增 2 项');
+  expect(notice).toContain('跳过 1 项');
+  expect(screen.queryByText(/导入完成：/)).toBeNull();
 });

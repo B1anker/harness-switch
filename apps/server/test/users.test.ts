@@ -12,16 +12,23 @@ import { IUserService } from '../src/services/users';
 import { IVaultService } from '../src/services/vault';
 
 let rootDir = '';
+const originalCodexHome = process.env.CODEX_HOME;
 
 beforeEach(() => {
   rootDir = mkdtempSync(join(tmpdir(), 'hsw-users-'));
   process.env.HSW_HOME_DIR = join(rootDir, 'owner');
   process.env.HSW_DATA_DIR = join(rootDir, 'owner', '.harness-switch');
+  process.env.CODEX_HOME = join(rootDir, 'owner', '.codex');
 });
 
 afterEach(() => {
   delete process.env.HSW_HOME_DIR;
   delete process.env.HSW_DATA_DIR;
+  if (originalCodexHome === undefined) {
+    delete process.env.CODEX_HOME;
+  } else {
+    process.env.CODEX_HOME = originalCodexHome;
+  }
   rmSync(rootDir, { recursive: true, force: true });
 });
 
@@ -90,6 +97,153 @@ describe('local Unix users', () => {
     expect(raw).not.toContain('sk-peer-secret');
   });
 
+  test('overwrites same-name profiles only for explicitly selected harnesses', async () => {
+    const { app, firstCookie, services, peer } = await setup();
+    const environment = services.get(IEnvironmentService);
+    const vault = services.get(IVaultService);
+    const profiles = services.get(IProfileService);
+
+    profiles.upsert(
+      'claude',
+      {
+        name: 'shared',
+        baseUrl: 'https://owner-claude.example/v1',
+        apiKey: 'sk-owner-claude',
+        model: 'owner-claude',
+      },
+      true,
+    );
+    profiles.upsert(
+      'kimi',
+      {
+        name: 'shared',
+        baseUrl: 'https://owner-kimi.example/v1',
+        apiKey: 'sk-owner-kimi',
+        model: 'owner-kimi',
+      },
+      true,
+    );
+
+    environment.runAsUser(peer, () => {
+      const provider = vault.create({
+        name: 'Peer upstream',
+        apiKey: 'sk-peer-provider',
+        endpoints: [{ key: 'main', label: 'Main', baseUrl: 'https://peer.example/v1' }],
+      });
+      profiles.upsert(
+        'claude',
+        {
+          name: 'shared',
+          providerId: provider.id,
+          providerEndpoint: 'main',
+          model: 'peer-claude',
+        },
+        true,
+      );
+      profiles.upsert(
+        'kimi',
+        {
+          name: 'shared',
+          baseUrl: 'https://peer-kimi.example/v1',
+          apiKey: 'sk-peer-kimi',
+          model: 'peer-kimi',
+        },
+        true,
+      );
+    });
+
+    const preview = await json(app, '/api/users/sync/preview', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({ sourceUser: peer.username }),
+    });
+    expect(preview.conflicts).toEqual([
+      { harness: 'claude', name: 'shared' },
+      { harness: 'kimi', name: 'shared' },
+    ]);
+
+    const result = await json(app, '/api/users/sync', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceUser: peer.username,
+        conflictPolicy: 'skip',
+        overwriteHarnesses: ['claude'],
+      }),
+    });
+    expect(result).toMatchObject({ overwritten: 1, skipped: 1, providersCopied: 1 });
+    expect(profiles.get('claude', 'shared')).toMatchObject({
+      model: 'peer-claude',
+      providerEndpoint: 'main',
+    });
+    expect(profiles.get('claude', 'shared')?.providerId).toBeString();
+    expect(profiles.decrypt('claude', 'shared').apiKey).toBe('sk-peer-provider');
+    expect(profiles.get('kimi', 'shared')).toMatchObject({ model: 'owner-kimi' });
+  });
+
+  test('reports and overwrites only same-name profiles whose content differs', async () => {
+    const { app, firstCookie, services, peer } = await setup();
+    const environment = services.get(IEnvironmentService);
+    const vault = services.get(IVaultService);
+    const profiles = services.get(IProfileService);
+    const matchingHarnesses = ['kimi', 'pi', 'dsh'] as const;
+    const matchingProfile = {
+      name: 'gpt',
+      baseUrl: 'https://same.example/v1',
+      apiKey: 'sk-same-secret',
+      model: 'same-model',
+    };
+
+    profiles.upsert(
+      'claude',
+      {
+        name: 'cpa',
+        baseUrl: 'https://same.example',
+        apiKey: 'sk-same-secret',
+        model: 'same-model',
+      },
+      true,
+    );
+    for (const harness of matchingHarnesses) {
+      profiles.upsert(harness, matchingProfile, true);
+    }
+
+    environment.runAsUser(peer, () => {
+      const provider = vault.create({
+        name: 'Shared upstream',
+        apiKey: 'sk-same-secret',
+        endpoints: [{ key: 'main', label: 'Main', baseUrl: 'https://same.example' }],
+      });
+      profiles.upsert(
+        'claude',
+        {
+          name: 'cpa',
+          providerId: provider.id,
+          providerEndpoint: 'main',
+          model: 'same-model',
+        },
+        true,
+      );
+      for (const harness of matchingHarnesses) {
+        profiles.upsert(harness, matchingProfile, true);
+      }
+    });
+
+    const preview = await json(app, '/api/users/sync/preview', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({ sourceUser: peer.username }),
+    });
+    expect(preview.conflicts).toEqual([{ harness: 'claude', name: 'cpa' }]);
+
+    const result = await json(app, '/api/users/sync', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceUser: peer.username,
+        conflictPolicy: 'skip',
+        overwriteHarnesses: ['claude', ...matchingHarnesses],
+      }),
+    });
+    expect(result).toMatchObject({ overwritten: 1, skipped: 3, providersCopied: 1 });
+  });
+
   test('copies a Codex login cache only with explicit confirmation', async () => {
     const { app, firstCookie, owner, peer } = await setup();
     const sourceAuth = join(peer.homeDir, '.codex', 'auth.json');
@@ -149,6 +303,20 @@ describe('local Unix users', () => {
     });
     expect(response.status).toBe(400);
     expect(readFileSync(targetAuth, 'utf8')).toContain('keep-me');
+  });
+
+  test('rejects unknown harness ids in a selective overwrite request', async () => {
+    const { app, firstCookie, peer } = await setup();
+    const response = await app.request('/api/users/sync', {
+      method: 'POST',
+      headers: { Cookie: firstCookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceUser: peer.username,
+        conflictPolicy: 'skip',
+        overwriteHarnesses: ['gemini'],
+      }),
+    });
+    expect(response.status).toBe(400);
   });
 
   test('new files use the selected target user ownership metadata', () => {

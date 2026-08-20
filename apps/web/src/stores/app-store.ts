@@ -82,6 +82,8 @@ type AppState = {
   loadBackups: () => Promise<void>;
   loadBackupDetail: (id: string) => Promise<BackupDetail>;
   restoreBackup: (id: string) => Promise<void>;
+  /** Lets a dialog hand its success message to the toast so it can close itself. */
+  setNotice: (notice: string) => void;
   clearNotice: () => void;
   loadProviders: () => Promise<void>;
   createProvider: (input: CreateProviderRequest) => Promise<void>;
@@ -393,6 +395,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().loadHarnesses();
     return result;
   },
+
+  setNotice: (notice) => set({ notice }),
 
   clearNotice: () => set({ notice: null }),
 }));
