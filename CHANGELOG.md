@@ -1,3 +1,10 @@
+# [0.13.0](https://github.com/B1anker/harness-switch/compare/v0.12.0...v0.13.0) (2026-08-20)
+
+
+### Features
+
+* support local user switching and config sync ([6e4d17d](https://github.com/B1anker/harness-switch/commit/6e4d17d54a846b99a0e2925b8e29552eba82e51c))
+
 # [0.12.0](https://github.com/B1anker/harness-switch/compare/v0.11.1...v0.12.0) (2026-08-20)
 
 
