@@ -1,11 +1,23 @@
 import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { ArrowRightLeft, ChevronDown, LogOut, Plus, Server, SlidersHorizontal } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  ChevronDown,
+  KeyRound,
+  LogOut,
+  Plus,
+  Server,
+  SlidersHorizontal,
+  Stethoscope,
+} from 'lucide-react';
 import { useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
+import { DoctorDialog } from '@/components/doctor-dialog';
+import { DriftPanel } from '@/components/drift-panel';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
 import { NoticeToast } from '@/components/notice-toast';
 import { ProfileDialog } from '@/components/profile-dialog';
+import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TransferDialog } from '@/components/transfer-dialog';
 import { Button } from '@/components/ui/button';
@@ -26,6 +38,8 @@ export function DashboardPage() {
   const backups = useAppStore((state) => state.backups);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [vaultOpen, setVaultOpen] = useState(false);
+  const [doctorOpen, setDoctorOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
@@ -53,6 +67,14 @@ export function DashboardPage() {
             <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft />
               <span className="hidden sm:inline">导入 / 导出</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setVaultOpen(true)}>
+              <KeyRound />
+              <span className="hidden sm:inline">凭据库</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDoctorOpen(true)}>
+              <Stethoscope />
+              <span className="hidden sm:inline">诊断</span>
             </Button>
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => void logout()}>
@@ -129,6 +151,8 @@ export function DashboardPage() {
         />
       ) : null}
       <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
+      <ProviderVaultDialog open={vaultOpen} onOpenChange={setVaultOpen} />
+      <DoctorDialog open={doctorOpen} onOpenChange={setDoctorOpen} />
       <NoticeToast />
     </div>
   );
@@ -261,6 +285,8 @@ function ContextPanel({
             </div>
           </div>
         </section>
+
+        <DriftPanel harness={harness} />
 
         <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
           <h3 className="font-semibold">最近备份</h3>

@@ -1,4 +1,12 @@
-import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
+import type {
+  DoctorCheck,
+  DoctorReport,
+  DriftFileState,
+  DriftSummary,
+  HarnessSummary,
+  ProfilePublic,
+  ProviderPublic,
+} from '@seaveyon/harness-switch-shared';
 import { useAppStore } from '@/stores/app-store';
 
 export function profileFixture(overrides: Partial<ProfilePublic> = {}): ProfilePublic {
@@ -70,4 +78,68 @@ export function stubStoreActions<K extends keyof ReturnType<typeof useAppStore.g
   }
   useAppStore.setState(patch);
   return calls;
+}
+
+export function providerFixture(overrides: Partial<ProviderPublic> = {}): ProviderPublic {
+  return {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    notes: '',
+    apiKeyConfigured: true,
+    endpoints: [
+      { key: 'main', label: '主入口', baseUrl: 'https://openrouter.ai/api/v1' },
+      { key: 'fallback', label: '', baseUrl: 'https://fallback.example.com/v1' },
+    ],
+    updatedAt: '2026-08-13T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+export function driftFileFixture(overrides: Partial<DriftFileState> = {}): DriftFileState {
+  return {
+    key: 'settings',
+    label: 'settings.json',
+    path: '/home/tester/.claude/settings.json',
+    format: 'json',
+    expectedContent: '{"env":{"ANTHROPIC_AUTH_TOKEN":"sk-expected"}}',
+    currentContent: '{"env":{"ANTHROPIC_AUTH_TOKEN":"sk-live"}}',
+    status: 'drifted',
+    ...overrides,
+  };
+}
+
+export function driftSummaryFixture(overrides: Partial<DriftSummary> = {}): DriftSummary {
+  return {
+    harness: 'claude',
+    status: 'in-sync',
+    active: true,
+    files: [],
+    ...overrides,
+  };
+}
+
+export function doctorCheckFixture(overrides: Partial<DoctorCheck> = {}): DoctorCheck {
+  return {
+    id: 'claude.install',
+    label: 'claude.install',
+    status: 'ok',
+    detail: '已找到可执行文件 claude',
+    ...overrides,
+  };
+}
+
+export function doctorReportFixture(overrides: Partial<DoctorReport> = {}): DoctorReport {
+  return {
+    harness: 'claude',
+    checks: [
+      doctorCheckFixture(),
+      doctorCheckFixture({
+        id: 'claude.drift',
+        label: 'claude.drift',
+        status: 'warn',
+        detail: '2 个文件与激活配置不一致（drifted）',
+      }),
+    ],
+    ...overrides,
+  };
 }

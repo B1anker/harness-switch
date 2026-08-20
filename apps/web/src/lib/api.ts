@@ -22,6 +22,32 @@ export function backupsPath(id?: string): string {
   return id ? `/api/backups/${encodeURIComponent(id)}` : '/api/backups';
 }
 
+/** Provider Vault: shared credential entries any profile can reference. */
+export function providersPath(): string {
+  return '/api/providers';
+}
+
+export function providerPath(id: string): string {
+  return `${providersPath()}/${encodeURIComponent(id)}`;
+}
+
+export function doctorPath(): string {
+  return '/api/doctor';
+}
+
+/** Drift reports for every harness, or a single harness when an id is given. */
+export function driftPath(harnessId?: HarnessId | string): string {
+  return harnessId ? `/api/drift/${encodeURIComponent(harnessId)}` : '/api/drift';
+}
+
+export function driftReapplyPath(harnessId: HarnessId | string): string {
+  return `${driftPath(harnessId)}/reapply`;
+}
+
+export function driftAdoptPath(harnessId: HarnessId | string): string {
+  return `${driftPath(harnessId)}/adopt`;
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has('Content-Type')) {

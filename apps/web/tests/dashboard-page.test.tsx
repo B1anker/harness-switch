@@ -4,7 +4,7 @@ import { DashboardPage } from '@/pages/dashboard-page';
 import { useAppStore } from '@/stores/app-store';
 import { harnessFixture, profileFixture } from './fixtures';
 
-test('switches the visible harness with the app tabs', () => {
+function setDashboardState() {
   const claudeProfile = profileFixture({ name: 'claude-main' });
   const codexProfile = profileFixture({
     harness: 'codex',
@@ -26,8 +26,19 @@ test('switches the visible harness with the app tabs', () => {
     ],
     backups: [],
     notice: null,
+    providers: [],
+    drift: [],
+    doctor: [],
+    doctorUpdatedAvailable: false,
     loadBackups: async () => {},
+    loadProviders: async () => {},
+    loadDrift: async () => {},
+    loadDoctor: async () => {},
   });
+}
+
+test('switches the visible harness with the app tabs', () => {
+  setDashboardState();
 
   render(<DashboardPage />);
 
@@ -45,4 +56,27 @@ test('switches the visible harness with the app tabs', () => {
   expect(codexTab).toHaveAttribute('aria-selected', 'true');
   expect(within(screen.getByRole('tabpanel')).getByText('codex-main')).toBeInTheDocument();
   expect(within(screen.getByRole('tabpanel')).queryByText('claude-main')).toBeNull();
+});
+
+test('the header opens the vault and the doctor dialogs', () => {
+  setDashboardState();
+
+  render(<DashboardPage />);
+
+  fireEvent.click(screen.getByRole('button', { name: '凭据库' }));
+  expect(screen.getByRole('heading', { name: '凭据库' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+  fireEvent.click(screen.getByRole('button', { name: '诊断' }));
+  expect(screen.getByRole('heading', { name: '诊断' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+});
+
+test('the right column shows the drift card for the selected harness', () => {
+  setDashboardState();
+
+  render(<DashboardPage />);
+
+  expect(screen.getByText('配置漂移')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '查看差异' })).toBeDisabled();
 });

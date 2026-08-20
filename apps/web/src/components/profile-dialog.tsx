@@ -5,7 +5,7 @@ import type {
   ProfilePublic,
 } from '@seaveyon/harness-switch-shared';
 import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +40,8 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
   const createProfile = useAppStore((state) => state.createProfile);
   const updateProfile = useAppStore((state) => state.updateProfile);
   const previewProfile = useAppStore((state) => state.previewProfile);
+  const providers = useAppStore((state) => state.providers);
+  const loadProviders = useAppStore((state) => state.loadProviders);
 
   const isEdit = profile !== null;
   const [name, setName] = useState(profile?.name ?? '');
@@ -49,10 +51,24 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
   const [notes, setNotes] = useState(profile?.notes ?? '');
   const [extras, setExtras] = useState(() => initialExtras(harness.fields, profile));
   const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [providerId, setProviderId] = useState(profile?.providerId ?? '');
+  const [providerEndpoint, setProviderEndpoint] = useState(profile?.providerEndpoint ?? '');
   const [advanced, setAdvanced] = useState(false);
   const [targets, setTargets] = useState<PreviewTarget[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const providerEntries = providers ?? [];
+  const selectedProvider = providerEntries.find((entry) => entry.id === providerId) ?? null;
+  const selectedEndpoint = selectedProvider?.endpoints.find(
+    (endpoint) => endpoint.key === providerEndpoint,
+  );
+
+  useEffect(() => {
+    if (providers === null) {
+      void loadProviders();
+    }
+  }, [providers, loadProviders]);
 
   async function loadPreview() {
     if (!profile) {
@@ -86,18 +102,24 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
     setPending(true);
     setError(null);
     try {
+      const payload = {
+        name,
+        baseUrl:
+          selectedProvider && providerEndpoint ? (selectedEndpoint?.baseUrl ?? baseUrl) : baseUrl,
+        model,
+        notes,
+        extras,
+        ...(providerId
+          ? { providerId, ...(providerEndpoint ? { providerEndpoint } : {}) }
+          : isEdit
+            ? { providerId: '' }
+            : {}),
+        ...(selectedProvider ? {} : { apiKey: apiKey || undefined }),
+      };
       if (isEdit) {
-        await updateProfile(harness.id, profile.name, {
-          name,
-          baseUrl,
-          apiKey: apiKey || undefined,
-          model,
-          notes,
-          extras,
-          overrides,
-        });
+        await updateProfile(harness.id, profile.name, { ...payload, overrides });
       } else {
-        await createProfile(harness.id, { name, baseUrl, apiKey, model, notes, extras });
+        await createProfile(harness.id, payload);
       }
       onOpenChange(false);
     } catch (err) {
@@ -157,11 +179,21 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
               <Label htmlFor="baseUrl">API Base URL</Label>
               <Input
                 id="baseUrl"
-                value={baseUrl}
+                value={
+                  selectedProvider && providerEndpoint
+                    ? (selectedEndpoint?.baseUrl ?? baseUrl)
+                    : baseUrl
+                }
                 onChange={(event) => setBaseUrl(event.target.value)}
                 placeholder="https://api.example.com/v1"
+                disabled={selectedProvider !== null && providerEndpoint !== ''}
                 required
               />
+              {selectedProvider && providerEndpoint ? (
+                <p className="text-xs text-muted-foreground">
+                  Base URL 来自凭据库 endpoint「{providerEndpoint}」。
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -171,9 +203,17 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 type="password"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder={isEdit ? '留空表示保持不变' : '必填'}
-                required={!isEdit}
+                placeholder={
+                  selectedProvider ? '密钥由凭据库提供' : isEdit ? '留空表示保持不变' : '必填'
+                }
+                disabled={selectedProvider !== null}
+                required={!isEdit && selectedProvider === null}
               />
+              {selectedProvider ? (
+                <p className="text-xs text-muted-foreground">
+                  已引用共享 Provider，密钥在「凭据库」中统一轮换。
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -215,6 +255,62 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 onChange={(event) => setNotes(event.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-3 rounded-xl border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="provider-select" className="font-medium">
+                使用共享 Provider（凭据库）
+              </Label>
+              {selectedProvider ? <Badge variant="secondary">密钥由凭据库提供</Badge> : null}
+            </div>
+            <Select
+              value={providerId}
+              onValueChange={(value) => {
+                setProviderId(value);
+                setProviderEndpoint('');
+              }}
+            >
+              <SelectTrigger id="provider-select" aria-label="使用共享 Provider">
+                <SelectValue placeholder="不使用（本配置自带密钥）" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">不使用（本配置自带密钥）</SelectItem>
+                {providerEntries.map((entry) => (
+                  <SelectItem key={entry.id} value={entry.id}>
+                    {entry.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {providerEntries.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                凭据库为空，可先在顶部「凭据库」中新增 Provider 条目。
+              </p>
+            ) : null}
+            {selectedProvider ? (
+              <div className="space-y-2">
+                <Label htmlFor="provider-endpoint">命名 Endpoint（可选）</Label>
+                <Select value={providerEndpoint} onValueChange={setProviderEndpoint}>
+                  <SelectTrigger id="provider-endpoint" aria-label="命名 Endpoint">
+                    <SelectValue placeholder="不指定（使用下方 Base URL）" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">不指定（使用下方 Base URL）</SelectItem>
+                    {selectedProvider.endpoints.map((endpoint) => (
+                      <SelectItem key={endpoint.key} value={endpoint.key}>
+                        {endpoint.label ? `${endpoint.label}（${endpoint.key}）` : endpoint.key}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedProvider.endpoints.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    该 Provider 没有命名 endpoint，将使用下方 Base URL。
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-xl border">

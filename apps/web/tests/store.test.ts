@@ -27,6 +27,16 @@ beforeEach(() => {
     envFile: '',
     error: null,
     notice: null,
+    providers: null,
+    providersLoading: false,
+    providersError: null,
+    doctor: null,
+    doctorUpdatedAvailable: false,
+    doctorLoading: false,
+    doctorError: null,
+    drift: null,
+    driftLoading: false,
+    driftError: null,
   });
 });
 
@@ -38,6 +48,33 @@ function harnessResponse() {
   return {
     envFile: '/home/tester/.harness-switch/env.sh',
     items: [{ id: 'claude', label: 'Claude Code', mode: 'replace', profiles: [] }],
+  };
+}
+
+function providersResponse() {
+  return {
+    items: [
+      {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        apiKeyConfigured: true,
+        endpoints: [],
+        updatedAt: '2026-08-13T00:00:00.000Z',
+      },
+    ],
+  };
+}
+
+function driftResponse() {
+  return {
+    items: [{ harness: 'claude', status: 'unknown', active: false, files: [] }],
+  };
+}
+
+function doctorResponse() {
+  return {
+    items: [{ harness: 'claude', checks: [] }],
+    updatedAvailable: true,
   };
 }
 
@@ -64,6 +101,20 @@ test('a real failure surfaces the server message', async () => {
   responder = () => ({ status: 500, body: { error: 'disk full' } });
   await useAppStore.getState().loadHarnesses();
   expect(useAppStore.getState().error).toBe('disk full');
+});
+
+test('loading the session also refreshes drift without blocking on its failure', async () => {
+  responder = (path) =>
+    path === '/api/auth/session'
+      ? { status: 200, body: {} }
+      : path === '/api/harnesses'
+        ? { status: 200, body: harnessResponse() }
+        : { status: 500, body: { error: 'drift broken' } };
+
+  await useAppStore.getState().loadSession();
+
+  expect(useAppStore.getState().authenticated).toBe(true);
+  expect(requests.some((request) => request.path === '/api/drift')).toBe(true);
 });
 
 test('activating explains what took effect and when', async () => {
@@ -100,7 +151,7 @@ test('warnings from steps after the switch committed are shown, not swallowed', 
   expect(useAppStore.getState().notice).toContain('注意：未能把 main 的现有配置回填保存');
 });
 
-test('creating and updating hit the right paths and refresh the list', async () => {
+test('creating and updating hit the right paths and refresh the list plus drift', async () => {
   responder = () => ({ status: 200, body: harnessResponse() });
 
   await useAppStore.getState().createProfile('claude', {
@@ -114,10 +165,13 @@ test('creating and updating hit the right paths and refresh the list', async () 
   expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual([
     'POST /api/harnesses/claude/profiles',
     'GET /api/harnesses',
+    'GET /api/drift',
     'PATCH /api/harnesses/kimi/profiles/prod%20key',
     'GET /api/harnesses',
+    'GET /api/drift',
     'DELETE /api/harnesses/claude/profiles/main',
     'GET /api/harnesses',
+    'GET /api/drift',
   ]);
 });
 
@@ -172,7 +226,10 @@ test('logging out clears everything the session loaded', async () => {
     harnesses: [{ id: 'claude' }],
     backups: [{ id: 'b' }],
     envFile: '/env.sh',
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+    providers: [providersResponse().items[0]!],
+    doctor: doctorResponse().items,
+    drift: driftResponse().items,
+  } as never);
 
   await useAppStore.getState().logout();
 
@@ -181,10 +238,150 @@ test('logging out clears everything the session loaded', async () => {
   expect(state.harnesses).toEqual([]);
   expect(state.backups).toEqual([]);
   expect(state.envFile).toBe('');
+  expect(state.providers).toBeNull();
+  expect(state.doctor).toBeNull();
+  expect(state.drift).toBeNull();
 });
 
 test('dismissing the notice clears it', () => {
   useAppStore.setState({ notice: 'something happened' });
   useAppStore.getState().clearNotice();
   expect(useAppStore.getState().notice).toBeNull();
+});
+
+test('loading providers stores the list without ever exposing a key', async () => {
+  responder = () => ({ status: 200, body: providersResponse() });
+
+  await useAppStore.getState().loadProviders();
+
+  expect(requests[0]?.path).toBe('/api/providers');
+  expect(useAppStore.getState().providers).toHaveLength(1);
+  expect(useAppStore.getState().providers?.[0]).not.toHaveProperty('apiKey');
+});
+
+test('an expired session clears the provider list back to empty', async () => {
+  responder = () => ({ status: 401, body: { error: 'authentication required' } });
+  await useAppStore.getState().loadProviders();
+  expect(useAppStore.getState().authenticated).toBe(false);
+  expect(useAppStore.getState().providers).toEqual([]);
+});
+
+test('creating a provider posts and reloads the list', async () => {
+  responder = (path) =>
+    path === '/api/providers'
+      ? { status: 201, body: providersResponse().items[0] }
+      : { status: 200, body: providersResponse() };
+
+  await useAppStore.getState().createProvider({
+    name: 'DeepSeek',
+    apiKey: 'sk-test',
+  });
+
+  expect(requests[0]).toMatchObject({ path: '/api/providers', method: 'POST' });
+  expect(JSON.parse(requests[0]?.body ?? '{}')).toEqual({ name: 'DeepSeek', apiKey: 'sk-test' });
+  expect(requests.map((request) => request.path)).toEqual(['/api/providers', '/api/providers']);
+});
+
+test('updating a provider patches it and refreshes the harness list and drift', async () => {
+  responder = (path) =>
+    path === '/api/providers/openrouter'
+      ? { status: 200, body: { provider: providersResponse().items[0], warnings: [] } }
+      : path === '/api/harnesses'
+        ? { status: 200, body: harnessResponse() }
+        : path === '/api/drift'
+          ? { status: 200, body: driftResponse() }
+          : { status: 200, body: providersResponse() };
+
+  const result = await useAppStore.getState().updateProvider('openrouter', {
+    apiKey: 'sk-rotated',
+  });
+
+  expect(requests[0]).toMatchObject({ path: '/api/providers/openrouter', method: 'PATCH' });
+  expect(result.provider.id).toBe('openrouter');
+  expect(requests.some((request) => request.path === '/api/harnesses')).toBe(true);
+  expect(requests.some((request) => request.path === '/api/drift')).toBe(true);
+});
+
+test('deleting a provider deletes and reloads', async () => {
+  responder = (path) =>
+    path === '/api/providers/openrouter'
+      ? { status: 200, body: { ok: true } }
+      : { status: 200, body: providersResponse() };
+
+  await useAppStore.getState().deleteProvider('openrouter');
+
+  expect(requests[0]).toMatchObject({ path: '/api/providers/openrouter', method: 'DELETE' });
+  expect(requests.map((request) => request.path)).toEqual([
+    '/api/providers/openrouter',
+    '/api/providers',
+  ]);
+});
+
+test('a referenced provider surfaces the 409 message', async () => {
+  responder = () => ({ status: 409, body: { error: 'Provider 正被 2 个配置引用' } });
+  await expect(useAppStore.getState().deleteProvider('openrouter')).rejects.toThrow(
+    'Provider 正被 2 个配置引用',
+  );
+});
+
+test('loading the doctor stores the reports and the update availability', async () => {
+  responder = () => ({ status: 200, body: doctorResponse() });
+
+  await useAppStore.getState().loadDoctor();
+
+  expect(requests[0]?.path).toBe('/api/doctor');
+  expect(useAppStore.getState().doctor).toHaveLength(1);
+  expect(useAppStore.getState().doctor?.[0]?.harness).toBe('claude');
+  expect(useAppStore.getState().doctorUpdatedAvailable).toBe(true);
+});
+
+test('loading drift stores one report per harness', async () => {
+  responder = () => ({ status: 200, body: driftResponse() });
+
+  await useAppStore.getState().loadDrift();
+
+  expect(requests[0]?.path).toBe('/api/drift');
+  expect(useAppStore.getState().drift).toHaveLength(1);
+  expect(useAppStore.getState().drift?.[0]?.harness).toBe('claude');
+});
+
+test('reapplying drift posts to the harness and reloads the view', async () => {
+  responder = (path) =>
+    path === '/api/drift/claude/reapply'
+      ? { status: 200, body: { ok: true, files: [] } }
+      : { status: 200, body: driftResponse() };
+  useAppStore.setState({ harnesses: [{ id: 'claude', label: 'Claude Code' }] } as Partial<
+    ReturnType<typeof useAppStore.getState>
+  > as never);
+
+  const files = await useAppStore.getState().reapplyDrift('claude');
+
+  expect(requests[0]?.path).toBe('/api/drift/claude/reapply');
+  expect(files).toEqual([]);
+  expect(useAppStore.getState().notice).toContain('Claude Code');
+});
+
+test('adopting the live files reloads the harness list and drift', async () => {
+  responder = (path) =>
+    path === '/api/drift/claude/adopt'
+      ? {
+          status: 200,
+          body: {
+            ok: true,
+            summary: { harness: 'claude', status: 'in-sync', active: true, files: [] },
+          },
+        }
+      : path === '/api/harnesses'
+        ? { status: 200, body: harnessResponse() }
+        : { status: 200, body: driftResponse() };
+  useAppStore.setState({ harnesses: [{ id: 'claude', label: 'Claude Code' }] } as Partial<
+    ReturnType<typeof useAppStore.getState>
+  > as never);
+
+  const result = await useAppStore.getState().adoptDrift('claude');
+
+  expect(requests[0]?.path).toBe('/api/drift/claude/adopt');
+  expect(result.summary.harness).toBe('claude');
+  expect(useAppStore.getState().notice).toContain('Claude Code');
+  expect(requests.some((request) => request.path === '/api/harnesses')).toBe(true);
 });

@@ -10,6 +10,7 @@ type Recorded = { created: unknown[][]; updated: unknown[][] };
 function setup(preview: PreviewTarget[] = []): Recorded {
   const recorded: Recorded = { created: [], updated: [] };
   useAppStore.setState({
+    providers: [],
     createProfile: async (...args: unknown[]) => {
       recorded.created.push(args);
     },
@@ -17,6 +18,7 @@ function setup(preview: PreviewTarget[] = []): Recorded {
       recorded.updated.push(args);
     },
     previewProfile: async () => preview,
+    loadProviders: async () => {},
   } as Partial<ReturnType<typeof useAppStore.getState>> as never);
   return recorded;
 }
@@ -204,9 +206,11 @@ test('handing a file back clears its override', async () => {
 
 test('shows the reason a save failed instead of closing silently', async () => {
   useAppStore.setState({
+    providers: [],
     createProfile: async () => {
       throw new Error('profile already exists');
     },
+    loadProviders: async () => {},
   } as Partial<ReturnType<typeof useAppStore.getState>> as never);
   const closes: boolean[] = [];
   render(
