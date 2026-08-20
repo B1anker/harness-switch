@@ -88,6 +88,51 @@ On the destination machine, select the bundle and enter the migration password. 
 
 Keep the migration password separately from the bundle. It cannot be recovered from the export file.
 
+### Provider Vault: shared credentials
+
+The **凭据库 (Provider Vault)** stores an API key once under a named entry with one or more named endpoints (each a base URL), encrypted with the same AES-256-GCM key that protects `profiles.json`. A profile can reference a vault entry instead of carrying its own key:
+
+- The vault owns the credential; the profile keeps a materialized cache so existing readers (transfer export, `active.json`, `env.sh`) keep working unchanged.
+- Rotating the vault key or an endpoint re-applies every **active** profile that references the entry, so the live files follow immediately. Failures are reported as warnings.
+- An entry that is referenced by any profile cannot be deleted (HTTP `409`).
+- Detach a profile by clearing the provider selection in the profile form; the cached key stays as the profile's own inline key.
+
+### Configuration drift
+
+The dashboard's **配置漂移** panel compares what the active profile would render against the actual files on disk, using parsed-value comparison for JSON/TOML/YAML so a re-render that only reorders keys does not count as drift. Each file is reported as:
+
+- `in-sync` — disk matches what the profile would write,
+- `drifted` — disk differs from what the profile would write,
+- `missing` — the file does not exist yet,
+- `invalid` — the live file cannot be parsed,
+- `unknown` — nothing is active for this tool (official-login `text` files cannot be verified).
+
+Two repair actions are offered per harness:
+
+- **重新应用 (re-apply)** rewrites the live files from the active profile, with the usual backup-before-write and all-or-nothing rollback.
+- **采纳现场配置 (adopt)** reads the live files back into the profile record (same path as the pre-switch backfill). It refuses with `409` when the profile has manual raw overrides, and never adopts content the tool itself could not parse.
+
+### Diagnostics (Doctor)
+
+The **诊断 (Doctor)** panel runs read-only checks per harness: whether the tool's CLI is on `PATH` (`install`), whether each target's config directory exists (`configDir`), whether each target file exists and is readable/writable (`files`, with a warning when a config file holding credentials is group/other-readable), whether the files parse (`parse`), and whether live state drifts from the active profile (`drift`). A global update check reports whether a newer release exists (`updatedAvailable`).
+
+The connectivity probe is **disabled by default in the MVP**: passing `--probe` only records a `unknown`-status check that reports the active base URL and explains that no network request is made.
+
+### CLI automation
+
+The same business logic is available from the terminal without opening the browser or starting any listener: the CLI builds the same service graph in-process and reads/writes the same data directory, so it works even when the daemon is not running. Every command supports `--json` for scripting:
+
+```bash
+harness-switch list                          # harnesses, active profile, profile counts
+harness-switch providers                     # Provider Vault entries
+harness-switch doctor                        # read-only diagnostics
+harness-switch doctor --probe --harness claude
+harness-switch plan claude                   # drift inspection for a harness
+harness-switch activate claude main --yes    # activate a profile
+```
+
+`plan <harness>` prints the drift inspection of the active profile (expected vs. current content per file); without an active profile it reports `status: unknown`. `activate` prompts for confirmation on a TTY and requires `--yes` in non-interactive terminals (CI). JSON output mirrors the HTTP API response shapes (`HarnessesResponse`, `ProvidersResponse`, `DoctorResponse`, `DriftSummary`, `ActivateResponse`), so scripts can reuse the same field names. `HSW_DATA_DIR` and `HSW_HOME_DIR` override where it reads state (defaults: `~/.harness-switch` and `$HOME`).
+
 ## Security
 
 The service defaults to loopback only. Do **not** expose the management port directly to the public Internet. Use SSH port forwarding or a TLS-enabled reverse proxy with additional access control.
@@ -136,6 +181,14 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `POST` | `/api/transfer/export` | Create a passphrase-encrypted portable bundle |
 | `POST` | `/api/transfer/preview` | Decrypt and report profile counts and conflicts without writing |
 | `POST` | `/api/transfer/import` | Import with `skip` or `overwrite` conflict handling |
+| `GET` | `/api/providers` | Provider Vault entries (no key material) |
+| `POST` | `/api/providers` | Create a vault entry |
+| `PATCH` | `/api/providers/:id` | Update; re-applies referencing active profiles |
+| `DELETE` | `/api/providers/:id` | Delete; `409` while referenced by a profile |
+| `GET` | `/api/drift` | Drift report for every harness |
+| `POST` | `/api/drift/:harnessId/reapply` | Rewrite live files from the active profile |
+| `POST` | `/api/drift/:harnessId/adopt` | Read live files back into the profile record |
+| `GET` | `/api/doctor` | Read-only diagnostics (`?probe=1` includes the MVP-disabled, non-network probe check) |
 
 ## Background daemon (bunx / npx)
 
@@ -148,6 +201,7 @@ bunx @seaveyon/harness-switch@latest             # start, or update + restart th
 bunx @seaveyon/harness-switch@latest status      # pid, url, log path
 bunx @seaveyon/harness-switch@latest stop        # stop the daemon
 bunx @seaveyon/harness-switch@latest server      # run in the foreground instead
+bunx @seaveyon/harness-switch@latest list        # CLI automation (see above)
 ```
 
 `npx -y @seaveyon/harness-switch@latest` works the same way. Append `@latest`

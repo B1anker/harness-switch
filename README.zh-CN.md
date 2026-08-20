@@ -88,6 +88,51 @@ source ~/.harness-switch/env.sh
 
 请将迁移密码与备份包分开保管。它无法从导出文件中还原。
 
+### 凭据库（Provider Vault）：共享凭据
+
+**凭据库**让一个 API Key 只保存一次，并挂在一个具名条目下，条目下可含多个具名 endpoint（每个一个 Base URL），使用与 `profiles.json` 相同的 AES-256-GCM 密钥加密。某个配置可以引用凭据库条目，而不再自带密钥：
+
+- 凭据库拥有凭据；配置里保留一份物化缓存，因此现有读取方（迁移导出、`active.json`、`env.sh`）无需改动仍能工作。
+- 轮换凭据库密钥或 endpoint 时，所有**已激活**且引用该条目的配置会被重新应用，live 文件立即跟上；失败以 warnings 报告。
+- 仍被配置引用的条目无法删除（HTTP `409`）。
+- 在配置表单中清除 Provider 选择即可解除引用；缓存的密钥会作为该配置自己的内联密钥保留。
+
+### 配置漂移
+
+仪表盘的 **配置漂移** 面板把「激活配置会渲染出的内容」与磁盘上的实际文件做比较；JSON/TOML/YAML 按解析后的值比较，因此仅键顺序变化的重新渲染不会误报为漂移。每个文件的状态为：
+
+- `in-sync` — 磁盘与配置将写入的内容一致；
+- `drifted` — 磁盘与配置将写入的内容不同；
+- `missing` — 文件还不存在；
+- `invalid` — live 文件无法解析；
+- `unknown` — 该工具当前未激活任何配置（官方登录的 `text` 文件无法校验）。
+
+每个 Harness 提供两种修复动作：
+
+- **重新应用**：按激活配置重写 live 文件，沿用「写前备份 + 全有或全无回滚」。
+- **采纳现场配置**：把 live 文件内容读回配置记录（与切走前回填同一路径）。当配置存在手动 override 时拒绝执行；工具自身无法解析的内容也绝不会被采纳。
+
+### 诊断（Doctor）
+
+**诊断** 面板对每个 Harness 执行只读检查：工具的 CLI 是否在 `PATH` 中（`install`）、每个目标文件所在目录是否存在（`configDir`）、每个目标文件是否存在且可读可写（`files`，配置文件持有凭据且 group/other 可读时给出 warning）、文件能否解析（`parse`）、live 状态是否与激活配置漂移（`drift`）。另有全局的版本更新检查，报告是否有新版本可用（`updatedAvailable`）。
+
+连通性探测在 MVP 中**默认关闭**：传入 `--probe` 也只会记录一条 `unknown` 状态的检查，报告当前激活的 base URL 并说明未发起任何网络请求。
+
+### CLI 自动化
+
+不打开浏览器、也不启动任何监听进程就能在终端使用同样的业务逻辑：CLI 在进程内构建与 HTTP 服务相同的服务图，直接读写同一数据目录，即使守护进程未运行也能工作。每条命令都支持 `--json` 以便脚本化：
+
+```bash
+harness-switch list                          # Harness、激活配置与配置数量
+harness-switch providers                     # 凭据库条目
+harness-switch doctor                        # 只读诊断
+harness-switch doctor --probe --harness claude
+harness-switch plan claude                   # 该 Harness 的漂移检查
+harness-switch activate claude main --yes    # 激活一个配置
+```
+
+`plan <harness>` 输出激活配置的漂移检查（每个文件预期内容 vs 当前内容）；未激活任何配置时报告 `status: unknown`。`activate` 在 TTY 上会询问确认，在非交互式终端（CI）里必须加 `--yes`。JSON 输出与 HTTP API 的响应形状一致（`HarnessesResponse`、`ProvidersResponse`、`DoctorResponse`、`DriftSummary`、`ActivateResponse`），脚本可直接复用同样的字段名。`HSW_DATA_DIR` 与 `HSW_HOME_DIR` 可覆盖状态读写位置（默认 `~/.harness-switch` 与 `$HOME`）。
+
 ## 安全性
 
 服务默认仅监听回环地址。请 **不要** 把管理端口直接暴露到公网。请使用 SSH 端口转发，或配合额外访问控制的 TLS 反向代理。
@@ -136,6 +181,14 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `POST` | `/api/transfer/export` | 生成一个用密码加密的可迁移备份包 |
 | `POST` | `/api/transfer/preview` | 解密并报告配置数量与冲突，不写入任何内容 |
 | `POST` | `/api/transfer/import` | 导入，冲突处理方式为 `skip` 或 `overwrite` |
+| `GET` | `/api/providers` | 凭据库条目（不含密钥材料） |
+| `POST` | `/api/providers` | 创建凭据库条目 |
+| `PATCH` | `/api/providers/:id` | 更新；自动重新应用引用它的已激活配置 |
+| `DELETE` | `/api/providers/:id` | 删除；仍被配置引用时返回 `409` |
+| `GET` | `/api/drift` | 每个 Harness 的漂移报告 |
+| `POST` | `/api/drift/:harnessId/reapply` | 按激活配置重写 live 文件 |
+| `POST` | `/api/drift/:harnessId/adopt` | 把 live 文件读回配置记录 |
+| `GET` | `/api/doctor` | 只读诊断（`?probe=1` 包含默认关闭、不发网络请求的探测检查） |
 
 ## 后台守护进程（bunx / npx）
 
@@ -146,6 +199,7 @@ bunx @seaveyon/harness-switch@latest             # 启动，或更新并重启�
 bunx @seaveyon/harness-switch@latest status      # 查看 pid、地址、日志路径
 bunx @seaveyon/harness-switch@latest stop        # 停止守护进程
 bunx @seaveyon/harness-switch@latest server      # 改为前台运行
+bunx @seaveyon/harness-switch@latest list        # CLI 自动化（见上文）
 ```
 
 `npx -y @seaveyon/harness-switch@latest` 效果相同。加上 `@latest` 可以保证 `bunx`/`npx` 每次先拉取最新发布版本。
