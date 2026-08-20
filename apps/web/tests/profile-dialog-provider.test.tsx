@@ -38,7 +38,7 @@ function fill(label: string, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
-test('referencing a provider disables the api key and submits the reference', async () => {
+test('selecting a provider automatically selects its first endpoint', async () => {
   const recorded = setup();
   render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
 
@@ -46,15 +46,17 @@ test('referencing a provider disables the api key and submits the reference', as
 
   expect(screen.getByText('密钥由凭据库提供')).toBeInTheDocument();
   expect(screen.getByLabelText('API Key')).toBeDisabled();
+  expect(screen.getByRole('combobox', { name: '命名 Endpoint' })).toHaveTextContent('主入口');
+  expect(screen.getByLabelText('API Base URL')).toHaveValue('https://openrouter.ai/api/v1');
+  expect(screen.getByLabelText('API Base URL')).toBeDisabled();
 
   fill('配置名称', 'shared-main');
-  // Without a named endpoint the base url stays editable (and is required).
-  fill('API Base URL', 'https://openrouter.ai/api/v1');
   fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
   await waitFor(() => expect(recorded.created).toHaveLength(1));
   const payload = recorded.created[0]?.[1] as Record<string, unknown>;
   expect(payload.providerId).toBe('openrouter');
+  expect(payload.providerEndpoint).toBe('main');
   expect(payload.apiKey).toBeUndefined();
 });
 
@@ -68,9 +70,9 @@ test('picking an endpoint fills and disables the base url with its value', async
     button: 0,
     pointerType: 'mouse',
   });
-  fireEvent.click(screen.getByRole('option', { name: /主入口/ }));
+  fireEvent.click(screen.getByRole('option', { name: /fallback/ }));
 
-  expect(screen.getByLabelText('API Base URL')).toHaveValue('https://openrouter.ai/api/v1');
+  expect(screen.getByLabelText('API Base URL')).toHaveValue('https://fallback.example.com/v1');
   expect(screen.getByLabelText('API Base URL')).toBeDisabled();
 
   fill('配置名称', 'endpoint-main');
@@ -79,8 +81,8 @@ test('picking an endpoint fills and disables the base url with its value', async
   await waitFor(() => expect(recorded.created).toHaveLength(1));
   const payload = recorded.created[0]?.[1] as Record<string, unknown>;
   expect(payload.providerId).toBe('openrouter');
-  expect(payload.providerEndpoint).toBe('main');
-  expect(payload.baseUrl).toBe('https://openrouter.ai/api/v1');
+  expect(payload.providerEndpoint).toBe('fallback');
+  expect(payload.baseUrl).toBe('https://fallback.example.com/v1');
   expect(payload.apiKey).toBeUndefined();
 });
 
@@ -128,4 +130,26 @@ test('editing a provider-backed profile detaches when the provider is deselected
   const [, , payload] = recorded.updated[0] as [string, string, Record<string, unknown>];
   expect(payload.providerId).toBe('');
   expect(payload.providerEndpoint).toBeUndefined();
+});
+
+test('marks a stale endpoint select as invalid instead of submitting it', async () => {
+  const recorded = setup();
+  render(
+    <ProfileDialog
+      harness={harnessFixture()}
+      profile={profileFixture({
+        providerId: 'openrouter',
+        providerEndpoint: 'removed',
+        baseUrl: 'https://old.example.com/v1',
+      })}
+      onOpenChange={() => {}}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  const select = screen.getByRole('combobox', { name: '命名 Endpoint' });
+  expect(await screen.findByText('引用的 Endpoint 已不存在，请重新选择')).toBeInTheDocument();
+  expect(select).toHaveAttribute('aria-invalid', 'true');
+  expect(recorded.updated).toEqual([]);
 });

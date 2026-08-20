@@ -25,6 +25,7 @@ const DEFAULT_MAX_TOKENS = 32768;
 export class DshAdapter implements HarnessAdapter {
   readonly id = 'dsh' as const;
   readonly mode: HarnessMode = 'additive';
+  readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 安全写入 DSH 的 .credentials.yaml，并由 settings.yaml 引用。';
 

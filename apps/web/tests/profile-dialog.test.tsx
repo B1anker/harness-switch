@@ -59,6 +59,57 @@ test('selecting an option updates the controlled extra field', async () => {
   });
 });
 
+test('marks core fields invalid and clears each error when the value changes', () => {
+  const recorded = setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  expect(screen.getByLabelText('配置名称')).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByLabelText('API Base URL')).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByLabelText('API Key')).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByText('请输入配置名称')).toBeInTheDocument();
+  expect(screen.getByText('请输入 API Base URL')).toBeInTheDocument();
+  expect(screen.getByText('请输入 API Key')).toBeInTheDocument();
+  expect(recorded.created).toEqual([]);
+
+  fill('配置名称', 'valid-name');
+  expect(screen.getByLabelText('配置名称').getAttribute('aria-invalid')).toBeNull();
+  expect(screen.getByLabelText('API Base URL')).toHaveAttribute('aria-invalid', 'true');
+});
+
+test('validates the adapter model and required dynamic fields consistently', () => {
+  const recorded = setup();
+  render(
+    <ProfileDialog
+      harness={harnessFixture({
+        id: 'kimi',
+        label: 'Kimi Code',
+        modelRequired: true,
+        fields: [
+          { key: 'region', label: '区域', kind: 'select', required: true, options: [] },
+          { key: 'headers', label: '请求头', kind: 'textarea', required: true },
+        ],
+      })}
+      profile={null}
+      onOpenChange={() => {}}
+    />,
+  );
+
+  fill('配置名称', 'kimi-main');
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-test');
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  expect(screen.getByLabelText('模型')).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('combobox', { name: '区域' })).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByLabelText('请求头')).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByText('请输入模型名称')).toBeInTheDocument();
+  expect(screen.getByText('请填写区域')).toBeInTheDocument();
+  expect(screen.getByText('请填写请求头')).toBeInTheDocument();
+  expect(recorded.created).toEqual([]);
+});
+
 test('creating submits the core fields together with the field defaults', async () => {
   const recorded = setup();
   render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
@@ -68,8 +119,11 @@ test('creating submits the core fields together with the field defaults', async 
   fill('API Key', 'sk-test');
   fill('回退模型（ANTHROPIC_MODEL）', 'claude-sonnet-4-5');
   fill('Haiku 模型映射', 'claude-haiku-4-5');
+  fill('Haiku 显示名称（选填）', 'Fast');
   fill('Sonnet 模型映射', 'claude-sonnet-4-5');
+  fill('Sonnet 显示名称（选填）', 'Balanced');
   fill('Opus 模型映射', 'claude-opus-4-5');
+  fill('Opus 显示名称（选填）', 'Powerful');
   fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
   await waitFor(() => expect(recorded.created).toHaveLength(1));
@@ -84,9 +138,13 @@ test('creating submits the core fields together with the field defaults', async 
       extras: {
         authVar: 'ANTHROPIC_AUTH_TOKEN',
         haikuModel: 'claude-haiku-4-5',
+        haikuModelName: 'Fast',
         sonnetModel: 'claude-sonnet-4-5',
+        sonnetModelName: 'Balanced',
         opusModel: 'claude-opus-4-5',
+        opusModelName: 'Powerful',
         fableModel: '',
+        fableModelName: '',
         subagentModel: '',
       },
     },
@@ -101,6 +159,46 @@ test('a preset fills the base url and the model in one click', () => {
 
   expect(screen.getByLabelText('API Base URL')).toHaveValue('https://api.z.ai/api/anthropic');
   expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）')).toHaveValue('glm-4.6');
+});
+
+test('keeps the title and close action outside the scroll area and puts Provider first', () => {
+  setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  const heading = screen.getByRole('heading', { name: '新增 Claude Code 配置' });
+  const content = heading.closest('[data-slot="dialog-content"]');
+  const scroll = content?.querySelector('[data-slot="profile-dialog-scroll"]');
+  const provider = content?.querySelector('[data-slot="provider-reference-fields"]');
+  const close = screen.getByRole('button', { name: 'Close' });
+
+  expect(content).toHaveClass('overflow-hidden');
+  expect(content).toHaveClass('sm:max-w-[1120px]');
+  expect(scroll).toHaveClass('overflow-y-auto');
+  expect(scroll?.contains(heading)).toBe(false);
+  expect(scroll?.contains(close)).toBe(false);
+  expect(scroll?.firstElementChild).toBe(provider);
+});
+
+test('groups Claude model mappings into a wide role, display name and model grid', () => {
+  setup();
+  render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
+
+  const mapping = screen.getByText('模型映射').closest('[data-slot="claude-model-mapping"]');
+  expect(mapping).toBeInTheDocument();
+  expect(mapping).toHaveTextContent('模型角色');
+  expect(mapping).toHaveTextContent('显示名称');
+  expect(mapping).toHaveTextContent('实际请求模型');
+  expect(mapping).toHaveTextContent('Sonnet');
+  expect(mapping).toHaveTextContent('Opus');
+  expect(mapping).toHaveTextContent('Fable');
+  expect(mapping).toHaveTextContent('Haiku');
+  expect(mapping).toHaveTextContent('Subagent');
+
+  fill('Sonnet 模型映射', 'gpt-5.6-terra');
+  expect(screen.getByLabelText('Sonnet 显示名称（选填）')).toHaveAttribute(
+    'placeholder',
+    '默认：gpt-5.6-terra',
+  );
 });
 
 test('editing can rename the profile and keeps the stored key when left blank', async () => {
@@ -133,7 +231,10 @@ test('the raw editor is only offered once the profile exists', () => {
   setup();
   render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
 
-  fireEvent.click(screen.getByRole('button', { name: /高级：原始配置/ }));
+  const trigger = screen.getByRole('button', { name: /高级：原始配置/ });
+  expect(trigger).toHaveClass('rounded-xl');
+  fireEvent.click(trigger);
+  expect(trigger).toHaveClass('rounded-t-xl');
   expect(screen.getByText(/先保存这份配置/)).toBeInTheDocument();
 });
 

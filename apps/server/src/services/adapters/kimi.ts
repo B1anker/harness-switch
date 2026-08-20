@@ -32,6 +32,7 @@ const DEFAULT_CONTEXT = 262144;
 export class KimiAdapter implements HarnessAdapter {
   readonly id = 'kimi' as const;
   readonly mode: HarnessMode = 'additive';
+  readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'Kimi Code 不从 shell 读取凭据，env.sh 对它无效。';
 

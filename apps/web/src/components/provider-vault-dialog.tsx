@@ -1,5 +1,5 @@
 import type { ProviderPublic } from '@seaveyon/harness-switch-shared';
-import { ChevronLeft, Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   AlertDialog,
@@ -37,6 +37,11 @@ type EndpointDraft = {
   key: string;
   baseUrl: string;
   label: string;
+};
+
+type EndpointFieldErrors = {
+  key?: string;
+  baseUrl?: string;
 };
 
 /**
@@ -107,10 +112,17 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>凭据库</DialogTitle>
+          <DialogTitle>
+            {view.kind === 'create'
+              ? '新增 Provider'
+              : view.kind === 'edit'
+                ? `编辑 ${view.entry.name}`
+                : '凭据库'}
+          </DialogTitle>
           <DialogDescription>
-            Provider 条目集中保存 API Key（AES-256-GCM 加密，默认不显示明文），并附带可复用的
-            endpoint。配置档案可以引用这里的条目，而不是各自保存一份密钥。
+            {view.kind === 'list'
+              ? 'Provider 条目集中保存 API Key（AES-256-GCM 加密，默认不显示明文），并附带可复用的 endpoint。配置档案可以引用这里的条目，而不是各自保存一份密钥。'
+              : '配置凭据和可复用的命名 Endpoint；保存后返回凭据库列表。'}
           </DialogDescription>
         </DialogHeader>
 
@@ -234,11 +246,13 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
           </>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            关闭
-          </Button>
-        </DialogFooter>
+        {view.kind === 'list' ? (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              关闭
+            </Button>
+          </DialogFooter>
+        ) : null}
       </DialogContent>
 
       <AlertDialog
@@ -299,24 +313,65 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; apiKey?: string }>({});
+  const [endpointErrors, setEndpointErrors] = useState<Record<number, EndpointFieldErrors>>({});
 
   function updateEndpoint(index: number, patch: Partial<EndpointDraft>) {
     setEndpoints((current) =>
       current.map((endpoint, i) => (i === index ? { ...endpoint, ...patch } : endpoint)),
     );
+    setEndpointErrors((current) => {
+      if (!current[index]) return current;
+      const next = { ...current };
+      const errors = { ...next[index] };
+      if (patch.key !== undefined) delete errors.key;
+      if (patch.baseUrl !== undefined) delete errors.baseUrl;
+      if (Object.keys(errors).length === 0) delete next[index];
+      else next[index] = errors;
+      return next;
+    });
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const complete = endpoints.filter((endpoint) => endpoint.key.trim() && endpoint.baseUrl.trim());
+    const normalizedEndpoints = endpoints.map((endpoint) => ({
+      key: endpoint.key.trim(),
+      label: endpoint.label.trim(),
+      baseUrl: endpoint.baseUrl.trim(),
+    }));
+    const nextFieldErrors = {
+      ...(!name.trim() ? { name: '请输入 Provider 名称' } : {}),
+      ...(!isEdit && !apiKey.trim() ? { apiKey: '请输入 API Key' } : {}),
+    };
+    const keyCounts = new Map<string, number>();
+    for (const endpoint of normalizedEndpoints) {
+      if (endpoint.key) keyCounts.set(endpoint.key, (keyCounts.get(endpoint.key) ?? 0) + 1);
+    }
+    const nextEndpointErrors = Object.fromEntries(
+      normalizedEndpoints.flatMap((endpoint, index) => {
+        const errors: EndpointFieldErrors = {};
+        if (!endpoint.key) errors.key = '请输入 Endpoint 标识';
+        else if (
+          endpoint.key.includes('/') ||
+          endpoint.key.includes('\\') ||
+          endpoint.key.length > 60
+        )
+          errors.key = '不能包含 / 或 \\，且最多 60 个字符';
+        else if ((keyCounts.get(endpoint.key) ?? 0) > 1) errors.key = 'Endpoint 标识不能重复';
+        if (!endpoint.baseUrl) errors.baseUrl = '请输入 Base URL';
+        return Object.keys(errors).length > 0 ? [[index, errors] as const] : [];
+      }),
+    );
+    setFieldErrors(nextFieldErrors);
+    setEndpointErrors(nextEndpointErrors);
+    if (Object.keys(nextFieldErrors).length > 0 || Object.keys(nextEndpointErrors).length > 0) {
+      setError('请检查标红的必填项。');
+      return;
+    }
     const body = {
-      name,
+      name: name.trim(),
       notes: notes.trim() || undefined,
-      endpoints: complete.map((endpoint) => ({
-        key: endpoint.key.trim(),
-        label: endpoint.label.trim(),
-        baseUrl: endpoint.baseUrl.trim(),
-      })),
+      endpoints: normalizedEndpoints,
     };
     setPending(true);
     setError(null);
@@ -343,25 +398,26 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
-      <button
-        type="button"
-        className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-        onClick={onCancel}
-      >
-        <ChevronLeft className="size-3.5" />
-        返回凭据库
-      </button>
+    <form onSubmit={onSubmit} noValidate className="space-y-4">
       <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="provider-name">名称</Label>
           <Input
             id="provider-name"
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => {
+              setName(event.target.value);
+              setFieldErrors((current) => ({ ...current, name: undefined }));
+            }}
             placeholder="例如：openrouter"
-            required
+            aria-invalid={fieldErrors.name ? true : undefined}
+            aria-describedby={fieldErrors.name ? 'provider-name-error' : undefined}
           />
+          {fieldErrors.name ? (
+            <p id="provider-name-error" className="text-xs text-destructive">
+              {fieldErrors.name}
+            </p>
+          ) : null}
         </div>
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="provider-api-key">API Key</Label>
@@ -369,10 +425,19 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
             id="provider-api-key"
             type="password"
             value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
+            onChange={(event) => {
+              setApiKey(event.target.value);
+              setFieldErrors((current) => ({ ...current, apiKey: undefined }));
+            }}
             placeholder={isEdit ? '留空表示保持不变' : '必填'}
-            required={!isEdit}
+            aria-invalid={fieldErrors.apiKey ? true : undefined}
+            aria-describedby={fieldErrors.apiKey ? 'provider-api-key-error' : undefined}
           />
+          {fieldErrors.apiKey ? (
+            <p id="provider-api-key-error" className="text-xs text-destructive">
+              {fieldErrors.apiKey}
+            </p>
+          ) : null}
         </div>
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor="provider-notes">备注（可选）</Label>
@@ -399,32 +464,57 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
             {endpoints.map((endpoint, index) => (
               <div
                 key={index}
-                className="grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                className="grid items-start gap-2 sm:grid-cols-[10rem_minmax(0,1fr)_minmax(0,1fr)_auto]"
               >
-                <Input
-                  aria-label={`Endpoint ${index + 1} 名称`}
-                  value={endpoint.key}
-                  onChange={(event) => updateEndpoint(index, { key: event.target.value })}
-                  placeholder="名称"
-                />
-                <Input
-                  aria-label={`Endpoint ${index + 1} Base URL`}
-                  value={endpoint.baseUrl}
-                  onChange={(event) => updateEndpoint(index, { baseUrl: event.target.value })}
-                  placeholder="https://api.example.com/v1"
-                />
+                <div className="space-y-1.5">
+                  <Input
+                    aria-label={`Endpoint ${index + 1} 名称`}
+                    value={endpoint.key}
+                    onChange={(event) => updateEndpoint(index, { key: event.target.value })}
+                    placeholder="标识，如 default"
+                    aria-invalid={endpointErrors[index]?.key ? true : undefined}
+                    aria-describedby={
+                      endpointErrors[index]?.key ? `endpoint-${index}-key-error` : undefined
+                    }
+                  />
+                  {endpointErrors[index]?.key ? (
+                    <p id={`endpoint-${index}-key-error`} className="text-xs text-destructive">
+                      {endpointErrors[index].key}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="space-y-1.5">
+                  <Input
+                    aria-label={`Endpoint ${index + 1} Base URL`}
+                    value={endpoint.baseUrl}
+                    onChange={(event) => updateEndpoint(index, { baseUrl: event.target.value })}
+                    placeholder="https://api.example.com/v1"
+                    aria-invalid={endpointErrors[index]?.baseUrl ? true : undefined}
+                    aria-describedby={
+                      endpointErrors[index]?.baseUrl ? `endpoint-${index}-url-error` : undefined
+                    }
+                  />
+                  {endpointErrors[index]?.baseUrl ? (
+                    <p id={`endpoint-${index}-url-error`} className="text-xs text-destructive">
+                      {endpointErrors[index].baseUrl}
+                    </p>
+                  ) : null}
+                </div>
                 <Input
                   aria-label={`Endpoint ${index + 1} 标签`}
                   value={endpoint.label}
                   onChange={(event) => updateEndpoint(index, { label: event.target.value })}
-                  placeholder="标签（可选）"
+                  placeholder="显示标签（可选）"
                 />
                 <Button
                   type="button"
                   size="icon"
                   variant="ghost"
                   aria-label={`移除 Endpoint ${index + 1}`}
-                  onClick={() => setEndpoints((current) => current.filter((_, i) => i !== index))}
+                  onClick={() => {
+                    setEndpoints((current) => current.filter((_, i) => i !== index));
+                    setEndpointErrors({});
+                  }}
                 >
                   <Trash2 />
                 </Button>
@@ -447,11 +537,11 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-      <DialogFooter>
-        <Button type="button" variant="outline" onClick={onCancel}>
+      <DialogFooter className="flex-row justify-end gap-2 space-x-0">
+        <Button type="button" variant="outline" className="min-w-24" onClick={onCancel}>
           取消
         </Button>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" className="min-w-24" disabled={pending}>
           {pending ? '保存中…' : isEdit ? '保存修改' : '新增凭据'}
         </Button>
       </DialogFooter>

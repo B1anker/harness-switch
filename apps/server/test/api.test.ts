@@ -320,10 +320,18 @@ describe('rest api', () => {
     const kimi = await summary(context, 'kimi');
 
     expect(claude.mode).toBe('replace');
+    expect(claude.modelRequired).toBeUndefined();
     expect(claude.targets[0]?.path).toBe(claudeSettings());
     expect(claude.fields.map((field) => field.key)).toContain('authVar');
+    expect(
+      claude.fields
+        .filter((field) => ['haikuModel', 'sonnetModel', 'opusModel'].includes(field.key))
+        .every((field) => field.required),
+    ).toBe(true);
+    expect(claude.fields.find((field) => field.key === 'fableModel')?.required).toBeUndefined();
 
     expect(kimi.mode).toBe('additive');
+    expect(kimi.modelRequired).toBe(true);
     // Kimi Code never reads credentials from the shell, so env.sh must not pretend it does.
     expect(kimi.envVars).toEqual([]);
     expect(kimi.envNote).toBeString();
@@ -331,6 +339,7 @@ describe('rest api', () => {
     const pi = await summary(context, 'pi');
     expect(pi.label).toBe('Pi');
     expect(pi.mode).toBe('additive');
+    expect(pi.modelRequired).toBe(true);
     expect(pi.targets.map((target) => target.path)).toEqual([
       join(homeDir, '.pi', 'agent', 'models.json'),
       join(homeDir, '.pi', 'agent', 'settings.json'),

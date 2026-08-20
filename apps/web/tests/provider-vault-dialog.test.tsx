@@ -101,6 +101,82 @@ test('editing rotates the key and submits the entry id', async () => {
   expect(payload.name).toBe('OpenRouter');
 });
 
+test('editing has one aligned cancel/save action row without a duplicate close action', () => {
+  setup([providerFixture()]);
+  renderDialog();
+
+  fireEvent.click(screen.getByRole('button', { name: '编辑 OpenRouter' }));
+
+  expect(screen.getByRole('heading', { name: '编辑 OpenRouter' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '关闭' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '返回凭据库' })).toBeNull();
+  const cancel = screen.getByRole('button', { name: '取消' });
+  const save = screen.getByRole('button', { name: '保存修改' });
+  expect(cancel.parentElement).toBe(save.parentElement);
+  expect(cancel.parentElement).toHaveClass('flex-row');
+});
+
+test('editing persists newly added named endpoints', async () => {
+  const recorded = setup([providerFixture({ endpoints: [] })]);
+  renderDialog();
+
+  fireEvent.click(screen.getByRole('button', { name: '编辑 OpenRouter' }));
+  fireEvent.click(screen.getByRole('button', { name: '添加 endpoint' }));
+  fireEvent.change(screen.getByLabelText('Endpoint 1 名称'), { target: { value: ' main ' } });
+  fireEvent.change(screen.getByLabelText('Endpoint 1 Base URL'), {
+    target: { value: ' https://api.example.com/v1 ' },
+  });
+  fireEvent.change(screen.getByLabelText('Endpoint 1 标签'), { target: { value: ' 主入口 ' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+  await waitFor(() => expect(recorded.updated).toHaveLength(1));
+  expect(recorded.updated[0]).toEqual([
+    'openrouter',
+    {
+      name: 'OpenRouter',
+      notes: undefined,
+      endpoints: [{ key: 'main', label: '主入口', baseUrl: 'https://api.example.com/v1' }],
+    },
+  ]);
+});
+
+test('an incomplete endpoint is not silently discarded', async () => {
+  const recorded = setup([providerFixture({ endpoints: [] })]);
+  renderDialog();
+
+  fireEvent.click(screen.getByRole('button', { name: '编辑 OpenRouter' }));
+  fireEvent.click(screen.getByRole('button', { name: '添加 endpoint' }));
+  fireEvent.change(screen.getByLabelText('Endpoint 1 名称'), { target: { value: 'main' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+  const baseUrl = screen.getByLabelText('Endpoint 1 Base URL');
+  expect(await screen.findByText('请输入 Base URL')).toBeInTheDocument();
+  expect(baseUrl).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByLabelText('Endpoint 1 名称').getAttribute('aria-invalid')).toBeNull();
+  expect(recorded.updated).toEqual([]);
+});
+
+test('marks each invalid endpoint field and clears the state while correcting it', async () => {
+  const recorded = setup([providerFixture({ endpoints: [] })]);
+  renderDialog();
+
+  fireEvent.click(screen.getByRole('button', { name: '编辑 OpenRouter' }));
+  fireEvent.click(screen.getByRole('button', { name: '添加 endpoint' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存修改' }));
+
+  const key = screen.getByLabelText('Endpoint 1 名称');
+  const baseUrl = screen.getByLabelText('Endpoint 1 Base URL');
+  expect(await screen.findByText('请输入 Endpoint 标识')).toBeInTheDocument();
+  expect(screen.getByText('请输入 Base URL')).toBeInTheDocument();
+  expect(key).toHaveAttribute('aria-invalid', 'true');
+  expect(baseUrl).toHaveAttribute('aria-invalid', 'true');
+
+  fireEvent.change(key, { target: { value: 'default' } });
+  expect(key.getAttribute('aria-invalid')).toBeNull();
+  expect(baseUrl).toHaveAttribute('aria-invalid', 'true');
+  expect(recorded.updated).toEqual([]);
+});
+
 test('deleting asks for confirmation first and deletes on confirm', async () => {
   const recorded = setup([providerFixture()]);
   renderDialog();

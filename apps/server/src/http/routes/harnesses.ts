@@ -41,6 +41,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       active: activation.getActive(id),
       profiles: profiles.list(id),
       fields: adapter.fields,
+      modelRequired: adapter.modelRequired,
       targets: adapter.targets(),
       envVars: adapter.envVarNames,
       envNote: adapter.envNote,

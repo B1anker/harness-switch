@@ -35,6 +35,7 @@ const DEFAULT_MAX_TOKENS = 8192;
 export class PiAdapter implements HarnessAdapter {
   readonly id = 'pi' as const;
   readonly mode: HarnessMode = 'additive';
+  readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 直接写入 models.json，无需环境变量；运行时仍可用 --model 覆盖。';
 

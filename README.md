@@ -167,6 +167,7 @@ This protects against accidental plaintext disclosure in profile storage, but do
 | `HSW_DATA_DIR` | `~/.harness-switch` | Control-plane and service-owner data directory; other users use `.harness-switch` in their own home. |
 | `HSW_HOME_DIR` | `$HOME` | Service owner's home override, mainly for tests and containers. |
 | `HSW_USERS` | auto-discovered | Comma-separated allowlist such as `root,alice`. The service owner is always manageable. |
+| `HSW_UPDATE_CHECK` | `1` | Set to `0` to skip npm registry update checks. The local development command sets this automatically. |
 | `HSW_SESSION_TTL_HOURS` | `24` | How long a Web login stays valid. Sessions survive a service restart. |
 | `HSW_BACKUP_RETAIN` | `10` | Number of snapshots to keep. |
 | `HSW_PUBLIC_DIR` | auto | Optional override for the built frontend directory. |

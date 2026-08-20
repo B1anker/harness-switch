@@ -167,6 +167,7 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `HSW_DATA_DIR` | `~/.harness-switch` | 管理端以及启动服务用户的数据目录；其他用户使用各自 Home 下的 `.harness-switch`。 |
 | `HSW_HOME_DIR` | `$HOME` | 启动服务用户的 Home 覆盖值，主要用于测试和容器部署。 |
 | `HSW_USERS` | 自动发现 | 逗号分隔的本地用户名允许名单，例如 `root,alice`。启动服务的用户始终可管理。 |
+| `HSW_UPDATE_CHECK` | `1` | 设为 `0` 可跳过 npm registry 更新检测；本地开发命令会自动设置。 |
 | `HSW_SESSION_TTL_HOURS` | `24` | Web 登录的有效时长（小时）。会话可以跨服务重启保留。 |
 | `HSW_BACKUP_RETAIN` | `10` | 保留的快照数量。 |
 | `HSW_PUBLIC_DIR` | 自动 | 可选，覆盖前端构建产物目录。 |

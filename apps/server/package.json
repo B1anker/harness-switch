@@ -29,7 +29,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "dev": "bun --hot src/main.ts server",
+    "dev": "HSW_UPDATE_CHECK=0 bun --hot src/main.ts server",
     "start": "bun dist/harness-switch.js",
     "start:foreground": "bun dist/harness-switch.js server",
     "build": "bun build src/main.ts --outfile dist/harness-switch.js --target bun && bun ../../scripts/postbuild.ts",

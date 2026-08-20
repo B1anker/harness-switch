@@ -37,6 +37,12 @@ export function compareVersions(a: string, b: string): number {
  */
 export async function checkForUpdate(force = false): Promise<UpdateCheck> {
   const current = await serverVersion();
+  // Local development should be deterministic and must not depend on npm being
+  // reachable. The explicit switch also prevents a cached registry result from
+  // leaking into a process after checks have been disabled.
+  if (process.env.HSW_UPDATE_CHECK === '0') {
+    return { current, latest: null, updateAvailable: false };
+  }
   if (!force && cached && Date.now() - cached.at < CACHE_TTL_MS) {
     return {
       current,

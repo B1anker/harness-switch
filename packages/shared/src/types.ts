@@ -33,6 +33,8 @@ export type FieldSpec = {
   help?: string;
   options?: FieldOption[];
   defaultValue?: string;
+  /** Lets schema-driven forms place this field on its own row. */
+  fullWidth?: boolean;
 };
 
 /** One native config file a harness owns. */
@@ -74,6 +76,8 @@ export type HarnessSummary = {
   active: ActivePublic | null;
   profiles: ProfilePublic[];
   fields: FieldSpec[];
+  /** Whether the core model field is required by this harness adapter. */
+  modelRequired?: boolean;
   targets: TargetSpec[];
   /** Environment variables this harness actually honours, for the env.sh layer. */
   envVars: string[];

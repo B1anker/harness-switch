@@ -32,6 +32,8 @@ export interface HarnessAdapter {
   readonly mode: HarnessMode;
   /** Harness-specific form fields; core fields are handled by the caller. */
   readonly fields: FieldSpec[];
+  /** Whether the shared model field must be filled before this adapter can render. */
+  readonly modelRequired?: boolean;
   /** Names of the env vars this harness honours, for display. Empty when it honours none. */
   readonly envVarNames: string[];
   /** Explains why the env.sh layer cannot help, when it cannot. */

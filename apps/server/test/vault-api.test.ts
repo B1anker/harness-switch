@@ -175,6 +175,17 @@ describe('providers api', () => {
       }),
     });
     expect(patched.status).toBe(200);
+    const listed = (await (
+      await app.request('/api/providers', { headers: { Cookie: cookie } })
+    ).json()) as {
+      items: Array<{
+        id: string;
+        endpoints: Array<{ key: string; label: string; baseUrl: string }>;
+      }>;
+    };
+    expect(listed.items.find((entry) => entry.id === 'acme')?.endpoints).toEqual([
+      { key: 'eu', label: 'EU', baseUrl: 'https://eu2.acme.example/v1' },
+    ]);
     const settings = JSON.parse(await readFile(claudeSettings(), 'utf8'));
     expect(settings.env.ANTHROPIC_BASE_URL).toBe('https://eu2.acme.example/v1');
   });

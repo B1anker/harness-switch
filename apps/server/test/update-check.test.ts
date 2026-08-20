@@ -14,6 +14,7 @@ afterEach(async () => {
   globalThis.fetch = realFetch;
   delete process.env.HSW_HOME_DIR;
   delete process.env.HSW_DATA_DIR;
+  delete process.env.HSW_UPDATE_CHECK;
   delete process.env.HSW_UPDATE_SPAWN;
   if (originalCodexHome === undefined) {
     delete process.env.CODEX_HOME;
@@ -75,6 +76,24 @@ describe('checkForUpdate', () => {
     const result = await checkForUpdate(true);
     expect(result.latest).toBeNull();
     expect(result.updateAvailable).toBe(false);
+  });
+
+  test('skips the registry entirely when update checks are disabled', async () => {
+    process.env.HSW_UPDATE_CHECK = '0';
+    let fetched = false;
+    globalThis.fetch = (async () => {
+      fetched = true;
+      throw new Error('fetch should not run');
+    }) as unknown as typeof globalThis.fetch;
+
+    const result = await checkForUpdate(true);
+
+    expect(result).toEqual({
+      current: await serverVersion(),
+      latest: null,
+      updateAvailable: false,
+    });
+    expect(fetched).toBe(false);
   });
 });
 

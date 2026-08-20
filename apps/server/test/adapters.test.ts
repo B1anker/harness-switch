@@ -89,7 +89,9 @@ describe('claude adapter', () => {
     const current = JSON.stringify({
       env: {
         ANTHROPIC_DEFAULT_HAIKU_MODEL: 'stale-haiku',
+        ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME: 'Stale Fast',
         ANTHROPIC_DEFAULT_FABLE_MODEL: 'stale-fable',
+        ANTHROPIC_DEFAULT_FABLE_MODEL_NAME: 'Stale Latest',
       },
     });
     const settings = JSON.parse(
@@ -97,8 +99,11 @@ describe('claude adapter', () => {
         profile({
           extras: {
             haikuModel: 'fast-model',
+            haikuModelName: 'Fast',
             sonnetModel: 'balanced-model',
+            sonnetModelName: 'Balanced',
             opusModel: 'strong-model',
+            opusModelName: 'Powerful',
             subagentModel: 'cheap-model',
           },
         }),
@@ -107,10 +112,35 @@ describe('claude adapter', () => {
     );
 
     expect(settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('fast-model');
+    expect(settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME).toBe('Fast');
     expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('balanced-model');
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL_NAME).toBe('Balanced');
     expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('strong-model');
+    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME).toBe('Powerful');
     expect(settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL).toBeUndefined();
+    expect(settings.env.ANTHROPIC_DEFAULT_FABLE_MODEL_NAME).toBeUndefined();
     expect(settings.env.CLAUDE_CODE_SUBAGENT_MODEL).toBe('cheap-model');
+  });
+
+  test('leaves display names unset so Claude Code defaults to each model id', () => {
+    const adapter = new ClaudeAdapter(environment);
+    const current = JSON.stringify({
+      env: { ANTHROPIC_DEFAULT_SONNET_MODEL_NAME: 'Stale name' },
+    });
+    const settings = JSON.parse(
+      adapter.render(
+        profile({
+          extras: {
+            sonnetModel: 'gateway-sonnet-model',
+            sonnetModelName: '',
+          },
+        }),
+        { settings: current },
+      ).settings,
+    );
+
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gateway-sonnet-model');
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL_NAME).toBeUndefined();
   });
 
   test('merges extra env lines and ignores comments', () => {
@@ -132,9 +162,13 @@ describe('claude adapter', () => {
       apiKey: 'sk-edited',
       extras: {
         haikuModel: '',
+        haikuModelName: '',
         sonnetModel: '',
+        sonnetModelName: '',
         opusModel: '',
+        opusModelName: '',
         fableModel: '',
+        fableModelName: '',
         subagentModel: '',
       },
     });
