@@ -35,6 +35,8 @@ export interface IFileService {
    * New files start at 0600 because they hold API keys.
    */
   writeUserFile(file: string, text: string): void;
+  /** Writes a credential-bearing native file as the selected user with mode 0600. */
+  writeUserSecretFile(file: string, text: string): void;
   readJson<T>(file: string, fallback: T): T;
   writeJson(file: string, value: unknown): void;
   ensureDir(dir: string): void;
@@ -106,6 +108,13 @@ export class FileService implements IFileService {
     this.write(file, text, this.modeOf(file));
   }
 
+  writeUserSecretFile(file: string, text: string): void {
+    this.write(file, text, 0o600, {
+      uid: this.environment.currentUser.uid,
+      gid: this.environment.currentUser.gid,
+    });
+  }
+
   readJson<T>(file: string, fallback: T): T {
     try {
       return JSON.parse(this.readText(file)) as T;
@@ -152,10 +161,9 @@ export class FileService implements IFileService {
     }
   }
 
-  private write(file: string, text: string, mode: number): void {
+  private write(file: string, text: string, mode: number, owner = this.ownerOf(file)): void {
     this.ensureDir(dirname(file));
     const tmp = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
-    const owner = this.ownerOf(file);
     writeFileSync(tmp, text, { encoding: 'utf8', mode });
     this.applyOwner(tmp, owner.uid, owner.gid);
     renameSync(tmp, file);

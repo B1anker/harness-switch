@@ -5,6 +5,16 @@ import type {
 } from '@seaveyon/harness-switch-shared';
 import { Copy, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -44,6 +54,8 @@ export function UserSyncDialog({
   const [sourceUser, setSourceUser] = useState('');
   const [policy, setPolicy] = useState<TransferConflictPolicy>('skip');
   const [preview, setPreview] = useState<UserSyncPreview | null>(null);
+  const [migrateCodexLoginCache, setMigrateCodexLoginCache] = useState(false);
+  const [confirmingCacheMigration, setConfirmingCacheMigration] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +66,8 @@ export function UserSyncDialog({
       sources.some((user) => user.username === current) ? current : (sources[0]?.username ?? ''),
     );
     setPreview(null);
+    setMigrateCodexLoginCache(false);
+    setConfirmingCacheMigration(false);
     setMessage(null);
     setError(null);
   }, [open, sources]);
@@ -85,14 +99,22 @@ export function UserSyncDialog({
     try {
       const result = await api<UserSyncResponse>('/api/users/sync', {
         method: 'POST',
-        body: JSON.stringify({ sourceUser, conflictPolicy: policy }),
+        body: JSON.stringify({
+          sourceUser,
+          conflictPolicy: policy,
+          migrateCodexLoginCache,
+        }),
       });
       await Promise.all([loadHarnesses(), loadProviders()]);
       const warning = result.warnings.length > 0 ? ` 注意：${result.warnings.join('；')}` : '';
+      const cacheResult = result.codexLoginCacheMigrated
+        ? 'Codex 登录缓存已迁移。'
+        : 'Codex 登录缓存未迁移。';
       setMessage(
-        `同步完成：新增 ${result.imported}，覆盖 ${result.overwritten}，跳过 ${result.skipped}，复制凭据 ${result.providersCopied}。${warning}`,
+        `同步完成：新增 ${result.imported}，覆盖 ${result.overwritten}，跳过 ${result.skipped}，复制凭据 ${result.providersCopied}。${cacheResult}${warning}`,
       );
       setPreview(null);
+      setMigrateCodexLoginCache(false);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -107,7 +129,7 @@ export function UserSyncDialog({
           <DialogTitle>从其他用户同步</DialogTitle>
           <DialogDescription>
             将来源用户的配置和所引用的凭据复制到 {currentUser || '当前用户'}
-            。激活状态、备份和原生配置文件不会复制。
+            。激活状态、备份和原生配置文件默认不会复制；可单独选择迁移 Codex 登录缓存。
           </DialogDescription>
         </DialogHeader>
 
@@ -120,6 +142,7 @@ export function UserSyncDialog({
                 onValueChange={(value) => {
                   setSourceUser(value);
                   setPreview(null);
+                  setMigrateCodexLoginCache(false);
                   setMessage(null);
                 }}
               >
@@ -162,6 +185,32 @@ export function UserSyncDialog({
                     </Select>
                   </div>
                 ) : null}
+                {preview.codexLoginCache.available ? (
+                  <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+                    <span className="flex cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={migrateCodexLoginCache}
+                        onChange={(event) => setMigrateCodexLoginCache(event.target.checked)}
+                        className="mt-0.5 size-4 accent-primary"
+                      />
+                      <span>
+                        <span className="block font-medium">
+                          迁移 Codex 官方登录缓存（auth.json）
+                        </span>
+                        <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                          这会复制可复用的 Codex
+                          登录会话，不是普通配置。仅在目标用户可以使用该登录时选择。
+                        </span>
+                      </span>
+                    </span>
+                    {preview.codexLoginCache.targetExists ? (
+                      <span className="block text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                        目标用户已有登录缓存；继续后将覆盖它，并自动创建备份。
+                      </span>
+                    ) : null}
+                  </label>
+                ) : null}
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   同步仅写入配置库。需要生效时，请在同步后手动激活对应配置。
                 </p>
@@ -186,6 +235,32 @@ export function UserSyncDialog({
               <Copy />
               {pending ? '正在检查…' : '检查可同步内容'}
             </Button>
+          ) : migrateCodexLoginCache ? (
+            <AlertDialog open={confirmingCacheMigration} onOpenChange={setConfirmingCacheMigration}>
+              <Button disabled={pending} onClick={() => setConfirmingCacheMigration(true)}>
+                <Copy />
+                {pending ? '正在同步…' : `同步到 ${currentUser}`}
+              </Button>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>确认迁移 Codex 登录缓存？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    将把 {sourceUser} 的 Codex 官方登录缓存（auth.json）复制到{' '}
+                    {currentUser || '当前用户'}。
+                    {preview.codexLoginCache.targetExists
+                      ? '目标用户已有缓存，会被覆盖并创建备份。'
+                      : '目标用户将获得新的本地登录缓存。'}
+                    仅当目标用户可以使用这个登录会话时才继续。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>取消</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => void synchronize()}>
+                    迁移登录缓存并同步
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           ) : (
             <Button disabled={pending} onClick={() => void synchronize()}>
               <Copy />

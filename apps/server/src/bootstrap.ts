@@ -3,6 +3,7 @@ import { ActivationService, IActivationService } from './services/activation';
 import { AdapterRegistry, IAdapterRegistry } from './services/adapters';
 import { AuthService, IAuthService } from './services/auth';
 import { BackupService, IBackupService } from './services/backup';
+import { CodexLoginCacheService, ICodexLoginCacheService } from './services/codex-login-cache';
 import { CryptoService, ICryptoService } from './services/crypto';
 import { DoctorService, IDoctorService } from './services/doctor';
 import { DriftService, IDriftService } from './services/drift';
@@ -24,6 +25,7 @@ export function createServices(): InstantiationService {
   collection.set(IUserService, new SyncDescriptor(UserService));
   collection.set(IUserSyncService, new SyncDescriptor(UserSyncService));
   collection.set(IFileService, new SyncDescriptor(FileService));
+  collection.set(ICodexLoginCacheService, new SyncDescriptor(CodexLoginCacheService));
   collection.set(ICryptoService, new SyncDescriptor(CryptoService));
   collection.set(IAuthService, new SyncDescriptor(AuthService));
   collection.set(IHarnessRegistry, new SyncDescriptor(HarnessRegistry));

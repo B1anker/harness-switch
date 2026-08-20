@@ -2,11 +2,12 @@ import {
   HARNESS_LABELS,
   type TransferConflictPolicy,
   type TransferEnvelope,
+  type TransferExportPreview,
   type TransferImportResponse,
   type TransferPreview,
 } from '@seaveyon/harness-switch-shared';
 import { Download, FileLock2, Upload } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +17,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,15 +49,42 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [exportPassphrase, setExportPassphrase] = useState('');
   const [exportConfirmation, setExportConfirmation] = useState('');
+  const [exportPreview, setExportPreview] = useState<TransferExportPreview | null>(null);
+  const [includeCodexLoginCache, setIncludeCodexLoginCache] = useState(false);
   const [envelope, setEnvelope] = useState<TransferEnvelope | null>(null);
   const [fileName, setFileName] = useState('');
   const [importPassphrase, setImportPassphrase] = useState('');
   const [preview, setPreview] = useState<TransferPreview | null>(null);
+  const [previewStale, setPreviewStale] = useState(false);
+  const [migrateCodexLoginCache, setMigrateCodexLoginCache] = useState(false);
   const [conflictPolicy, setConflictPolicy] = useState<TransferConflictPolicy>('skip');
   const [restoreActive, setRestoreActive] = useState(true);
+  const [confirmingImport, setConfirmingImport] = useState(false);
   const [pending, setPending] = useState<'export' | 'preview' | 'import' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setIncludeCodexLoginCache(false);
+      setMigrateCodexLoginCache(false);
+      setPreviewStale(false);
+      setConfirmingImport(false);
+      return;
+    }
+    let disposed = false;
+    setIncludeCodexLoginCache(false);
+    void api<TransferExportPreview>('/api/transfer/export/preview')
+      .then((result) => {
+        if (!disposed) setExportPreview(result);
+      })
+      .catch(() => {
+        if (!disposed) setExportPreview(null);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [open]);
 
   async function exportAll() {
     setPending('export');
@@ -66,10 +93,17 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
     try {
       const result = await api<TransferEnvelope>('/api/transfer/export', {
         method: 'POST',
-        body: JSON.stringify({ passphrase: exportPassphrase }),
+        body: JSON.stringify({
+          passphrase: exportPassphrase,
+          includeCodexLoginCache,
+        }),
       });
       downloadEnvelope(result);
-      setMessage('加密导出包已生成。迁移密码不会写入文件，请单独保管。');
+      setMessage(
+        includeCodexLoginCache
+          ? '加密导出包已生成，已包含 Codex 登录缓存。迁移密码不会写入文件，请单独保管。'
+          : '加密导出包已生成，未包含 Codex 登录缓存。迁移密码不会写入文件，请单独保管。',
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -79,6 +113,9 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
 
   async function readFile(file: File | undefined) {
     setPreview(null);
+    setPreviewStale(false);
+    setConfirmingImport(false);
+    setMigrateCodexLoginCache(false);
     setMessage(null);
     setError(null);
     if (!file) {
@@ -110,9 +147,17 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
     try {
       const result = await api<TransferPreview>('/api/transfer/preview', {
         method: 'POST',
-        body: JSON.stringify({ envelope, passphrase: importPassphrase }),
+        body: JSON.stringify({
+          envelope,
+          passphrase: importPassphrase,
+          conflictPolicy,
+          restoreActive,
+        }),
       });
       setPreview(result);
+      setPreviewStale(false);
+      setConfirmingImport(false);
+      setMigrateCodexLoginCache(false);
     } catch (err) {
       setPreview(null);
       setError((err as Error).message);
@@ -122,9 +167,10 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
   }
 
   async function importAll() {
-    if (!envelope || !preview) {
+    if (!envelope || !preview || previewStale) {
       return;
     }
+    setConfirmingImport(false);
     setPending('import');
     setError(null);
     try {
@@ -135,6 +181,7 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
           passphrase: importPassphrase,
           conflictPolicy,
           restoreActive,
+          migrateCodexLoginCache,
         }),
       });
       await loadHarnesses();
@@ -142,8 +189,16 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
       if (result.overwritten > 0) parts.push(`覆盖 ${result.overwritten} 项`);
       if (result.skipped > 0) parts.push(`跳过 ${result.skipped} 项`);
       if (result.activeRestored > 0) parts.push(`恢复 ${result.activeRestored} 个激活状态`);
-      setMessage(`导入完成：${parts.join('，')}。${result.warnings.join('；')}`);
+      parts.push(
+        result.codexLoginCacheMigrated
+          ? '已迁移导出包内的 Codex 登录缓存'
+          : '未迁移导出包内的 Codex 登录缓存',
+      );
+      const warning = result.warnings.length > 0 ? ` ${result.warnings.join('；')}` : '';
+      setMessage(`导入完成：${parts.join('，')}。${warning}`);
       setPreview(null);
+      setPreviewStale(false);
+      setMigrateCodexLoginCache(false);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -154,6 +209,13 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
   const canExport =
     exportPassphrase.length >= 8 && exportPassphrase === exportConfirmation && pending === null;
   const canPreview = envelope !== null && importPassphrase.length >= 8 && pending === null;
+  const previewMatchesOptions =
+    preview?.conflictPolicy === conflictPolicy && preview?.restoreActive === restoreActive;
+  const canImport = preview !== null && previewMatchesOptions && !previewStale && pending === null;
+  const activationEffect =
+    preview && previewMatchesOptions && !previewStale
+      ? codexActivationEffectText(preview.codexActivationAuthEffect)
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -203,6 +265,29 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
           </div>
           {exportConfirmation && exportPassphrase !== exportConfirmation ? (
             <p className="text-xs text-destructive">两次输入的迁移密码不一致。</p>
+          ) : null}
+          {exportPreview?.codexLoginCacheAvailable ? (
+            <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+              <span className="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={includeCodexLoginCache}
+                  onChange={(event) => setIncludeCodexLoginCache(event.target.checked)}
+                  className="mt-0.5 size-4 accent-primary"
+                />
+                <span>
+                  <span className="block font-medium">
+                    在导出包中包含 Codex 官方登录缓存（auth.json）
+                  </span>
+                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                    导出包仍会使用迁移密码加密，但其中将含有可复用的 Codex
+                    登录会话；请仅交给可信的接收方。
+                  </span>
+                </span>
+              </span>
+            </label>
+          ) : exportPreview ? (
+            <p className="text-xs text-muted-foreground">当前用户没有可导出的 Codex 登录缓存。</p>
           ) : null}
           <Button type="button" onClick={() => void exportAll()} disabled={!canExport}>
             <Download />
@@ -256,6 +341,9 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                 onChange={(event) => {
                   setImportPassphrase(event.target.value);
                   setPreview(null);
+                  setPreviewStale(false);
+                  setConfirmingImport(false);
+                  setMigrateCodexLoginCache(false);
                 }}
                 placeholder="导出时设置的密码"
               />
@@ -294,12 +382,52 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                     .join('、')}
                 </div>
               ) : null}
+              {preview.codexLoginCache?.available ? (
+                <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+                  <span className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={migrateCodexLoginCache}
+                      onChange={(event) => setMigrateCodexLoginCache(event.target.checked)}
+                      className="mt-0.5 size-4 accent-primary"
+                    />
+                    <span>
+                      <span className="block font-medium">
+                        迁移 Codex 官方登录缓存（auth.json）
+                      </span>
+                      <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                        导出包包含一个可复用的 Codex
+                        登录会话。默认不写入本机；仅在当前用户可以使用该登录时选择。
+                      </span>
+                    </span>
+                  </span>
+                  {preview.codexLoginCache?.targetExists ? (
+                    <span className="block text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                      本机已有登录缓存；继续后将覆盖它，并自动创建备份。
+                    </span>
+                  ) : null}
+                </label>
+              ) : null}
+              {activationEffect ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                  {activationEffect}
+                </div>
+              ) : null}
+              {previewStale ? (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  已修改导入选项，请重新检查内容后再确认导入。
+                </p>
+              ) : null}
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="conflict-policy">同名配置处理</Label>
                   <Select
                     value={conflictPolicy}
-                    onValueChange={(value) => setConflictPolicy(value as TransferConflictPolicy)}
+                    onValueChange={(value) => {
+                      setConflictPolicy(value as TransferConflictPolicy);
+                      setPreviewStale(true);
+                      setConfirmingImport(false);
+                    }}
                   >
                     <SelectTrigger id="conflict-policy">
                       <SelectValue />
@@ -314,33 +442,47 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                   <input
                     type="checkbox"
                     checked={restoreActive}
-                    onChange={(event) => setRestoreActive(event.target.checked)}
+                    onChange={(event) => {
+                      setRestoreActive(event.target.checked);
+                      setPreviewStale(true);
+                      setConfirmingImport(false);
+                    }}
                     className="size-4 accent-primary"
                   />
                   恢复导出时的激活状态
                 </label>
               </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button type="button" disabled={pending !== null}>
-                    <Upload />
-                    确认导入
-                  </Button>
-                </AlertDialogTrigger>
+              <Button type="button" disabled={!canImport} onClick={() => setConfirmingImport(true)}>
+                <Upload />
+                {previewStale ? '请重新检查导入内容' : '确认导入'}
+              </Button>
+              <AlertDialog open={confirmingImport} onOpenChange={setConfirmingImport}>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>确认导入全部配置？</AlertDialogTitle>
+                    <AlertDialogTitle>
+                      {activationEffect ? '确认可能改动 Codex auth.json？' : '确认导入全部配置？'}
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
                       将导入 {preview.profileCount} 个配置。
                       {conflictPolicy === 'overwrite' && preview.conflicts.length > 0
                         ? `其中 ${preview.conflicts.length} 个同名配置会被覆盖。`
                         : '同名配置会保留，不会被覆盖。'}
+                      {migrateCodexLoginCache
+                        ? preview.codexLoginCache?.targetExists
+                          ? '此外，导出包内的完整 Codex 官方登录缓存会覆盖本机缓存，并自动创建备份。'
+                          : '此外，导出包内的完整 Codex 官方登录缓存会写入本机。'
+                        : '不会迁移导出包内的完整 Codex 官方登录缓存。'}
+                      {activationEffect ? ` ${activationEffect}` : null}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>取消</AlertDialogCancel>
                     <AlertDialogAction onClick={() => void importAll()}>
-                      {conflictPolicy === 'overwrite' ? '覆盖并导入' : '安全导入'}
+                      {activationEffect
+                        ? '了解并继续导入'
+                        : conflictPolicy === 'overwrite'
+                          ? '覆盖并导入'
+                          : '安全导入'}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -356,6 +498,21 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function codexActivationEffectText(
+  effect: TransferPreview['codexActivationAuthEffect'],
+): string | null {
+  switch (effect) {
+    case 'openai-api-key':
+      return '恢复选定的 Codex 激活配置会更新本机 auth.json 中的 OPENAI_API_KEY；这不是迁移导出包内的完整官方登录会话。';
+    case 'auth-override':
+      return '恢复选定的 Codex 激活配置会按该配置的原始 auth 覆盖内容写入本机 auth.json。';
+    case 'official-cleanup':
+      return '恢复 Codex 官方登录状态可能清理本机 auth.json 中遗留的 OPENAI_API_KEY。';
+    case 'none':
+      return null;
+  }
 }
 
 function downloadEnvelope(envelope: TransferEnvelope): void {

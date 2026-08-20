@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app';
@@ -88,6 +88,67 @@ describe('local Unix users', () => {
 
     const raw = readFileSync(environment.files.profiles, 'utf8');
     expect(raw).not.toContain('sk-peer-secret');
+  });
+
+  test('copies a Codex login cache only with explicit confirmation', async () => {
+    const { app, firstCookie, owner, peer } = await setup();
+    const sourceAuth = join(peer.homeDir, '.codex', 'auth.json');
+    const targetAuth = join(owner.homeDir, '.codex', 'auth.json');
+    const sourceCache = '{"tokens":{"access_token":"source-login-session"}}\n';
+    mkdirSync(join(peer.homeDir, '.codex'), { recursive: true, mode: 0o700 });
+    mkdirSync(join(owner.homeDir, '.codex'), { recursive: true, mode: 0o700 });
+    writeFileSync(sourceAuth, sourceCache, { mode: 0o600 });
+    writeFileSync(targetAuth, '{"tokens":{"access_token":"target-login-session"}}\n', {
+      mode: 0o644,
+    });
+
+    const preview = await json(app, '/api/users/sync/preview', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({ sourceUser: peer.username }),
+    });
+    expect(preview.codexLoginCache).toEqual({ available: true, targetExists: true });
+
+    const unchanged = await json(app, '/api/users/sync', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({ sourceUser: peer.username, conflictPolicy: 'skip' }),
+    });
+    expect(unchanged.codexLoginCacheMigrated).toBe(false);
+    expect(readFileSync(targetAuth, 'utf8')).toContain('target-login-session');
+
+    const migrated = await json(app, '/api/users/sync', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceUser: peer.username,
+        conflictPolicy: 'skip',
+        migrateCodexLoginCache: true,
+      }),
+    });
+    expect(migrated.codexLoginCacheMigrated).toBe(true);
+    expect(readFileSync(sourceAuth, 'utf8')).toBe(sourceCache);
+    expect(readFileSync(targetAuth, 'utf8')).toBe(sourceCache);
+    expect(statSync(targetAuth).mode & 0o777).toBe(0o600);
+  });
+
+  test('rejects a malformed requested Codex login cache before touching the target', async () => {
+    const { app, firstCookie, owner, peer } = await setup();
+    const sourceAuth = join(peer.homeDir, '.codex', 'auth.json');
+    const targetAuth = join(owner.homeDir, '.codex', 'auth.json');
+    mkdirSync(join(peer.homeDir, '.codex'), { recursive: true, mode: 0o700 });
+    mkdirSync(join(owner.homeDir, '.codex'), { recursive: true, mode: 0o700 });
+    writeFileSync(sourceAuth, '[]\n', { mode: 0o600 });
+    writeFileSync(targetAuth, '{"tokens":{"access_token":"keep-me"}}\n', { mode: 0o600 });
+
+    const response = await app.request('/api/users/sync', {
+      method: 'POST',
+      headers: { Cookie: firstCookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sourceUser: peer.username,
+        conflictPolicy: 'skip',
+        migrateCodexLoginCache: true,
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect(readFileSync(targetAuth, 'utf8')).toContain('keep-me');
   });
 
   test('new files use the selected target user ownership metadata', () => {

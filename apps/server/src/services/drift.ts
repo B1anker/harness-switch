@@ -152,12 +152,24 @@ export class DriftService implements IDriftService {
   }
 
   /**
-   * Official login has no expected rendering, so only the live file's parseability is
-   * checked: parseable files are in-sync, text files cannot be verified (unknown),
-   * broken ones are invalid and absent ones are missing.
+   * Official login has no named profile, so only files the official renderer actually
+   * participates in are inspected. In particular, an absent optional Codex auth.json is
+   * not drift merely because the adapter knows where that cache would live.
    */
   private officialFiles(harness: HarnessId): DriftFileState[] {
-    const targets = this.adapters.get(harness).targets();
+    const adapter = this.adapters.get(harness);
+    let targets: AdapterTarget[];
+    try {
+      const writes = this.activation.expectedWrites(harness);
+      targets = adapter
+        .targets()
+        .filter((target) => writes.some((write) => write.path === target.path));
+    } catch {
+      // A corrupt participating file can prevent the official renderer from planning its
+      // cleanup. Still inspect normal targets as invalid, but never turn Codex's unmanaged
+      // login cache into a required official-login file.
+      targets = adapter.targets().filter((target) => target.key !== 'auth');
+    }
     return targets.map((target) => {
       const live = this.files.readOptional(target.path) ?? null;
       const base = {

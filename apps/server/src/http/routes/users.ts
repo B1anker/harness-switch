@@ -30,7 +30,13 @@ export function createUserRoutes(services: InstantiationService): Hono {
 
   app.post('/sync', async (c) => {
     const body = await readBody(c.req.json.bind(c.req));
-    return c.json(sync.sync(String(body.sourceUser ?? ''), body.conflictPolicy ?? 'skip'));
+    return c.json(
+      sync.sync(
+        String(body.sourceUser ?? ''),
+        body.conflictPolicy ?? 'skip',
+        body.migrateCodexLoginCache === true,
+      ),
+    );
   });
 
   app.post('/:username/select', (c) => {
