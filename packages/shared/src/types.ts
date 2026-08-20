@@ -52,6 +52,10 @@ export type ProfilePublic = {
   extras: Record<string, string>;
   /** Target keys whose content the user has taken over in the advanced editor. */
   overriddenTargets: string[];
+  /** Optional reference to a Provider Vault entry that owns this profile's credential. */
+  providerId?: string;
+  /** Optional named endpoint under the vault entry; its base URL wins when set. */
+  providerEndpoint?: string;
   updatedAt: string;
 };
 
@@ -100,6 +104,10 @@ export type CreateProfileRequest = {
   notes?: string;
   extras?: Record<string, string>;
   overrides?: Record<string, string>;
+  /** Reference a Provider Vault entry instead of an inline apiKey. */
+  providerId?: string;
+  /** Named endpoint under the vault entry; its base URL wins over baseUrl. */
+  providerEndpoint?: string;
 };
 
 export type UpdateProfileRequest = {
@@ -110,6 +118,9 @@ export type UpdateProfileRequest = {
   notes?: string;
   extras?: Record<string, string>;
   overrides?: Record<string, string>;
+  /** Set to a vault entry id to reference it; set to '' (with apiKey) to detach. */
+  providerId?: string;
+  providerEndpoint?: string;
 };
 
 /** One rendered config file, as it would be written to disk. */
@@ -222,4 +233,132 @@ export type OkResponse = {
 
 export type ErrorResponse = {
   error: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Provider Vault                                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One named endpoint under a vault entry. `key` is the identifier profiles
+ * reference; `baseUrl` is not a secret.
+ */
+export type ProviderEndpoint = {
+  key: string;
+  label: string;
+  baseUrl: string;
+};
+
+/** A vault entry as seen by callers: the API key itself is never exposed. */
+export type ProviderPublic = {
+  id: string;
+  name: string;
+  endpoints: ProviderEndpoint[];
+  notes?: string;
+  /** True when a credential is stored for this entry. */
+  apiKeyConfigured: boolean;
+  updatedAt: string;
+};
+
+export type ProvidersResponse = {
+  items: ProviderPublic[];
+};
+
+export type CreateProviderRequest = {
+  name: string;
+  apiKey: string;
+  endpoints?: ProviderEndpoint[];
+  notes?: string;
+};
+
+export type UpdateProviderRequest = {
+  name?: string;
+  /** Present and non-empty rotates the credential; empty or absent keeps it. */
+  apiKey?: string;
+  /** Full replacement of the named endpoints. */
+  endpoints?: ProviderEndpoint[];
+  notes?: string;
+};
+
+export type ProviderMutationResponse = {
+  provider: ProviderPublic;
+  /** Non-fatal problems while re-applying profiles that reference this entry. */
+  warnings: string[];
+};
+
+/* ------------------------------------------------------------------ */
+/* Drift                                                               */
+/* ------------------------------------------------------------------ */
+
+export type DriftStatus = 'in-sync' | 'drifted' | 'missing' | 'invalid' | 'unknown';
+
+/**
+ * One target file compared against what the active profile would render.
+ * Field names align with BackupFileDetail so the frontend diff view can reuse them.
+ */
+export type DriftFileState = {
+  key: string;
+  label: string;
+  path: string;
+  format: ConfigFormat;
+  /** The content the active profile would write; null when nothing is expected. */
+  expectedContent: string | null;
+  /** The live file content right now; null when the file is absent on disk. */
+  currentContent: string | null;
+  status: DriftStatus;
+};
+
+export type DriftSummary = {
+  harness: HarnessId;
+  status: DriftStatus;
+  /** True when a profile is active for this harness. */
+  active: boolean;
+  files: DriftFileState[];
+};
+
+export type DriftResponse = {
+  items: DriftSummary[];
+};
+
+export type DriftReapplyResponse = {
+  ok: true;
+  files: DriftFileState[];
+};
+
+export type DriftAdoptResponse = {
+  ok: true;
+  summary: DriftSummary;
+  /** Non-fatal problems while reading the live files back. */
+  warnings: string[];
+};
+
+/** Request body for POST /api/drift/:harnessId/adopt (no options yet). */
+export type AdoptRequest = object;
+
+/** Request body for POST /api/drift/:harnessId/reapply (no options yet). */
+export type ApproveDriftRequest = object;
+
+/* ------------------------------------------------------------------ */
+/* Doctor                                                              */
+/* ------------------------------------------------------------------ */
+
+export type DoctorCheckStatus = 'ok' | 'warn' | 'error' | 'unknown';
+
+export type DoctorCheck = {
+  id: string;
+  label: string;
+  status: DoctorCheckStatus;
+  /** Human-readable message plus machine-readable extras. */
+  detail?: unknown;
+};
+
+export type DoctorReport = {
+  harness: HarnessId;
+  checks: DoctorCheck[];
+};
+
+export type DoctorResponse = {
+  items: DoctorReport[];
+  /** True when a newer release exists on the registry. */
+  updatedAvailable: boolean;
 };
