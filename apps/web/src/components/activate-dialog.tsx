@@ -27,6 +27,7 @@ type ActivateDialogProps = {
 export function ActivateDialog({ harness, profile, open, onOpenChange }: ActivateDialogProps) {
   const previewProfile = useAppStore((state) => state.previewProfile);
   const activateProfile = useAppStore((state) => state.activateProfile);
+  const currentUser = useAppStore((state) => state.currentUser);
   const [targets, setTargets] = useState<PreviewTarget[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -65,7 +66,8 @@ export function ActivateDialog({ harness, profile, open, onOpenChange }: Activat
           <AlertDialogTitle>激活配置？</AlertDialogTitle>
           <AlertDialogDescription>
             将把 {harness.label} 切换到「{profile.name}」并写入原生配置文件
-            {changedCount > 0 ? `，其中 ${changedCount} 个文件将变更` : ''}。写入前会自动备份。
+            {changedCount > 0 ? `，其中 ${changedCount} 个文件将变更` : ''}。目标本地用户：
+            {currentUser || '当前用户'}。写入前会自动备份。
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error ? (

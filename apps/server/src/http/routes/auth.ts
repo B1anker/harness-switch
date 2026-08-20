@@ -22,7 +22,7 @@ export function createAuthRoutes(services: InstantiationService): Hono {
       path: '/',
       maxAge: environment.sessionTtlMs / 1000,
     });
-    return c.json({ authenticated: true });
+    return c.json({ authenticated: true, currentUser: environment.defaultUser.username });
   });
 
   app.post('/logout', (c) => {
@@ -36,7 +36,7 @@ export function createAuthRoutes(services: InstantiationService): Hono {
     if (!auth.isAuthenticated(token)) {
       throw new HttpError(401, 'authentication required');
     }
-    return c.json({ authenticated: true });
+    return c.json({ authenticated: true, currentUser: auth.userForToken(token)! });
   });
 
   return app;

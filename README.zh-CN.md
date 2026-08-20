@@ -118,6 +118,14 @@ source ~/.harness-switch/env.sh
 
 连通性探测在 MVP 中**默认关闭**：传入 `--probe` 也只会记录一条 `unknown` 状态的检查，报告当前激活的 base URL 并说明未发起任何网络请求。
 
+### 本地 Unix 多用户
+
+Dashboard 顶栏可以在 `root`、`alice` 等本地登录用户之间切换。每个用户使用自己 Home 下独立的配置档案、凭据库、加密密钥、激活状态和备份；切换用户本身不会写入 Harness 文件，只有显式激活配置才会写入。
+
+“同步用户配置”可以把另一个用户的配置和它引用的 Provider Vault 凭据一次性复制到当前用户。同步时密钥只在服务端解密，并使用目标用户的本地密钥重新加密；激活状态、备份和原生配置文件不会复制。同名配置默认跳过，也可以显式选择覆盖。
+
+跨用户写入必须具备目标 Home 的权限。要同时管理 `root` 和普通用户，通常需要以 root 运行 harness-switch；新建文件和目录会设置为目标用户的 UID/GID。此时 Web 密码等同于管理所有已开放用户配置的权限，因此务必保持回环监听并使用 SSH 隧道。可用 `HSW_USERS=root,alice` 限制界面中允许管理的账号。
+
 ### CLI 自动化
 
 不打开浏览器、也不启动任何监听进程就能在终端使用同样的业务逻辑：CLI 在进程内构建与 HTTP 服务相同的服务图，直接读写同一数据目录，即使守护进程未运行也能工作。每条命令都支持 `--json` 以便脚本化：
@@ -129,6 +137,11 @@ harness-switch doctor                        # 只读诊断
 harness-switch doctor --probe --harness claude
 harness-switch plan claude                   # 该 Harness 的漂移检查
 harness-switch activate claude main --yes    # 激活一个配置
+harness-switch users                         # 可管理的本地 Unix 用户
+harness-switch list --user alice             # 查看 alice 的独立配置
+harness-switch activate codex main --user alice --yes
+harness-switch sync --from root --to alice   # 一次性复制；同名项默认跳过
+harness-switch sync --from root --to alice --overwrite
 ```
 
 `plan <harness>` 输出激活配置的漂移检查（每个文件预期内容 vs 当前内容）；未激活任何配置时报告 `status: unknown`。`activate` 在 TTY 上会询问确认，在非交互式终端（CI）里必须加 `--yes`。JSON 输出与 HTTP API 的响应形状一致（`HarnessesResponse`、`ProvidersResponse`、`DoctorResponse`、`DriftSummary`、`ActivateResponse`），脚本可直接复用同样的字段名。`HSW_DATA_DIR` 与 `HSW_HOME_DIR` 可覆盖状态读写位置（默认 `~/.harness-switch` 与 `$HOME`）。
@@ -151,8 +164,9 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 |---|---:|---|
 | `HOST` | `127.0.0.1` | 绑定地址。使用 SSH 隧道时请保持默认值。 |
 | `PORT` | `8787` | 监听端口。 |
-| `HSW_DATA_DIR` | `~/.harness-switch` | 存放加密配置、激活状态、密钥、密码、会话、备份和 env 文件的目录。 |
-| `HSW_HOME_DIR` | `$HOME` | 用于定位各 Harness 配置目录的家目录。 |
+| `HSW_DATA_DIR` | `~/.harness-switch` | 管理端以及启动服务用户的数据目录；其他用户使用各自 Home 下的 `.harness-switch`。 |
+| `HSW_HOME_DIR` | `$HOME` | 启动服务用户的 Home 覆盖值，主要用于测试和容器部署。 |
+| `HSW_USERS` | 自动发现 | 逗号分隔的本地用户名允许名单，例如 `root,alice`。启动服务的用户始终可管理。 |
 | `HSW_SESSION_TTL_HOURS` | `24` | Web 登录的有效时长（小时）。会话可以跨服务重启保留。 |
 | `HSW_BACKUP_RETAIN` | `10` | 保留的快照数量。 |
 | `HSW_PUBLIC_DIR` | 自动 | 可选，覆盖前端构建产物目录。 |
@@ -169,6 +183,10 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `POST` | `/api/auth/login` | `{ "password": "..." }` |
 | `POST` | `/api/auth/logout` | 清除会话 cookie |
 | `GET` | `/api/auth/session` | 未认证时返回 `401` |
+| `GET` | `/api/users` | 可管理的本地用户和当前会话选中的用户 |
+| `POST` | `/api/users/:username/select` | 为当前 Web 会话切换目标用户，不写 Harness 文件 |
+| `POST` | `/api/users/sync/preview` | 预览从其他用户复制配置时的数量和冲突 |
+| `POST` | `/api/users/sync` | 从其他用户复制配置和关联凭据；冲突策略为 `skip` 或 `overwrite` |
 | `GET` | `/api/harnesses` | 集合，含嵌套的配置、表单字段定义和实际文件路径 |
 | `GET` | `/api/harnesses/:id` | 单个 Harness |
 | `POST` | `/api/harnesses/:id/profiles` | 创建 |

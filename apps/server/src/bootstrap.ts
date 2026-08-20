@@ -13,12 +13,16 @@ import { ILogService, LogService } from './services/log';
 import { IProfileService, ProfileService } from './services/profiles';
 import { HarnessRegistry, IHarnessRegistry } from './services/registry';
 import { ITransferService, TransferService } from './services/transfer';
+import { IUserSyncService, UserSyncService } from './services/user-sync';
+import { IUserService, UserService } from './services/users';
 import { IVaultService, VaultService } from './services/vault';
 
 export function createServices(): InstantiationService {
   const collection = new ServiceCollection();
   collection.set(ILogService, new SyncDescriptor(LogService));
   collection.set(IEnvironmentService, new SyncDescriptor(EnvironmentService));
+  collection.set(IUserService, new SyncDescriptor(UserService));
+  collection.set(IUserSyncService, new SyncDescriptor(UserSyncService));
   collection.set(IFileService, new SyncDescriptor(FileService));
   collection.set(ICryptoService, new SyncDescriptor(CryptoService));
   collection.set(IAuthService, new SyncDescriptor(AuthService));

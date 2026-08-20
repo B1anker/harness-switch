@@ -118,6 +118,14 @@ The **诊断 (Doctor)** panel runs read-only checks per harness: whether the too
 
 The connectivity probe is **disabled by default in the MVP**: passing `--probe` only records a `unknown`-status check that reports the active base URL and explains that no network request is made.
 
+### Local Unix users
+
+The dashboard header can switch between local login users such as `root` and `alice`. Each user has independent profiles, Provider Vault, encryption key, active state and backups under their own home. Selecting a user does not write any harness file; only an explicit activation does.
+
+“Sync user config” performs a one-time copy of another user's profiles and referenced Provider Vault credentials into the selected user. Secrets are decrypted only on the server and re-encrypted with the destination user's local key. Active state, backups and native config files are not copied. Same-name profiles are skipped by default and can be explicitly overwritten.
+
+Cross-user writes require access to the destination home. Managing both `root` and regular users therefore normally requires running harness-switch as root; newly created files and directories are assigned to the destination UID/GID. The Web password then grants control over every exposed user's configs, so keep the loopback bind and SSH tunnel. Use `HSW_USERS=root,alice` to restrict the manageable accounts.
+
 ### CLI automation
 
 The same business logic is available from the terminal without opening the browser or starting any listener: the CLI builds the same service graph in-process and reads/writes the same data directory, so it works even when the daemon is not running. Every command supports `--json` for scripting:
@@ -129,6 +137,11 @@ harness-switch doctor                        # read-only diagnostics
 harness-switch doctor --probe --harness claude
 harness-switch plan claude                   # drift inspection for a harness
 harness-switch activate claude main --yes    # activate a profile
+harness-switch users                         # manageable local Unix users
+harness-switch list --user alice             # inspect alice's independent store
+harness-switch activate codex main --user alice --yes
+harness-switch sync --from root --to alice   # one-time copy; skips conflicts
+harness-switch sync --from root --to alice --overwrite
 ```
 
 `plan <harness>` prints the drift inspection of the active profile (expected vs. current content per file); without an active profile it reports `status: unknown`. `activate` prompts for confirmation on a TTY and requires `--yes` in non-interactive terminals (CI). JSON output mirrors the HTTP API response shapes (`HarnessesResponse`, `ProvidersResponse`, `DoctorResponse`, `DriftSummary`, `ActivateResponse`), so scripts can reuse the same field names. `HSW_DATA_DIR` and `HSW_HOME_DIR` override where it reads state (defaults: `~/.harness-switch` and `$HOME`).
@@ -151,8 +164,9 @@ This protects against accidental plaintext disclosure in profile storage, but do
 |---|---:|---|
 | `HOST` | `127.0.0.1` | Bind address. Keep the default when using SSH tunnelling. |
 | `PORT` | `8787` | Listening port. |
-| `HSW_DATA_DIR` | `~/.harness-switch` | Directory for encrypted profiles, active state, key, password, sessions, backups, and env file. |
-| `HSW_HOME_DIR` | `$HOME` | Home directory used to locate the harness config directories. |
+| `HSW_DATA_DIR` | `~/.harness-switch` | Control-plane and service-owner data directory; other users use `.harness-switch` in their own home. |
+| `HSW_HOME_DIR` | `$HOME` | Service owner's home override, mainly for tests and containers. |
+| `HSW_USERS` | auto-discovered | Comma-separated allowlist such as `root,alice`. The service owner is always manageable. |
 | `HSW_SESSION_TTL_HOURS` | `24` | How long a Web login stays valid. Sessions survive a service restart. |
 | `HSW_BACKUP_RETAIN` | `10` | Number of snapshots to keep. |
 | `HSW_PUBLIC_DIR` | auto | Optional override for the built frontend directory. |
@@ -169,6 +183,10 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `POST` | `/api/auth/login` | `{ "password": "..." }` |
 | `POST` | `/api/auth/logout` | Clears the session cookie |
 | `GET` | `/api/auth/session` | `401` when unauthenticated |
+| `GET` | `/api/users` | Manageable local users and the user selected by this session |
+| `POST` | `/api/users/:username/select` | Select the target user for this Web session without writing harness files |
+| `POST` | `/api/users/sync/preview` | Preview counts and conflicts for a cross-user config copy |
+| `POST` | `/api/users/sync` | Copy profiles and referenced credentials using `skip` or `overwrite` conflicts |
 | `GET` | `/api/harnesses` | Collection with nested profiles, form field specs, and live file paths |
 | `GET` | `/api/harnesses/:id` | One harness |
 | `POST` | `/api/harnesses/:id/profiles` | Create |

@@ -34,6 +34,7 @@ export type {
   HarnessesResponse,
   HarnessMode,
   HarnessSummary,
+  LocalUserPublic,
   LoginRequest,
   OkResponse,
   PreviewResponse,
@@ -53,4 +54,8 @@ export type {
   TransferPreview,
   UpdateProfileRequest,
   UpdateProviderRequest,
+  UserSyncPreview,
+  UserSyncRequest,
+  UserSyncResponse,
+  UsersResponse,
 } from './types';

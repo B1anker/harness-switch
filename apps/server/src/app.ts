@@ -13,6 +13,7 @@ import { createHarnessRoutes } from './http/routes/harnesses';
 import { createProviderRoutes } from './http/routes/providers';
 import { createTransferRoutes } from './http/routes/transfer';
 import { createUpdateRoutes } from './http/routes/update';
+import { createUserRoutes } from './http/routes/users';
 import { IEnvironmentService } from './services/environment';
 import { ILogService } from './services/log';
 import { serverVersion } from './version';
@@ -32,6 +33,9 @@ export function createApp(services: InstantiationService): Hono {
     c.json({ name: 'harness-switch', version: await serverVersion() }),
   );
   api.route('/auth', createAuthRoutes(services));
+  api.use('/users/*', createAuthGuard(services));
+  api.use('/users', createAuthGuard(services));
+  api.route('/users', createUserRoutes(services));
   api.use('/harnesses/*', createAuthGuard(services));
   api.use('/harnesses', createAuthGuard(services));
   api.route('/harnesses', createHarnessRoutes(services));

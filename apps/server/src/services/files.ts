@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   chmodSync,
+  chownSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -98,7 +99,6 @@ export class FileService implements IFileService {
   }
 
   writeSecure(file: string, text: string): void {
-    this.environment.ensureDataDir();
     this.write(file, text, 0o600);
   }
 
@@ -119,7 +119,23 @@ export class FileService implements IFileService {
   }
 
   ensureDir(dir: string): void {
+    const missing: string[] = [];
+    let cursor = dir;
+    while (!existsSync(cursor)) {
+      missing.push(cursor);
+      const parent = dirname(cursor);
+      if (parent === cursor) break;
+      cursor = parent;
+    }
     mkdirSync(dir, { recursive: true, mode: 0o700 });
+    for (const created of missing.toReversed()) {
+      this.applyOwner(created, this.environment.currentUser.uid, this.environment.currentUser.gid);
+      try {
+        chmodSync(created, 0o700);
+      } catch {
+        // Windows has no POSIX file permissions.
+      }
+    }
   }
 
   remove(file: string): void {
@@ -139,7 +155,9 @@ export class FileService implements IFileService {
   private write(file: string, text: string, mode: number): void {
     this.ensureDir(dirname(file));
     const tmp = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
+    const owner = this.ownerOf(file);
     writeFileSync(tmp, text, { encoding: 'utf8', mode });
+    this.applyOwner(tmp, owner.uid, owner.gid);
     renameSync(tmp, file);
     try {
       chmodSync(file, mode);
@@ -154,6 +172,32 @@ export class FileService implements IFileService {
       return statSync(file).mode & 0o777;
     } catch {
       return 0o600;
+    }
+  }
+
+  private ownerOf(file: string): { uid: number; gid: number } {
+    try {
+      const stat = statSync(file);
+      return { uid: stat.uid, gid: stat.gid };
+    } catch {
+      return { uid: this.environment.currentUser.uid, gid: this.environment.currentUser.gid };
+    }
+  }
+
+  private applyOwner(path: string, uid: number, gid: number): void {
+    if (process.platform === 'win32') return;
+    try {
+      chownSync(path, uid, gid);
+    } catch (error) {
+      // A non-root process can manage itself without needing chown. Crossing user
+      // boundaries must fail clearly instead of leaving root-owned secret files.
+      if (uid !== process.getuid?.() || gid !== process.getgid?.()) {
+        throw new HttpError(
+          403,
+          `无法把 ${path} 的所有权设置为 ${this.environment.currentUser.username}，跨用户管理需要以 root 运行`,
+        );
+      }
+      if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
     }
   }
 }

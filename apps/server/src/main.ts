@@ -42,7 +42,9 @@ if (command === 'server') {
   command === 'providers' ||
   command === 'doctor' ||
   command === 'plan' ||
-  command === 'activate'
+  command === 'activate' ||
+  command === 'users' ||
+  command === 'sync'
 ) {
   const { flags, positional } = parseArgs(rest);
   process.exitCode = await runCli(command, positional, flags);

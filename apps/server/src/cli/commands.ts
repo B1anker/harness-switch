@@ -6,6 +6,8 @@ import type {
   HarnessesResponse,
   PreviewResponse,
   ProvidersResponse,
+  UserSyncResponse,
+  UsersResponse,
 } from '@seaveyon/harness-switch-shared';
 import { CliError, type CliFlags, flagValue, hasFlag, requirePositional } from './args';
 import { CliClient, readWebPassword, resolveBaseUrl } from './client';
@@ -36,6 +38,10 @@ export async function runCli(
   try {
     client = new CliClient(resolveBaseUrl(), readWebPassword());
     await client.login();
+    const selectedUser = flagValue(flags, 'user');
+    if (selectedUser) {
+      await selectUser(client, selectedUser);
+    }
   } catch (error) {
     return fail(error, json);
   }
@@ -52,6 +58,10 @@ export async function runCli(
         return await cmdPlan(client, positional, json);
       case 'activate':
         return await cmdActivate(client, positional, flags, json);
+      case 'users':
+        return await cmdUsers(client, json);
+      case 'sync':
+        return await cmdSync(client, flags, json);
       default:
         console.error(cliUsage());
         throw new CliError(`unknown command: ${command}`);
@@ -59,6 +69,45 @@ export async function runCli(
   } catch (error) {
     return fail(error, json);
   }
+}
+
+async function selectUser(client: CliClient, username: string): Promise<void> {
+  await client.post(`/api/users/${encodeURIComponent(username)}/select`);
+}
+
+async function cmdUsers(client: CliClient, json: OutputMode): Promise<number> {
+  const payload = (await client.get('/api/users')) as UsersResponse;
+  if (json === 'json') {
+    printJson(payload);
+  } else {
+    for (const user of payload.items) {
+      console.log(`${user.current ? '*' : ' '} ${user.username.padEnd(20)} ${user.homeDir}`);
+    }
+  }
+  return 0;
+}
+
+async function cmdSync(client: CliClient, flags: CliFlags, json: OutputMode): Promise<number> {
+  const source = flagValue(flags, 'from');
+  const target = flagValue(flags, 'to') || flagValue(flags, 'user');
+  if (!source || !target) {
+    throw new CliError('sync 需要 --from <来源用户> 和 --to <目标用户>');
+  }
+  await selectUser(client, target);
+  const conflictPolicy = hasFlag(flags, 'overwrite') ? 'overwrite' : 'skip';
+  const payload = (await client.post('/api/users/sync', {
+    sourceUser: source,
+    conflictPolicy,
+  })) as UserSyncResponse;
+  if (json === 'json') {
+    printJson(payload);
+  } else {
+    console.log(`已从 ${source} 同步到 ${target}`);
+    console.log(
+      `新增=${payload.imported} 覆盖=${payload.overwritten} 跳过=${payload.skipped} 凭据=${payload.providersCopied}`,
+    );
+  }
+  return 0;
 }
 
 async function cmdList(client: CliClient, json: OutputMode): Promise<number> {

@@ -7,6 +7,7 @@ import { ILogService } from './log';
 
 type Session = {
   expires: number;
+  username: string;
 };
 
 /**
@@ -29,6 +30,8 @@ export interface IAuthService {
   login(password: string): string | null;
   logout(token: string | undefined): void;
   isAuthenticated(token: string | undefined): boolean;
+  userForToken(token: string | undefined): string | undefined;
+  selectUser(token: string | undefined, username: string): void;
 }
 
 export const IAuthService = createDecorator<IAuthService>('authService');
@@ -48,7 +51,7 @@ export class AuthService implements IAuthService {
   ) {}
 
   ensurePassword(): string {
-    const file = this.environment.files.password;
+    const file = this.environment.managerFiles.password;
     if (!this.files.exists(file)) {
       const password = this.crypto.randomPassword();
       this.files.writeSecure(file, `${password}\n`);
@@ -65,6 +68,7 @@ export class AuthService implements IAuthService {
     const token = randomBytes(32).toString('base64url');
     this.load().set(digest('session', token), {
       expires: Date.now() + this.environment.sessionTtlMs,
+      username: this.environment.defaultUser.username,
     });
     this.persist();
     return token;
@@ -92,6 +96,24 @@ export class AuthService implements IAuthService {
     return true;
   }
 
+  userForToken(token: string | undefined): string | undefined {
+    if (!this.isAuthenticated(token) || !token) {
+      return undefined;
+    }
+    return this.load().get(digest('session', token))?.username;
+  }
+
+  selectUser(token: string | undefined, username: string): void {
+    if (!this.isAuthenticated(token) || !token) {
+      return;
+    }
+    const session = this.load().get(digest('session', token));
+    if (session) {
+      session.username = username;
+      this.persist();
+    }
+  }
+
   /** Reads the table once per process, dropping sessions that expired or predate the password. */
   private load(): Map<string, Session> {
     const loaded = this.sessions;
@@ -99,7 +121,7 @@ export class AuthService implements IAuthService {
       return loaded;
     }
     this.fingerprint = digest('password', this.ensurePassword());
-    const store = this.files.readJson<SessionStore>(this.environment.files.sessions, {
+    const store = this.files.readJson<SessionStore>(this.environment.managerFiles.sessions, {
       version: STORE_VERSION,
       password: this.fingerprint,
       sessions: {},
@@ -109,7 +131,13 @@ export class AuthService implements IAuthService {
       const now = Date.now();
       for (const [key, session] of Object.entries(store.sessions ?? {})) {
         if (typeof session?.expires === 'number' && session.expires > now) {
-          sessions.set(key, { expires: session.expires });
+          sessions.set(key, {
+            expires: session.expires,
+            username:
+              typeof session.username === 'string'
+                ? session.username
+                : this.environment.defaultUser.username,
+          });
         }
       }
     }
@@ -125,7 +153,7 @@ export class AuthService implements IAuthService {
     if (!sessions) {
       return;
     }
-    this.files.writeJson(this.environment.files.sessions, {
+    this.files.writeJson(this.environment.managerFiles.sessions, {
       version: STORE_VERSION,
       password: this.fingerprint,
       sessions: Object.fromEntries(sessions),

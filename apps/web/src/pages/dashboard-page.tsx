@@ -5,9 +5,11 @@ import {
   KeyRound,
   LogOut,
   Plus,
+  RefreshCw,
   Server,
   SlidersHorizontal,
   Stethoscope,
+  UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
@@ -21,7 +23,15 @@ import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TransferDialog } from '@/components/transfer-dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { UpdateButton } from '@/components/update-button';
+import { UserSyncDialog } from '@/components/user-sync-dialog';
 import { VersionBadge } from '@/components/version-badge';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -35,11 +45,16 @@ export function DashboardPage() {
   const harnesses = useAppStore((state) => state.harnesses);
   const envFile = useAppStore((state) => state.envFile);
   const logout = useAppStore((state) => state.logout);
+  const users = useAppStore((state) => state.users);
+  const currentUser = useAppStore((state) => state.currentUser);
+  const usersLoading = useAppStore((state) => state.usersLoading);
+  const switchUser = useAppStore((state) => state.switchUser);
   const backups = useAppStore((state) => state.backups);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [doctorOpen, setDoctorOpen] = useState(false);
+  const [userSyncOpen, setUserSyncOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
@@ -64,6 +79,27 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            <Select
+              value={currentUser || undefined}
+              onValueChange={(username) => void switchUser(username)}
+              disabled={usersLoading || users.length === 0}
+            >
+              <SelectTrigger className="w-[8.5rem]" aria-label="当前本地用户">
+                <UserRound className="size-4 shrink-0" />
+                <SelectValue placeholder="本地用户" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((user) => (
+                  <SelectItem key={user.username} value={user.username}>
+                    {user.username}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => setUserSyncOpen(true)}>
+              <RefreshCw />
+              <span className="hidden lg:inline">同步用户配置</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft />
               <span className="hidden sm:inline">导入 / 导出</span>
@@ -153,6 +189,7 @@ export function DashboardPage() {
       <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <ProviderVaultDialog open={vaultOpen} onOpenChange={setVaultOpen} />
       <DoctorDialog open={doctorOpen} onOpenChange={setDoctorOpen} />
+      <UserSyncDialog open={userSyncOpen} onOpenChange={setUserSyncOpen} />
       <NoticeToast />
     </div>
   );

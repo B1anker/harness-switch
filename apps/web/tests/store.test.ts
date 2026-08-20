@@ -22,6 +22,9 @@ beforeEach(() => {
 
   useAppStore.setState({
     authenticated: true,
+    currentUser: 'root',
+    users: [],
+    usersLoading: false,
     harnesses: [],
     backups: [],
     envFile: '',
@@ -85,6 +88,46 @@ test('loading harnesses stores the collection and the env file path', async () =
   expect(useAppStore.getState().harnesses).toHaveLength(1);
   expect(useAppStore.getState().envFile).toBe('/home/tester/.harness-switch/env.sh');
   expect(useAppStore.getState().loading).toBe(false);
+});
+
+test('switching Unix users refreshes every user-scoped collection', async () => {
+  useAppStore.setState({
+    users: [
+      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true },
+      { username: 'alice', uid: 1000, gid: 1000, homeDir: '/home/alice', current: false },
+    ],
+  });
+  responder = (path, method) => {
+    if (path === '/api/users/alice/select' && method === 'POST') {
+      return { status: 200, body: { currentUser: 'alice' } };
+    }
+    if (path === '/api/users') {
+      return {
+        status: 200,
+        body: {
+          currentUser: 'alice',
+          items: [
+            { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: false },
+            { username: 'alice', uid: 1000, gid: 1000, homeDir: '/home/alice', current: true },
+          ],
+        },
+      };
+    }
+    if (path === '/api/harnesses') return { status: 200, body: harnessResponse() };
+    if (path === '/api/backups') return { status: 200, body: { items: [] } };
+    return { status: 200, body: driftResponse() };
+  };
+
+  await useAppStore.getState().switchUser('alice');
+
+  expect(useAppStore.getState().currentUser).toBe('alice');
+  expect(requests.map((request) => `${request.method} ${request.path}`)).toEqual([
+    'POST /api/users/alice/select',
+    'GET /api/users',
+    'GET /api/harnesses',
+    'GET /api/backups',
+    'GET /api/drift',
+  ]);
 });
 
 test('an expired session drops the user back to the login screen without an error banner', async () => {

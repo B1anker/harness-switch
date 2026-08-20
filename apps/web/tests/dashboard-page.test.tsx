@@ -25,6 +25,12 @@ function setDashboardState() {
       }),
     ],
     backups: [],
+    currentUser: 'root',
+    users: [
+      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true },
+      { username: 'alice', uid: 1000, gid: 1000, homeDir: '/home/alice', current: false },
+    ],
+    usersLoading: false,
     notice: null,
     providers: [],
     drift: [],
@@ -65,6 +71,12 @@ test('the header opens the vault and the doctor dialogs', () => {
 
   fireEvent.click(screen.getByRole('button', { name: '凭据库' }));
   expect(screen.getByRole('heading', { name: '凭据库' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+  expect(screen.getByRole('combobox', { name: '当前本地用户' })).toHaveTextContent('root');
+  fireEvent.click(screen.getByRole('button', { name: '同步用户配置' }));
+  expect(screen.getByRole('heading', { name: '从其他用户同步' })).toBeInTheDocument();
+  expect(screen.getByText(/复制到 root/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
   fireEvent.click(screen.getByRole('button', { name: '诊断' }));

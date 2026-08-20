@@ -9,14 +9,22 @@ export type ParsedArgs = {
 export function parseArgs(argv: string[]): ParsedArgs {
   const flags: CliFlags = {};
   const positional: string[] = [];
-  for (const arg of argv) {
+  const valueFlags = new Set(['user', 'from', 'to', 'harness']);
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index]!;
     if (arg.startsWith('--')) {
       const body = arg.slice(2);
       const separator = body.indexOf('=');
       if (separator !== -1) {
         flags[body.slice(0, separator)] = body.slice(separator + 1);
       } else {
-        flags[body] = true;
+        const next = argv[index + 1];
+        if (valueFlags.has(body) && next && !next.startsWith('--')) {
+          flags[body] = next;
+          index++;
+        } else {
+          flags[body] = true;
+        }
       }
     } else {
       positional.push(arg);

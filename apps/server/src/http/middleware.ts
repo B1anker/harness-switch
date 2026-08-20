@@ -4,6 +4,7 @@ import { HttpError } from '../common/errors';
 import type { InstantiationService } from '../di';
 import { IAuthService } from '../services/auth';
 import { IEnvironmentService } from '../services/environment';
+import { IUserService } from '../services/users';
 
 export function createServiceMiddleware(services: InstantiationService): MiddlewareHandler {
   return async (c, next) => {
@@ -31,11 +32,14 @@ export function createOriginGuard(): MiddlewareHandler {
 export function createAuthGuard(services: InstantiationService): MiddlewareHandler {
   const auth = services.get(IAuthService);
   const environment = services.get(IEnvironmentService);
+  const users = services.get(IUserService);
   return async (c, next) => {
     const token = getCookie(c, environment.cookieName);
     if (!auth.isAuthenticated(token)) {
       throw new HttpError(401, 'authentication required');
     }
-    await next();
+    const username = auth.userForToken(token) ?? environment.defaultUser.username;
+    const user = users.require(username);
+    await environment.runAsUser(user, () => next());
   };
 }

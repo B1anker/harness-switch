@@ -90,6 +90,44 @@ export type HarnessesResponse = {
 
 export type SessionResponse = {
   authenticated: boolean;
+  currentUser: string;
+};
+
+export type LocalUserPublic = {
+  username: string;
+  uid: number;
+  gid: number;
+  homeDir: string;
+  current: boolean;
+};
+
+export type UsersResponse = {
+  currentUser: string;
+  items: LocalUserPublic[];
+};
+
+export type UserSyncRequest = {
+  sourceUser: string;
+  conflictPolicy?: TransferConflictPolicy;
+};
+
+export type UserSyncPreview = {
+  sourceUser: string;
+  targetUser: string;
+  profileCount: number;
+  providerCount: number;
+  conflicts: TransferConflict[];
+};
+
+export type UserSyncResponse = {
+  ok: true;
+  sourceUser: string;
+  targetUser: string;
+  imported: number;
+  overwritten: number;
+  skipped: number;
+  providersCopied: number;
+  warnings: string[];
 };
 
 export type LoginRequest = {

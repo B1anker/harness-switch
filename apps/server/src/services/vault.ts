@@ -19,6 +19,8 @@ export type VaultEntry = {
   endpoints: ProviderEndpoint[];
   created_at: string;
   updated_at: string;
+  /** Internal provenance used to update a previous cross-user sync without duplicating it. */
+  synced_from?: { username: string; provider_id: string };
 };
 
 export type { ProviderEndpoint } from '@seaveyon/harness-switch-shared';

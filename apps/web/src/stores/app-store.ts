@@ -15,13 +15,16 @@ import type {
   HarnessesResponse,
   HarnessId,
   HarnessSummary,
+  LocalUserPublic,
   PreviewResponse,
   PreviewTarget,
   ProviderMutationResponse,
   ProviderPublic,
   ProvidersResponse,
+  SessionResponse,
   UpdateProfileRequest,
   UpdateProviderRequest,
+  UsersResponse,
 } from '@seaveyon/harness-switch-shared';
 import { create } from 'zustand';
 import {
@@ -41,6 +44,9 @@ import {
 type AppState = {
   sessionChecked: boolean;
   authenticated: boolean;
+  currentUser: string;
+  users: LocalUserPublic[];
+  usersLoading: boolean;
   loading: boolean;
   error: string | null;
   envFile: string;
@@ -64,6 +70,8 @@ type AppState = {
   loadSession: () => Promise<void>;
   login: (password: string) => Promise<void>;
   logout: () => Promise<void>;
+  loadUsers: () => Promise<void>;
+  switchUser: (username: string) => Promise<void>;
   loadHarnesses: () => Promise<void>;
   createProfile: (harnessId: HarnessId, input: CreateProfileRequest) => Promise<void>;
   updateProfile: (harnessId: HarnessId, name: string, input: UpdateProfileRequest) => Promise<void>;
@@ -90,6 +98,9 @@ type AppState = {
 export const useAppStore = create<AppState>((set, get) => ({
   sessionChecked: false,
   authenticated: false,
+  currentUser: '',
+  users: [],
+  usersLoading: false,
   loading: false,
   error: null,
   envFile: '',
@@ -109,9 +120,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   loadSession: async () => {
     try {
-      await api('/api/auth/session');
-      set({ authenticated: true, sessionChecked: true, error: null });
-      await get().loadHarnesses();
+      const session = await api<SessionResponse>('/api/auth/session');
+      set({
+        authenticated: true,
+        sessionChecked: true,
+        currentUser: session.currentUser,
+        error: null,
+      });
+      await get().loadUsers();
+      await Promise.all([get().loadHarnesses(), get().loadBackups()]);
       await get().loadDrift();
     } catch (error) {
       set({
@@ -125,11 +142,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   login: async (password) => {
     set({ loading: true, error: null });
     try {
-      await api('/api/auth/login', {
+      const session = await api<SessionResponse>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify({ password }),
       });
-      set({ authenticated: true, loading: false });
+      set({ authenticated: true, loading: false, currentUser: session.currentUser });
+      await get().loadUsers();
       await get().loadHarnesses();
     } catch (error) {
       set({ loading: false, error: (error as Error).message });
@@ -141,6 +159,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     await api('/api/auth/logout', { method: 'POST' });
     set({
       authenticated: false,
+      currentUser: '',
+      users: [],
       harnesses: [],
       backups: [],
       envFile: '',
@@ -149,6 +169,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       doctorUpdatedAvailable: false,
       drift: null,
     });
+  },
+
+  loadUsers: async () => {
+    set({ usersLoading: true });
+    try {
+      const data = await api<UsersResponse>('/api/users');
+      set({ users: data.items, currentUser: data.currentUser, usersLoading: false });
+    } catch (error) {
+      set({ usersLoading: false, error: (error as Error).message });
+    }
+  },
+
+  switchUser: async (username) => {
+    if (!username || username === get().currentUser) return;
+    set({ usersLoading: true, loading: true, error: null });
+    try {
+      await api(`/api/users/${encodeURIComponent(username)}/select`, { method: 'POST' });
+      set({
+        currentUser: username,
+        harnesses: [],
+        backups: [],
+        envFile: '',
+        providers: null,
+        doctor: null,
+        doctorUpdatedAvailable: false,
+        drift: null,
+      });
+      await get().loadUsers();
+      await Promise.all([get().loadHarnesses(), get().loadBackups()]);
+      set({ usersLoading: false, loading: false });
+    } catch (error) {
+      set({ usersLoading: false, loading: false, error: (error as Error).message });
+      throw error;
+    }
   },
 
   loadHarnesses: async () => {
@@ -194,8 +248,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       method: 'POST',
     });
     const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
+    const username = get().currentUser || '当前用户';
     const lines = [
-      `${label} 已切换到「${name}」，原生配置文件已写入。`,
+      `${label} 已切换到「${name}」（用户：${username}），原生配置文件已写入。`,
       'Claude Code 会立即生效；Codex、Kimi Code、Pi 需要重新启动进程。',
       ...result.warnings.map((warning) => `注意：${warning}`),
     ];
@@ -208,8 +263,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       method: 'POST',
     });
     const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
+    const username = get().currentUser || '当前用户';
     const lines = [
-      `${label} 已切回官方登录，第三方 API 路由已从原生配置中移除。`,
+      `${label} 已切回官方登录（用户：${username}），第三方 API 路由已从原生配置中移除。`,
       '如尚未登录，请在终端启动对应工具并完成一次官方登录。',
       ...result.warnings.map((warning) => `注意：${warning}`),
     ];
