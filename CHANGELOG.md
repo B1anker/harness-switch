@@ -1,3 +1,20 @@
+# [0.12.0](https://github.com/B1anker/harness-switch/compare/v0.11.1...v0.12.0) (2026-08-20)
+
+
+### Bug Fixes
+
+* **server:** cache failed update checks for the TTL ([c5e6494](https://github.com/B1anker/harness-switch/commit/c5e6494a7fd57f8ac5ae15e26706c5fe713a2a37))
+
+
+### Features
+
+* **cli:** add automation commands with --json output ([7dd571f](https://github.com/B1anker/harness-switch/commit/7dd571f7ff629e91c4c79692fc9a2eb995ac7e14))
+* **server:** add configuration drift detection and repair ([299b704](https://github.com/B1anker/harness-switch/commit/299b704824595aa56a37064880ce178c8bcd5904))
+* **server:** add doctor diagnostics ([f5cff93](https://github.com/B1anker/harness-switch/commit/f5cff93dba1fbca4d7fbec778d6d72294abb180d))
+* **server:** add Provider Vault with profile references ([5e0ae29](https://github.com/B1anker/harness-switch/commit/5e0ae29299851c0ff5680decfc3672ad2f8eec55))
+* **shared:** add Provider Vault, drift and doctor types ([a077a85](https://github.com/B1anker/harness-switch/commit/a077a851e04ea1ad90ec91647de36cd59ffa3a14))
+* **web:** add Provider Vault, Doctor and drift UI ([150a34a](https://github.com/B1anker/harness-switch/commit/150a34ab49eb9730716e66d0ca9c231d76a703ee))
+
 ## [0.11.1](https://github.com/B1anker/harness-switch/compare/v0.11.0...v0.11.1) (2026-08-19)
 
 
