@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/B1anker/harness-switch/compare/v0.13.0...v0.14.0) (2026-08-20)
+
+
+### Features
+
+* refine harness configuration workflow ([84bbe43](https://github.com/B1anker/harness-switch/commit/84bbe43fd904f3772336045e9e33ad3d60e6aa15))
+
 # [0.13.0](https://github.com/B1anker/harness-switch/compare/v0.12.0...v0.13.0) (2026-08-20)
 
 
