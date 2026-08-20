@@ -7,7 +7,7 @@ import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { ILiveWriteService, type PlannedWrite } from './live-write';
 import { ILogService } from './log';
-import { type DecryptedProfile, IProfileService } from './profiles';
+import { IProfileService } from './profiles';
 import { IHarnessRegistry } from './registry';
 
 type ActiveEntry = {
@@ -32,6 +32,11 @@ export interface IActivationService {
   activate(harness: HarnessId, name: string): ActivationResult;
   activateOfficial(harness: HarnessId): ActivationResult;
   preview(harness: HarnessId, name: string): PreviewTarget[];
+  /**
+   * The exact writes the current ACTIVE state would produce (named profile or official
+   * login), overrides included. Renders only; nothing is written to disk.
+   */
+  expectedWrites(harness: HarnessId): PlannedWrite[];
   /** Keeps live files and active pointers in step after an edit or rename. */
   reconcileProfileUpdate(harness: HarnessId, previousName: string, nextName: string): void;
   /** Refuses to delete the active profile and clears additive leftovers otherwise. */
@@ -84,7 +89,7 @@ export class ActivationService implements IActivationService {
     const active = this.read();
     this.backfillPrevious(adapter, active[harness], name, warnings);
 
-    const writes = this.plan(adapter, profile);
+    const writes = this.expectedNamedWrites(harness, name);
     this.liveWrite.apply(harness, name, writes);
 
     // Committed only after the live files are on disk, so a failed write never leaves
@@ -127,19 +132,8 @@ export class ActivationService implements IActivationService {
     if (!alreadyOfficial) {
       this.backfillPrevious(adapter, previous, '__official__', warnings);
     }
-    const profile =
-      previous && !alreadyOfficial
-        ? {
-            name: previous.name,
-            baseUrl: previous.base_url,
-            apiKey: previous.api_key,
-            model: previous.model,
-            extras: previous.extras ?? {},
-          }
-        : undefined;
-    const targets = adapter.targets();
-    const rendered = adapter.renderOfficial(profile, this.readCurrent(targets));
-    this.liveWrite.apply(harness, '官方登录', this.toWrites(targets, rendered));
+    const writes = this.expectedOfficialWrites(harness);
+    this.liveWrite.apply(harness, '官方登录', writes);
 
     active[harness] = {
       name: '官方登录',
@@ -250,7 +244,25 @@ export class ActivationService implements IActivationService {
     }
   }
 
-  private plan(adapter: HarnessAdapter, profile: DecryptedProfile): PlannedWrite[] {
+  /**
+   * The exact content that would hit the disk for the current active state. With no
+   * active profile there is nothing to render, so the caller gets a clear 400.
+   */
+  expectedWrites(harness: HarnessId): PlannedWrite[] {
+    const active = this.read()[harness];
+    if (!active) {
+      throw new HttpError(400, '该工具未激活任何配置，无可渲染的内容');
+    }
+    if (active.official === true) {
+      return this.expectedOfficialWrites(harness);
+    }
+    return this.expectedNamedWrites(harness, active.name);
+  }
+
+  /** The exact content that would hit the disk for a named profile, overrides included. */
+  private expectedNamedWrites(harness: HarnessId, name: string): PlannedWrite[] {
+    const adapter = this.adapters.get(harness);
+    const profile = this.profiles.decrypt(harness, name);
     const targets = adapter.targets();
     const rendered = adapter.render(profile, this.readCurrent(targets));
     for (const [key, content] of Object.entries(profile.overrides)) {
@@ -260,6 +272,27 @@ export class ActivationService implements IActivationService {
         rendered[key] = content;
       }
     }
+    return this.toWrites(targets, rendered);
+  }
+
+  expectedOfficialWrites(harness: HarnessId): PlannedWrite[] {
+    const adapter = this.adapters.get(harness);
+    if (!adapter.renderOfficial) {
+      throw new HttpError(400, `${this.harnesses.label(harness)} 不支持官方账号登录模式`);
+    }
+    const active = this.read()[harness];
+    const profile =
+      active && active.official !== true
+        ? {
+            name: active.name,
+            baseUrl: active.base_url,
+            apiKey: active.api_key,
+            model: active.model,
+            extras: active.extras ?? {},
+          }
+        : undefined;
+    const targets = adapter.targets();
+    const rendered = adapter.renderOfficial(profile, this.readCurrent(targets));
     return this.toWrites(targets, rendered);
   }
 
