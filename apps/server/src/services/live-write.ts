@@ -9,11 +9,18 @@ export type PlannedWrite = {
   path: string;
   format: ConfigFormat;
   content: string;
+  /** Credential-bearing native files are always written target-owned with mode 0600. */
+  secret?: boolean;
 };
 
 export interface ILiveWriteService {
   readonly _serviceBrand: undefined;
   apply(harness: string, profile: string, writes: PlannedWrite[]): void;
+  /**
+   * Applies native files, runs a related storage mutation, and restores the files if that
+   * mutation fails. This lets a credential-file write participate in a larger transaction.
+   */
+  transaction<T>(harness: string, profile: string, writes: PlannedWrite[], operation: () => T): T;
 }
 
 export const ILiveWriteService = createDecorator<ILiveWriteService>('liveWriteService');
@@ -34,10 +41,13 @@ export class LiveWriteService implements ILiveWriteService {
    * deleting files that did not exist before.
    */
   apply(harness: string, profile: string, writes: PlannedWrite[]): void {
-    if (writes.length === 0) {
-      return;
-    }
+    this.transaction(harness, profile, writes, () => undefined);
+  }
 
+  transaction<T>(harness: string, profile: string, writes: PlannedWrite[], operation: () => T): T {
+    if (writes.length === 0) {
+      return operation();
+    }
     for (const write of writes) {
       assertParsable(write.format, write.path, write.content);
     }
@@ -46,29 +56,41 @@ export class LiveWriteService implements ILiveWriteService {
       path: write.path,
       content: this.files.readOptional(write.path),
     }));
-
     this.backups.create(harness, profile, snapshots);
 
-    const written: FileSnapshot[] = [];
+    const written: Array<{ snapshot: FileSnapshot; secret: boolean }> = [];
     try {
       for (const [index, write] of writes.entries()) {
-        this.files.writeUserFile(write.path, write.content);
-        written.push(snapshots[index]!);
+        this.write(write);
+        written.push({ snapshot: snapshots[index]!, secret: write.secret === true });
       }
+      return operation();
     } catch (error) {
       this.rollback(written);
       throw error;
     }
   }
 
-  private rollback(written: FileSnapshot[]): void {
-    for (const snapshot of written.toReversed()) {
+  private write(write: PlannedWrite): void {
+    if (write.secret) {
+      this.files.writeUserSecretFile(write.path, write.content);
+      return;
+    }
+    this.files.writeUserFile(write.path, write.content);
+  }
+
+  private rollback(written: Array<{ snapshot: FileSnapshot; secret: boolean }>): void {
+    for (const { snapshot, secret } of written.toReversed()) {
       try {
         if (snapshot.content === undefined) {
           this.files.remove(snapshot.path);
           continue;
         }
-        this.files.writeUserFile(snapshot.path, snapshot.content);
+        if (secret) {
+          this.files.writeUserSecretFile(snapshot.path, snapshot.content);
+        } else {
+          this.files.writeUserFile(snapshot.path, snapshot.content);
+        }
       } catch (error) {
         this.log.error(`rollback failed for ${snapshot.path}`, error);
       }

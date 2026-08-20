@@ -4,26 +4,38 @@ import { HttpError } from '../../common/errors';
 import type { InstantiationService } from '../../di';
 import { ITransferService } from '../../services/transfer';
 
-type ExportBody = { passphrase?: string };
+type ExportBody = { passphrase?: string; includeCodexLoginCache?: boolean };
 type ImportBody = {
   envelope?: TransferEnvelope;
   passphrase?: string;
   conflictPolicy?: TransferConflictPolicy;
   restoreActive?: boolean;
+  migrateCodexLoginCache?: boolean;
 };
 
 export function createTransferRoutes(services: InstantiationService): Hono {
   const app = new Hono();
   const transfer = services.get(ITransferService);
 
+  app.get('/export/preview', (c) => c.json(transfer.exportPreview()));
+
   app.post('/export', async (c) => {
     const body = await readBody<ExportBody>(c.req.json.bind(c.req));
-    return c.json(transfer.exportAll(String(body.passphrase ?? '')));
+    return c.json(
+      transfer.exportAll(String(body.passphrase ?? ''), body.includeCodexLoginCache === true),
+    );
   });
 
   app.post('/preview', async (c) => {
     const body = await readBody<ImportBody>(c.req.json.bind(c.req));
-    return c.json(transfer.preview(requireEnvelope(body.envelope), String(body.passphrase ?? '')));
+    return c.json(
+      transfer.preview(
+        requireEnvelope(body.envelope),
+        String(body.passphrase ?? ''),
+        body.conflictPolicy ?? 'skip',
+        body.restoreActive === true,
+      ),
+    );
   });
 
   app.post('/import', async (c) => {
@@ -34,6 +46,7 @@ export function createTransferRoutes(services: InstantiationService): Hono {
         String(body.passphrase ?? ''),
         body.conflictPolicy ?? 'skip',
         body.restoreActive === true,
+        body.migrateCodexLoginCache === true,
       ),
     );
   });

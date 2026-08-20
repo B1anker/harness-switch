@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServices } from '../src/bootstrap';
@@ -88,6 +96,35 @@ describe('live write', () => {
 
     // Truncating to an empty file would leave the harness with a config it cannot use.
     expect(files.exists(created)).toBe(false);
+  });
+
+  test('rolls a secret cache write back when its enclosing transaction fails', () => {
+    const live = services.get(ILiveWriteService);
+    const target = join(homeDir, '.codex', 'auth.json');
+    const original = '{"tokens":{"access_token":"old-session"}}\n';
+    mkdirSync(join(homeDir, '.codex'), { recursive: true, mode: 0o700 });
+    writeFileSync(target, original, { mode: 0o644 });
+
+    expect(() =>
+      live.transaction(
+        'codex',
+        '导入登录缓存',
+        [
+          {
+            path: target,
+            format: 'json',
+            content: '{"tokens":{"access_token":"new-session"}}\n',
+            secret: true,
+          },
+        ],
+        () => {
+          throw new Error('profile store failed');
+        },
+      ),
+    ).toThrow('profile store failed');
+
+    expect(readFileSync(target, 'utf8')).toBe(original);
+    expect(statSync(target).mode & 0o777).toBe(0o600);
   });
 
   test('keeps the permissions the user gave the file', () => {

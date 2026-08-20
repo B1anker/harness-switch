@@ -113,6 +113,7 @@ export function cliUsage(): string {
     '  --harness H   limit doctor to one harness',
     '  --user USER   run list/providers/doctor/plan/activate for this Unix user',
     '  --overwrite   overwrite same-name profiles during sync (default: skip)',
+    '  --copy-codex-auth  copy the source user’s Codex auth.json during sync',
     '',
     'environment:',
     '  HSW_URL       base URL of the local service (default http://127.0.0.1:8787)',

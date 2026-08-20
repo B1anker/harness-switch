@@ -292,6 +292,12 @@ test('dismissing the notice clears it', () => {
   expect(useAppStore.getState().notice).toBeNull();
 });
 
+test('a dialog can hand its own success message to the toast', () => {
+  // Dialogs that finish a job close themselves, so their result has to survive the unmount.
+  useAppStore.getState().setNotice('同步完成：新增 3。');
+  expect(useAppStore.getState().notice).toBe('同步完成：新增 3。');
+});
+
 test('loading providers stores the list without ever exposing a key', async () => {
   responder = () => ({ status: 200, body: providersResponse() });
 

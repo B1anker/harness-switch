@@ -26,3 +26,23 @@ export function VersionBadge() {
     </span>
   );
 }
+
+/**
+ * Flags a locally served bundle so a dev tab is never mistaken for the deployed one.
+ * The bundler substitutes NODE_ENV at build time, so this collapses to a constant and
+ * the badge is dropped from a production build entirely.
+ */
+export function DevModeBadge() {
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+  return (
+    <span
+      data-slot="dev-mode-badge"
+      title="本地开发模式：当前页面由本地 dev server 提供"
+      className="shrink-0 whitespace-nowrap rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] text-amber-700 dark:text-amber-300"
+    >
+      DEV
+    </span>
+  );
+}

@@ -95,16 +95,18 @@ async function cmdSync(client: CliClient, flags: CliFlags, json: OutputMode): Pr
   }
   await selectUser(client, target);
   const conflictPolicy = hasFlag(flags, 'overwrite') ? 'overwrite' : 'skip';
+  const copyCodexAuth = hasFlag(flags, 'copy-codex-auth');
   const payload = (await client.post('/api/users/sync', {
     sourceUser: source,
     conflictPolicy,
+    migrateCodexLoginCache: copyCodexAuth,
   })) as UserSyncResponse;
   if (json === 'json') {
     printJson(payload);
   } else {
     console.log(`已从 ${source} 同步到 ${target}`);
     console.log(
-      `新增=${payload.imported} 覆盖=${payload.overwritten} 跳过=${payload.skipped} 凭据=${payload.providersCopied}`,
+      `新增=${payload.imported} 覆盖=${payload.overwritten} 跳过=${payload.skipped} 凭据=${payload.providersCopied} Codex登录缓存=${payload.codexLoginCacheMigrated ? '已迁移' : '未迁移'}`,
     );
   }
   return 0;

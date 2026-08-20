@@ -3,11 +3,26 @@ import type {
   DoctorReport,
   DriftFileState,
   DriftSummary,
+  FieldSpec,
   HarnessSummary,
   ProfilePublic,
   ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
 import { useAppStore } from '@/stores/app-store';
+
+/** Mirrors the 1M flag spec the Claude adapter emits per model tier. */
+function oneMFieldFixture(role: string, key: string): FieldSpec {
+  return {
+    key,
+    label: `${role} 声明支持 1M`,
+    kind: 'select',
+    defaultValue: 'false',
+    options: [
+      { value: 'false', label: '关闭' },
+      { value: 'true', label: '开启' },
+    ],
+  };
+}
 
 export function profileFixture(overrides: Partial<ProfilePublic> = {}): ProfilePublic {
   return {
@@ -46,11 +61,15 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
       { key: 'haikuModelName', label: 'Haiku 显示名称（选填）', kind: 'text' },
       { key: 'sonnetModel', label: 'Sonnet 模型映射', kind: 'text' },
       { key: 'sonnetModelName', label: 'Sonnet 显示名称（选填）', kind: 'text' },
+      oneMFieldFixture('Sonnet', 'sonnetModel1m'),
       { key: 'opusModel', label: 'Opus 模型映射', kind: 'text' },
       { key: 'opusModelName', label: 'Opus 显示名称（选填）', kind: 'text' },
+      oneMFieldFixture('Opus', 'opusModel1m'),
       { key: 'fableModel', label: 'Fable 模型映射（可选）', kind: 'text' },
       { key: 'fableModelName', label: 'Fable 显示名称（选填）', kind: 'text' },
+      oneMFieldFixture('Fable', 'fableModel1m'),
       { key: 'subagentModel', label: '子代理模型（可选）', kind: 'text' },
+      oneMFieldFixture('子代理', 'subagentModel1m'),
     ],
     targets: [
       {

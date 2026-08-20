@@ -81,6 +81,14 @@ describe('drift inspect', () => {
     expect(report.files.every((file) => file.status === 'in-sync')).toBe(true);
   });
 
+  test('does not report an absent unmanaged Codex login cache as drift', () => {
+    activation().activateOfficial('codex');
+
+    const report = drift().inspect('codex');
+    expect(report.status).toBe('in-sync');
+    expect(report.files.some((file) => file.key === 'auth')).toBe(false);
+  });
+
   test('a hand edit shows as drifted with expected and live content', () => {
     activateClaude();
     const settings = JSON.parse(readFileSync(claudeSettings(), 'utf8'));

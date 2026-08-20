@@ -20,33 +20,67 @@ const SETTINGS = 'settings';
 const BASE_URL_VAR = 'ANTHROPIC_BASE_URL';
 const MODEL_VAR = 'ANTHROPIC_MODEL';
 const AUTH_VARS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY'] as const;
-const MODEL_MAPPINGS = [
-  [
-    'haikuModel',
-    'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-    'haikuModelName',
-    'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME',
-  ],
-  [
-    'sonnetModel',
-    'ANTHROPIC_DEFAULT_SONNET_MODEL',
-    'sonnetModelName',
-    'ANTHROPIC_DEFAULT_SONNET_MODEL_NAME',
-  ],
-  [
-    'opusModel',
-    'ANTHROPIC_DEFAULT_OPUS_MODEL',
-    'opusModelName',
-    'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME',
-  ],
-  [
-    'fableModel',
-    'ANTHROPIC_DEFAULT_FABLE_MODEL',
-    'fableModelName',
-    'ANTHROPIC_DEFAULT_FABLE_MODEL_NAME',
-  ],
-  ['subagentModel', 'CLAUDE_CODE_SUBAGENT_MODEL', undefined, undefined],
-] as const;
+/**
+ * Claude Code reads `[1m]` at the end of a pinned model id as "this model has a 1M
+ * context window" and strips the suffix before calling the provider. It is a capability
+ * declaration for the local session, not part of the model name, so it is kept as a
+ * separate flag per tier instead of being typed into the model field.
+ */
+const ONE_M_SUFFIX = '[1m]';
+type ModelMapping = {
+  field: string;
+  envVar: string;
+  nameField?: string;
+  nameEnvVar?: string;
+  /** Absent for tiers whose models have no 1M variant, such as Haiku. */
+  oneMField?: string;
+};
+const MODEL_MAPPINGS: readonly ModelMapping[] = [
+  {
+    field: 'haikuModel',
+    envVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+    nameField: 'haikuModelName',
+    nameEnvVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME',
+  },
+  {
+    field: 'sonnetModel',
+    envVar: 'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    nameField: 'sonnetModelName',
+    nameEnvVar: 'ANTHROPIC_DEFAULT_SONNET_MODEL_NAME',
+    oneMField: 'sonnetModel1m',
+  },
+  {
+    field: 'opusModel',
+    envVar: 'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    nameField: 'opusModelName',
+    nameEnvVar: 'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME',
+    oneMField: 'opusModel1m',
+  },
+  {
+    field: 'fableModel',
+    envVar: 'ANTHROPIC_DEFAULT_FABLE_MODEL',
+    nameField: 'fableModelName',
+    nameEnvVar: 'ANTHROPIC_DEFAULT_FABLE_MODEL_NAME',
+    oneMField: 'fableModel1m',
+  },
+  { field: 'subagentModel', envVar: 'CLAUDE_CODE_SUBAGENT_MODEL', oneMField: 'subagentModel1m' },
+];
+
+const ONE_M_OPTIONS = [
+  { value: 'false', label: '关闭' },
+  { value: 'true', label: '开启' },
+];
+
+function oneMField(role: string, key: string): FieldSpec {
+  return {
+    key,
+    label: `${role} 声明支持 1M`,
+    kind: 'select',
+    defaultValue: 'false',
+    options: ONE_M_OPTIONS,
+    help: '在模型 ID 末尾追加 [1m]，向 Claude Code 声明 1M 上下文；Claude Code 请求上游前会去掉该后缀。仅在该模型确实支持 1M 时开启。',
+  };
+}
 
 /**
  * Claude Code reads the `env` block of settings.json itself, so a switch takes effect
@@ -61,7 +95,7 @@ export class ClaudeAdapter implements HarnessAdapter {
     BASE_URL_VAR,
     ...AUTH_VARS,
     MODEL_VAR,
-    ...MODEL_MAPPINGS.flatMap(([, envVar, , nameEnvVar]) =>
+    ...MODEL_MAPPINGS.flatMap(({ envVar, nameEnvVar }) =>
       nameEnvVar ? [envVar, nameEnvVar] : [envVar],
     ),
   ];
@@ -109,6 +143,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       placeholder: '留空则使用 Sonnet 模型 ID',
       help: '写入 ANTHROPIC_DEFAULT_SONNET_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
     },
+    oneMField('Sonnet', 'sonnetModel1m'),
     {
       key: 'opusModel',
       label: 'Opus 模型映射',
@@ -124,6 +159,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       placeholder: '留空则使用 Opus 模型 ID',
       help: '写入 ANTHROPIC_DEFAULT_OPUS_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
     },
+    oneMField('Opus', 'opusModel1m'),
     {
       key: 'fableModel',
       label: 'Fable 模型映射（可选）',
@@ -138,6 +174,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       placeholder: '留空则使用 Fable 模型 ID',
       help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
     },
+    oneMField('Fable', 'fableModel1m'),
     {
       key: 'subagentModel',
       label: '子代理模型（可选）',
@@ -145,6 +182,7 @@ export class ClaudeAdapter implements HarnessAdapter {
       placeholder: '例如：glm-5-air',
       help: '写入 CLAUDE_CODE_SUBAGENT_MODEL，可让子代理使用更快或成本更低的模型。',
     },
+    oneMField('子代理', 'subagentModel1m'),
     {
       key: 'extraEnv',
       label: '追加环境变量（可选）',
@@ -173,9 +211,9 @@ export class ClaudeAdapter implements HarnessAdapter {
     if (profile.model) {
       vars[MODEL_VAR] = profile.model;
     }
-    for (const [field, envVar, nameField, nameEnvVar] of MODEL_MAPPINGS) {
+    for (const { field, envVar, nameField, nameEnvVar, oneMField: flagField } of MODEL_MAPPINGS) {
       if (profile.extras[field]) {
-        vars[envVar] = profile.extras[field];
+        vars[envVar] = withOneM(profile.extras[field], profile.extras[flagField ?? '']);
       }
       if (nameField && nameEnvVar && profile.extras[nameField]) {
         vars[nameEnvVar] = profile.extras[nameField];
@@ -204,10 +242,10 @@ export class ClaudeAdapter implements HarnessAdapter {
       delete env[MODEL_VAR];
     }
 
-    for (const [field, envVar, nameField, nameEnvVar] of MODEL_MAPPINGS) {
+    for (const { field, envVar, nameField, nameEnvVar, oneMField: flagField } of MODEL_MAPPINGS) {
       const value = profile.extras[field]?.trim();
       if (value) {
-        env[envVar] = value;
+        env[envVar] = withOneM(value, profile.extras[flagField ?? '']);
       } else {
         delete env[envVar];
       }
@@ -236,7 +274,7 @@ export class ClaudeAdapter implements HarnessAdapter {
     for (const authVar of AUTH_VARS) {
       delete env[authVar];
     }
-    for (const [, envVar, , nameEnvVar] of MODEL_MAPPINGS) {
+    for (const { envVar, nameEnvVar } of MODEL_MAPPINGS) {
       delete env[envVar];
       if (nameEnvVar) delete env[nameEnvVar];
     }
@@ -261,10 +299,18 @@ export class ClaudeAdapter implements HarnessAdapter {
       extras: {
         ...profile.extras,
         ...Object.fromEntries(
-          MODEL_MAPPINGS.flatMap(([field, envVar, nameField, nameEnvVar]) => [
-            [field, readString(env, envVar)],
-            ...(nameField && nameEnvVar ? [[nameField, readString(env, nameEnvVar)]] : []),
-          ]),
+          MODEL_MAPPINGS.flatMap(
+            ({ field, envVar, nameField, nameEnvVar, oneMField: flagField }) => {
+              const value = readString(env, envVar);
+              return [
+                [field, withoutOneM(value)],
+                ...(nameField && nameEnvVar ? [[nameField, readString(env, nameEnvVar)]] : []),
+                ...(flagField
+                  ? [[flagField, value.endsWith(ONE_M_SUFFIX) ? 'true' : 'false']]
+                  : []),
+              ];
+            },
+          ),
         ),
       },
     };
@@ -274,6 +320,15 @@ export class ClaudeAdapter implements HarnessAdapter {
     const configured = profile.extras.authVar;
     return AUTH_VARS.includes(configured as (typeof AUTH_VARS)[number]) ? configured : AUTH_VARS[0];
   }
+}
+
+function withOneM(value: string, enabled: string | undefined): string {
+  const model = withoutOneM(value.trim());
+  return enabled === 'true' && model ? `${model}${ONE_M_SUFFIX}` : model;
+}
+
+function withoutOneM(value: string): string {
+  return value.endsWith(ONE_M_SUFFIX) ? value.slice(0, -ONE_M_SUFFIX.length) : value;
 }
 
 function safeParse(text: string | undefined): JsonObject {

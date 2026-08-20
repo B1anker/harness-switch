@@ -122,6 +122,26 @@ describe('claude adapter', () => {
     expect(settings.env.CLAUDE_CODE_SUBAGENT_MODEL).toBe('cheap-model');
   });
 
+  test('adds a 1M suffix exactly when the model tier opts in', () => {
+    const adapter = new ClaudeAdapter(environment);
+    const settings = JSON.parse(
+      adapter.render(
+        profile({
+          extras: {
+            sonnetModel: 'gateway-sonnet[1m]',
+            sonnetModel1m: 'true',
+            opusModel: 'gateway-opus[1m]',
+            opusModel1m: 'false',
+          },
+        }),
+        {},
+      ).settings,
+    );
+
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gateway-sonnet[1m]');
+    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gateway-opus');
+  });
+
   test('leaves display names unset so Claude Code defaults to each model id', () => {
     const adapter = new ClaudeAdapter(environment);
     const current = JSON.stringify({
@@ -165,11 +185,15 @@ describe('claude adapter', () => {
         haikuModelName: '',
         sonnetModel: '',
         sonnetModelName: '',
+        sonnetModel1m: 'false',
         opusModel: '',
         opusModelName: '',
+        opusModel1m: 'false',
         fableModel: '',
         fableModelName: '',
+        fableModel1m: 'false',
         subagentModel: '',
+        subagentModel1m: 'false',
       },
     });
   });

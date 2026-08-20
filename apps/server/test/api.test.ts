@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createCipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
   HarnessSummary,
   PreviewResponse,
   ProfilePublic,
+  TransferEnvelope,
   TransferPreview,
 } from '@seaveyon/harness-switch-shared';
 import { createApp } from '../src/app';
@@ -22,6 +24,58 @@ type TestApp = {
   password: string;
   dataDir: string;
 };
+
+type PortableTestPayload = {
+  format: 'harness-switch-portable-config';
+  version: 1;
+  exportedAt: string;
+  profiles: Array<{
+    harness: string;
+    name: string;
+    baseUrl: string;
+    apiKey: string;
+    model: string;
+    notes: string;
+    extras: Record<string, string>;
+    overrides: Record<string, string>;
+  }>;
+  active: Array<{ harness: string; name: string; official: boolean }>;
+};
+
+function encryptedPortablePayload(
+  payload: PortableTestPayload,
+  passphrase = 'portable-secret',
+): TransferEnvelope {
+  const salt = randomBytes(16);
+  const iv = randomBytes(12);
+  const key = scryptSync(passphrase, salt, 32);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const data = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
+  return {
+    format: 'harness-switch-encrypted-export',
+    version: 1,
+    kdf: { name: 'scrypt', salt: salt.toString('base64url') },
+    cipher: {
+      name: 'aes-256-gcm',
+      iv: iv.toString('base64url'),
+      tag: cipher.getAuthTag().toString('base64url'),
+      data: data.toString('base64url'),
+    },
+  };
+}
+
+function portableClaudeProfile(name = 'portable') {
+  return {
+    harness: 'claude',
+    name,
+    baseUrl: 'https://api.example.com/v1',
+    apiKey: 'sk-portable-secret',
+    model: '',
+    notes: '',
+    extras: { authVar: 'ANTHROPIC_AUTH_TOKEN' },
+    overrides: {},
+  };
+}
 
 async function createTestApp(): Promise<TestApp> {
   homeDir = await mkdtemp(join(tmpdir(), 'hsw-home-'));
@@ -918,6 +972,307 @@ describe('rest api', () => {
     );
     expect(restored.status).toBe(200);
     expect(await readFile(claudeSettings(), 'utf8')).toBe('{"env":{"ORIGINAL":"1"}}\n');
+  });
+
+  test('exports and imports the Codex login cache only with separate opt-ins', async () => {
+    const context = await createTestApp();
+    const authPath = join(homeDir, '.codex', 'auth.json');
+    const exportedCache = '{"tokens":{"access_token":"portable-login-session"}}\n';
+    await mkdir(join(homeDir, '.codex'), { recursive: true });
+    await writeFile(authPath, exportedCache, { mode: 0o600 });
+
+    const availability = await context.app.request('/api/transfer/export/preview', {
+      headers: { Cookie: context.cookie },
+    });
+    expect(await availability.json()).toEqual({ codexLoginCacheAvailable: true });
+
+    const withoutCache = await context.app.request('/api/transfer/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ passphrase: 'portable-secret' }),
+    });
+    expect(withoutCache.status).toBe(200);
+    const withoutCachePreview = await context.app.request('/api/transfer/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope: await withoutCache.json(),
+        passphrase: 'portable-secret',
+      }),
+    });
+    expect((await withoutCachePreview.json()) as TransferPreview).toMatchObject({
+      codexLoginCache: { available: false, targetExists: true },
+    });
+
+    const withCache = await context.app.request('/api/transfer/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ passphrase: 'portable-secret', includeCodexLoginCache: true }),
+    });
+    expect(withCache.status).toBe(200);
+    const envelope = await withCache.json();
+    expect(JSON.stringify(envelope)).not.toContain('portable-login-session');
+    const withCachePreview = await context.app.request('/api/transfer/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ envelope, passphrase: 'portable-secret' }),
+    });
+    expect((await withCachePreview.json()) as TransferPreview).toMatchObject({
+      codexLoginCache: { available: true, targetExists: true },
+    });
+
+    await writeFile(authPath, '{"tokens":{"access_token":"target-session"}}\n', { mode: 0o644 });
+    const preserved = await context.app.request('/api/transfer/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'skip',
+        restoreActive: false,
+      }),
+    });
+    expect((await preserved.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
+      codexLoginCacheMigrated: false,
+    });
+    expect(await readFile(authPath, 'utf8')).toContain('target-session');
+
+    const migrated = await context.app.request('/api/transfer/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'skip',
+        restoreActive: false,
+        migrateCodexLoginCache: true,
+      }),
+    });
+    expect((await migrated.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
+      codexLoginCacheMigrated: true,
+    });
+    expect(await readFile(authPath, 'utf8')).toBe(exportedCache);
+    expect((await stat(authPath)).mode & 0o777).toBe(0o600);
+  });
+
+  test('rejects semantically invalid portable active states before preview or import', async () => {
+    const context = await createTestApp();
+    const profile = portableClaudeProfile('main');
+    const base: PortableTestPayload = {
+      format: 'harness-switch-portable-config',
+      version: 1,
+      exportedAt: '2026-08-20T00:00:00.000Z',
+      profiles: [profile],
+      active: [],
+    };
+    const cases: Array<{ label: string; payload: PortableTestPayload }> = [
+      {
+        label: 'duplicate profile',
+        payload: { ...base, profiles: [profile, { ...profile }] },
+      },
+      {
+        label: 'duplicate active harness',
+        payload: {
+          ...base,
+          active: [
+            { harness: 'claude', name: 'main', official: false },
+            { harness: 'claude', name: 'main', official: false },
+          ],
+        },
+      },
+      {
+        label: 'missing active profile',
+        payload: { ...base, active: [{ harness: 'claude', name: 'missing', official: false }] },
+      },
+      {
+        label: 'noncanonical official entry',
+        payload: { ...base, active: [{ harness: 'claude', name: 'not-official', official: true }] },
+      },
+      {
+        label: 'unsupported official entry',
+        payload: { ...base, active: [{ harness: 'qwen', name: '官方登录', official: true }] },
+      },
+    ];
+
+    for (const item of cases) {
+      const envelope = encryptedPortablePayload(item.payload);
+      const preview = await context.app.request('/api/transfer/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+        body: JSON.stringify({ envelope, passphrase: 'portable-secret', restoreActive: true }),
+      });
+      expect(preview.status, item.label).toBe(400);
+
+      const imported = await context.app.request('/api/transfer/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+        body: JSON.stringify({
+          envelope,
+          passphrase: 'portable-secret',
+          conflictPolicy: 'overwrite',
+          restoreActive: true,
+        }),
+      });
+      expect(imported.status, item.label).toBe(400);
+    }
+    expect((await summary(context, 'claude')).profiles).toHaveLength(0);
+  });
+
+  test('previews and restores an active Codex openai_auth profile without copying its login cache', async () => {
+    const context = await createTestApp();
+    const authPath = join(homeDir, '.codex', 'auth.json');
+    await mkdir(join(homeDir, '.codex'), { recursive: true });
+    await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
+    await createProfile(context, 'codex', {
+      name: 'third-party',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-portable-openai',
+      extras: { authMode: 'openai_auth' },
+    });
+    await activate(context, 'codex', 'third-party');
+
+    const exported = await context.app.request('/api/transfer/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ passphrase: 'portable-secret' }),
+    });
+    const envelope = await exported.json();
+    expect(exported.status).toBe(200);
+
+    await context.app.request('/api/harnesses/codex/official/activate', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+    await context.app.request('/api/harnesses/codex/profiles/third-party', {
+      method: 'DELETE',
+      headers: { Cookie: context.cookie },
+    });
+    await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
+    const backupsBeforeImport = (
+      (await (
+        await context.app.request('/api/backups', { headers: { Cookie: context.cookie } })
+      ).json()) as { items: Array<{ id: string }> }
+    ).items.length;
+
+    const preview = await context.app.request('/api/transfer/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'skip',
+        restoreActive: true,
+      }),
+    });
+    expect((await preview.json()) as TransferPreview).toMatchObject({
+      codexActivationAuthEffect: 'openai-api-key',
+      codexLoginCache: { available: false },
+    });
+
+    const imported = await context.app.request('/api/transfer/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'skip',
+        restoreActive: true,
+        migrateCodexLoginCache: false,
+      }),
+    });
+    expect(
+      (await imported.json()) as { activeRestored: number; codexLoginCacheMigrated: boolean },
+    ).toMatchObject({
+      activeRestored: 1,
+      codexLoginCacheMigrated: false,
+    });
+    expect(JSON.parse(await readFile(authPath, 'utf8'))).toMatchObject({
+      tokens: { refresh_token: 'target-session' },
+      OPENAI_API_KEY: 'sk-portable-openai',
+    });
+
+    const backups = (await (
+      await context.app.request('/api/backups', { headers: { Cookie: context.cookie } })
+    ).json()) as { items: Array<{ files: Array<{ path: string }> }> };
+    expect(backups.items).toHaveLength(backupsBeforeImport + 1);
+    expect(
+      backups.items.some((backup) => backup.files.some((file) => file.path === authPath)),
+    ).toBe(true);
+  });
+
+  test('plans Codex activation effects from the profile selected by the conflict policy', async () => {
+    const context = await createTestApp();
+    const authPath = join(homeDir, '.codex', 'auth.json');
+    await mkdir(join(homeDir, '.codex'), { recursive: true });
+    await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
+    await createProfile(context, 'codex', {
+      name: 'same-name',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'sk-source-openai',
+      extras: { authMode: 'openai_auth' },
+    });
+    await activate(context, 'codex', 'same-name');
+    const exported = await context.app.request('/api/transfer/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ passphrase: 'portable-secret' }),
+    });
+    const envelope = await exported.json();
+
+    const changed = await context.app.request('/api/harnesses/codex/profiles/same-name', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({ extras: { authMode: 'bearer_token' } }),
+    });
+    expect(changed.status).toBe(200);
+    await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
+
+    const preview = async (conflictPolicy: 'skip' | 'overwrite') => {
+      const response = await context.app.request('/api/transfer/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+        body: JSON.stringify({
+          envelope,
+          passphrase: 'portable-secret',
+          conflictPolicy,
+          restoreActive: true,
+        }),
+      });
+      return (await response.json()) as TransferPreview;
+    };
+    expect((await preview('skip')).codexActivationAuthEffect).toBe('none');
+    expect((await preview('overwrite')).codexActivationAuthEffect).toBe('openai-api-key');
+
+    const skipped = await context.app.request('/api/transfer/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'skip',
+        restoreActive: true,
+      }),
+    });
+    expect(skipped.status).toBe(200);
+    expect(JSON.parse(await readFile(authPath, 'utf8'))).toEqual({
+      tokens: { refresh_token: 'target-session' },
+    });
+
+    const overwritten = await context.app.request('/api/transfer/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'overwrite',
+        restoreActive: true,
+      }),
+    });
+    expect(overwritten.status).toBe(200);
+    expect(JSON.parse(await readFile(authPath, 'utf8'))).toMatchObject({
+      tokens: { refresh_token: 'target-session' },
+      OPENAI_API_KEY: 'sk-source-openai',
+    });
   });
 
   test('exports secrets in a portable encrypted bundle and imports them again', async () => {

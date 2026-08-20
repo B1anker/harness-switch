@@ -1,10 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import {
+  type CodexAuthJsonEffect,
   HARNESS_IDS,
   type HarnessId,
   isHarnessId,
   type TransferConflictPolicy,
   type TransferEnvelope,
+  type TransferExportPreview,
   type TransferImportResponse,
   type TransferPreview,
 } from '@seaveyon/harness-switch-shared';
@@ -12,9 +14,11 @@ import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IActivationService } from './activation';
 import { IAdapterRegistry } from './adapters';
+import { ICodexLoginCacheService } from './codex-login-cache';
 import { ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
+import { ILiveWriteService, type PlannedWrite } from './live-write';
 import type { ProfileStore, StoredProfile } from './profiles';
 import { IVaultService } from './vault';
 
@@ -45,17 +49,34 @@ type PortablePayload = {
   exportedAt: string;
   profiles: PortableProfile[];
   active: PortableActive[];
+  /** Present only when the user explicitly included the native Codex login session. */
+  codexLoginCache?: string;
+};
+
+type ImportPlan = {
+  store: ProfileStore;
+  imported: number;
+  overwritten: number;
+  skipped: number;
+  codexActivationAuthEffect: CodexAuthJsonEffect;
 };
 
 export interface ITransferService {
   readonly _serviceBrand: undefined;
-  exportAll(passphrase: string): TransferEnvelope;
-  preview(envelope: TransferEnvelope, passphrase: string): TransferPreview;
+  exportPreview(): TransferExportPreview;
+  exportAll(passphrase: string, includeCodexLoginCache: boolean): TransferEnvelope;
+  preview(
+    envelope: TransferEnvelope,
+    passphrase: string,
+    conflictPolicy: TransferConflictPolicy,
+    restoreActive: boolean,
+  ): TransferPreview;
   importAll(
     envelope: TransferEnvelope,
     passphrase: string,
     conflictPolicy: TransferConflictPolicy,
     restoreActive: boolean,
+    migrateCodexLoginCache: boolean,
   ): TransferImportResponse;
 }
 
@@ -65,6 +86,8 @@ export const ITransferService = createDecorator<ITransferService>('transferServi
   IEnvironmentService,
   IFileService,
   ICryptoService,
+  ICodexLoginCacheService,
+  ILiveWriteService,
   IAdapterRegistry,
   IActivationService,
   IVaultService,
@@ -76,13 +99,25 @@ export class TransferService implements ITransferService {
     private readonly environment: IEnvironmentService,
     private readonly files: IFileService,
     private readonly crypto: ICryptoService,
+    private readonly codexLoginCache: ICodexLoginCacheService,
+    private readonly liveWrite: ILiveWriteService,
     private readonly adapters: IAdapterRegistry,
     private readonly activation: IActivationService,
     private readonly vault: IVaultService,
   ) {}
 
-  exportAll(passphrase: string): TransferEnvelope {
+  exportPreview(): TransferExportPreview {
+    return { codexLoginCacheAvailable: this.codexLoginCache.exists() };
+  }
+
+  exportAll(passphrase: string, includeCodexLoginCache: boolean): TransferEnvelope {
     this.assertPassphrase(passphrase);
+    const codexLoginCache = includeCodexLoginCache
+      ? this.codexLoginCache.readOptional()
+      : undefined;
+    if (includeCodexLoginCache && codexLoginCache === undefined) {
+      throw new HttpError(400, '当前用户没有可导出的 Codex 登录缓存');
+    }
     const store = this.readStore();
     const profiles: PortableProfile[] = [];
     for (const harness of HARNESS_IDS) {
@@ -118,14 +153,22 @@ export class TransferService implements ITransferService {
         exportedAt: new Date().toISOString(),
         profiles,
         active,
+        codexLoginCache,
       },
       passphrase,
     );
   }
 
-  preview(envelope: TransferEnvelope, passphrase: string): TransferPreview {
+  preview(
+    envelope: TransferEnvelope,
+    passphrase: string,
+    conflictPolicy: TransferConflictPolicy,
+    restoreActive: boolean,
+  ): TransferPreview {
+    this.assertConflictPolicy(conflictPolicy);
     const payload = this.decrypt(envelope, passphrase);
-    const store = this.readStore();
+    const existing = this.readStore();
+    const plan = this.planImport(payload, existing, conflictPolicy, restoreActive);
     return {
       exportedAt: payload.exportedAt,
       profileCount: payload.profiles.length,
@@ -134,9 +177,16 @@ export class TransferService implements ITransferService {
         profiles: payload.profiles.filter((profile) => profile.harness === harness).length,
       })).filter((item) => item.profiles > 0),
       conflicts: payload.profiles
-        .filter((profile) => store[profile.harness]?.[profile.name] !== undefined)
+        .filter((profile) => existing[profile.harness]?.[profile.name] !== undefined)
         .map(({ harness, name }) => ({ harness, name })),
       activeCount: payload.active.length,
+      conflictPolicy,
+      restoreActive,
+      codexActivationAuthEffect: plan.codexActivationAuthEffect,
+      codexLoginCache: {
+        available: payload.codexLoginCache !== undefined,
+        targetExists: this.codexLoginCache.exists(),
+      },
     };
   }
 
@@ -145,33 +195,34 @@ export class TransferService implements ITransferService {
     passphrase: string,
     conflictPolicy: TransferConflictPolicy,
     restoreActive: boolean,
+    migrateCodexLoginCache: boolean,
   ): TransferImportResponse {
-    if (conflictPolicy !== 'skip' && conflictPolicy !== 'overwrite') {
-      throw new HttpError(400, 'invalid conflict policy');
-    }
+    this.assertConflictPolicy(conflictPolicy);
     const payload = this.decrypt(envelope, passphrase);
-    const store = structuredClone(this.readStore());
-    let imported = 0;
-    let overwritten = 0;
-    let skipped = 0;
-
-    for (const profile of payload.profiles) {
-      this.validateProfile(profile);
-      store[profile.harness] ||= {};
-      const exists = store[profile.harness]![profile.name] !== undefined;
-      if (exists && conflictPolicy === 'skip') {
-        skipped++;
-        continue;
-      }
-      store[profile.harness]![profile.name] = this.toStored(profile);
-      if (exists) {
-        overwritten++;
-      } else {
-        imported++;
-      }
+    if (migrateCodexLoginCache && payload.codexLoginCache === undefined) {
+      throw new HttpError(400, '导出包不包含可迁移的 Codex 登录缓存');
     }
+    const cacheWrite: PlannedWrite[] = migrateCodexLoginCache
+      ? [
+          {
+            ...this.codexLoginCache.prepareWrite(payload.codexLoginCache!),
+            format: 'json',
+            secret: true,
+          },
+        ]
+      : [];
+    const plan = this.planImport(payload, this.readStore(), conflictPolicy, restoreActive);
 
-    this.files.writeJson(this.environment.files.profiles, store);
+    const profilesPath = this.environment.files.profiles;
+    const profileSnapshot = this.files.readOptional(profilesPath);
+    this.liveWrite.transaction('codex', '导入登录缓存', cacheWrite, () => {
+      try {
+        this.files.writeJson(profilesPath, plan.store);
+      } catch (error) {
+        this.restore(profilesPath, profileSnapshot);
+        throw error;
+      }
+    });
 
     const warnings: string[] = [];
     let activeRestored = 0;
@@ -180,7 +231,7 @@ export class TransferService implements ITransferService {
         try {
           if (active.official) {
             this.activation.activateOfficial(active.harness);
-          } else if (store[active.harness]?.[active.name]) {
+          } else if (plan.store[active.harness]?.[active.name]) {
             this.activation.activate(active.harness, active.name);
           } else {
             throw new Error('对应配置不存在');
@@ -194,7 +245,15 @@ export class TransferService implements ITransferService {
       }
     }
 
-    return { ok: true, imported, overwritten, skipped, activeRestored, warnings };
+    return {
+      ok: true,
+      imported: plan.imported,
+      overwritten: plan.overwritten,
+      skipped: plan.skipped,
+      activeRestored,
+      codexLoginCacheMigrated: cacheWrite.length > 0,
+      warnings,
+    };
   }
 
   private decrypt(envelope: TransferEnvelope, passphrase: string): PortablePayload {
@@ -222,7 +281,109 @@ export class TransferService implements ITransferService {
         throw new HttpError(400, '导出文件中的激活状态无效');
       }
     }
+    if (payload.codexLoginCache !== undefined) {
+      if (typeof payload.codexLoginCache !== 'string') {
+        throw new HttpError(400, '导出文件中的 Codex 登录缓存无效');
+      }
+      this.codexLoginCache.validate(payload.codexLoginCache);
+    }
+    this.validatePayload(payload);
     return payload;
+  }
+
+  private assertConflictPolicy(conflictPolicy: TransferConflictPolicy): void {
+    if (conflictPolicy !== 'skip' && conflictPolicy !== 'overwrite') {
+      throw new HttpError(400, 'invalid conflict policy');
+    }
+  }
+
+  private validatePayload(payload: PortablePayload): void {
+    const profileIds = new Set<string>();
+    for (const profile of payload.profiles) {
+      this.validateProfile(profile);
+      const id = profileId(profile.harness, profile.name);
+      if (profileIds.has(id)) {
+        throw new HttpError(400, '导出文件包含重复的配置');
+      }
+      profileIds.add(id);
+    }
+
+    const activeHarnesses = new Set<HarnessId>();
+    for (const active of payload.active) {
+      if (activeHarnesses.has(active.harness)) {
+        throw new HttpError(400, '导出文件包含重复的激活状态');
+      }
+      activeHarnesses.add(active.harness);
+      const adapter = this.adapters.get(active.harness);
+      if (active.official) {
+        if (active.name !== '官方登录' || !adapter.renderOfficial) {
+          throw new HttpError(400, '导出文件中的官方登录状态无效');
+        }
+      } else if (!profileIds.has(profileId(active.harness, active.name))) {
+        throw new HttpError(400, '导出文件中的激活状态引用了不存在的配置');
+      }
+    }
+  }
+
+  private planImport(
+    payload: PortablePayload,
+    existing: ProfileStore,
+    conflictPolicy: TransferConflictPolicy,
+    restoreActive: boolean,
+  ): ImportPlan {
+    const store = structuredClone(existing);
+    let imported = 0;
+    let overwritten = 0;
+    let skipped = 0;
+
+    for (const profile of payload.profiles) {
+      store[profile.harness] ||= {};
+      const exists = store[profile.harness]![profile.name] !== undefined;
+      if (exists && conflictPolicy === 'skip') {
+        skipped++;
+        continue;
+      }
+      store[profile.harness]![profile.name] = this.toStored(profile);
+      if (exists) {
+        overwritten++;
+      } else {
+        imported++;
+      }
+    }
+
+    return {
+      store,
+      imported,
+      overwritten,
+      skipped,
+      codexActivationAuthEffect: this.codexActivationAuthEffect(payload, store, restoreActive),
+    };
+  }
+
+  private codexActivationAuthEffect(
+    payload: PortablePayload,
+    store: ProfileStore,
+    restoreActive: boolean,
+  ): CodexAuthJsonEffect {
+    if (!restoreActive) {
+      return 'none';
+    }
+    const active = payload.active.find((item) => item.harness === 'codex');
+    if (!active) {
+      return 'none';
+    }
+    if (active.official) {
+      // Codex's official renderer removes a stale OPENAI_API_KEY when one is present.
+      return 'official-cleanup';
+    }
+    const profile = store.codex?.[active.name];
+    if (!profile) {
+      return 'none';
+    }
+    if (profile.overrides?.auth !== undefined) {
+      return 'auth-override';
+    }
+    return profile.extras?.authMode === 'openai_auth' ? 'openai-api-key' : 'none';
   }
 
   private validateProfile(profile: PortableProfile): void {
@@ -252,6 +413,15 @@ export class TransferService implements ITransferService {
 
   private readStore(): ProfileStore {
     return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
+  }
+
+  private restore(path: string, snapshot: string | undefined): void {
+    try {
+      if (snapshot === undefined) this.files.remove(path);
+      else this.files.writeSecure(path, snapshot);
+    } catch {
+      // Preserve the original import failure; the cache transaction rolls its own write back.
+    }
   }
 
   /** Exports flatten vault references into the inline key the destination can decrypt. */
@@ -323,6 +493,10 @@ function decrypt(envelope: TransferEnvelope, passphrase: string): PortablePayloa
   } catch {
     throw new HttpError(400, '迁移密码错误或导出文件已损坏');
   }
+}
+
+function profileId(harness: HarnessId, name: string): string {
+  return `${harness} ${name}`;
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {

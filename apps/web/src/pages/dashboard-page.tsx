@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/select';
 import { UpdateButton } from '@/components/update-button';
 import { UserSyncDialog } from '@/components/user-sync-dialog';
-import { VersionBadge } from '@/components/version-badge';
+import { DevModeBadge, VersionBadge } from '@/components/version-badge';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -73,6 +73,7 @@ export function DashboardPage() {
                   harness-switch
                 </h1>
                 <VersionBadge />
+                <DevModeBadge />
                 <UpdateButton />
               </div>
               <p className="truncate text-xs text-muted-foreground">写入原生配置</p>

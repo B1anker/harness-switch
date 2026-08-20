@@ -86,6 +86,8 @@ Use **导入 / 导出** in the top bar to create one `.hsw-backup` file containi
 
 On the destination machine, select the bundle and enter the migration password. The UI shows profile counts and same-name conflicts before it writes anything. Import keeps destination profiles by default; overwriting is an explicit choice. Restoring the exported activation state is optional.
 
+A Codex official-login cache (`$CODEX_HOME/auth.json`) is **excluded by default**. When a valid cache is available, you may explicitly include it in the encrypted bundle and then make a second explicit choice to write it on the destination. This carries a reusable Codex/ChatGPT login session: share such a bundle only with a trusted recipient, and expect upstream expiry or revocation to still require a fresh `codex login`. An existing destination cache is backed up before replacement; copied caches are written as the destination user with mode `0600`.
+
 Keep the migration password separately from the bundle. It cannot be recovered from the export file.
 
 ### Provider Vault: shared credentials
@@ -124,6 +126,8 @@ The dashboard header can switch between local login users such as `root` and `al
 
 “Sync user config” performs a one-time copy of another user's profiles and referenced Provider Vault credentials into the selected user. Secrets are decrypted only on the server and re-encrypted with the destination user's local key. Active state, backups and native config files are not copied. Same-name profiles are skipped by default and can be explicitly overwritten.
 
+A source user's Codex official-login cache (`auth.json`) is the sole optional exception: it remains unchecked by default and requires an irreversible confirmation that identifies the source and destination users. Choose it only when the destination user is allowed to use that login session. The previous destination cache is backed up, and the replacement is destination-owned with mode `0600`; source ownership and permissions are never copied.
+
 Cross-user writes require access to the destination home. Managing both `root` and regular users therefore normally requires running harness-switch as root; newly created files and directories are assigned to the destination UID/GID. The Web password then grants control over every exposed user's configs, so keep the loopback bind and SSH tunnel. Use `HSW_USERS=root,alice` to restrict the manageable accounts.
 
 ### CLI automation
@@ -142,6 +146,7 @@ harness-switch list --user alice             # inspect alice's independent store
 harness-switch activate codex main --user alice --yes
 harness-switch sync --from root --to alice   # one-time copy; skips conflicts
 harness-switch sync --from root --to alice --overwrite
+harness-switch sync --from root --to alice --copy-codex-auth  # explicitly copy Codex auth.json
 ```
 
 `plan <harness>` prints the drift inspection of the active profile (expected vs. current content per file); without an active profile it reports `status: unknown`. `activate` prompts for confirmation on a TTY and requires `--yes` in non-interactive terminals (CI). JSON output mirrors the HTTP API response shapes (`HarnessesResponse`, `ProvidersResponse`, `DoctorResponse`, `DriftSummary`, `ActivateResponse`), so scripts can reuse the same field names. `HSW_DATA_DIR` and `HSW_HOME_DIR` override where it reads state (defaults: `~/.harness-switch` and `$HOME`).

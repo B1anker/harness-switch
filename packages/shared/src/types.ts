@@ -110,9 +110,23 @@ export type UsersResponse = {
   items: LocalUserPublic[];
 };
 
+/** Presence metadata only; cache contents are never returned in a preview. */
+export type CodexLoginCacheState = {
+  available: boolean;
+  targetExists: boolean;
+};
+
 export type UserSyncRequest = {
   sourceUser: string;
+  /**
+   * Legacy all-or-nothing conflict behavior. New clients should keep this at `skip`
+   * and opt individual harnesses into replacement with `overwriteHarnesses`.
+   */
   conflictPolicy?: TransferConflictPolicy;
+  /** Overwrite same-name profiles only for these harnesses. Defaults to none. */
+  overwriteHarnesses?: HarnessId[];
+  /** Explicitly copy the source user's Codex official-login cache. Defaults to false. */
+  migrateCodexLoginCache?: boolean;
 };
 
 export type UserSyncPreview = {
@@ -121,6 +135,7 @@ export type UserSyncPreview = {
   profileCount: number;
   providerCount: number;
   conflicts: TransferConflict[];
+  codexLoginCache: CodexLoginCacheState;
 };
 
 export type UserSyncResponse = {
@@ -131,6 +146,7 @@ export type UserSyncResponse = {
   overwritten: number;
   skipped: number;
   providersCopied: number;
+  codexLoginCacheMigrated: boolean;
   warnings: string[];
 };
 
@@ -250,12 +266,25 @@ export type TransferHarnessCount = {
   profiles: number;
 };
 
+export type TransferExportPreview = {
+  codexLoginCacheAvailable: boolean;
+};
+
+/** Secret-free description of how restoring an active Codex state may touch auth.json. */
+export type CodexAuthJsonEffect = 'none' | 'openai-api-key' | 'auth-override' | 'official-cleanup';
+
 export type TransferPreview = {
   exportedAt: string;
   profileCount: number;
   harnesses: TransferHarnessCount[];
   conflicts: TransferConflict[];
   activeCount: number;
+  /** Options used to calculate this preview; clients must re-check after changing either. */
+  conflictPolicy: TransferConflictPolicy;
+  restoreActive: boolean;
+  /** Potential auth.json change caused by restoring the selected active state. */
+  codexActivationAuthEffect: CodexAuthJsonEffect;
+  codexLoginCache: CodexLoginCacheState;
 };
 
 export type TransferConflictPolicy = 'skip' | 'overwrite';
@@ -266,6 +295,7 @@ export type TransferImportResponse = {
   overwritten: number;
   skipped: number;
   activeRestored: number;
+  codexLoginCacheMigrated: boolean;
   warnings: string[];
 };
 

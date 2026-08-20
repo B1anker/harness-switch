@@ -8,6 +8,7 @@ import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -38,16 +39,26 @@ type ProfileDialogProps = {
 
 type ProfileFieldErrors = Record<string, string | undefined>;
 
+/** `oneMKey` is null for tiers with no 1M variant, such as Haiku. */
 const CLAUDE_MODEL_ROWS = [
-  { role: 'Sonnet', modelKey: 'sonnetModel', nameKey: 'sonnetModelName' },
-  { role: 'Opus', modelKey: 'opusModel', nameKey: 'opusModelName' },
-  { role: 'Fable', modelKey: 'fableModel', nameKey: 'fableModelName' },
-  { role: 'Haiku', modelKey: 'haikuModel', nameKey: 'haikuModelName' },
+  { role: 'Sonnet', modelKey: 'sonnetModel', nameKey: 'sonnetModelName', oneMKey: 'sonnetModel1m' },
+  { role: 'Opus', modelKey: 'opusModel', nameKey: 'opusModelName', oneMKey: 'opusModel1m' },
+  { role: 'Fable', modelKey: 'fableModel', nameKey: 'fableModelName', oneMKey: 'fableModel1m' },
+  { role: 'Haiku', modelKey: 'haikuModel', nameKey: 'haikuModelName', oneMKey: null },
 ] as const;
 
-const CLAUDE_MODEL_FIELD_KEYS = new Set([
-  ...CLAUDE_MODEL_ROWS.flatMap(({ modelKey, nameKey }) => [modelKey, nameKey]),
-  'subagentModel',
+const CLAUDE_SUBAGENT_ROW = {
+  modelKey: 'subagentModel',
+  oneMKey: 'subagentModel1m',
+} as const;
+
+/** Keys the mapping grid renders itself, so they are dropped from the generic field list. */
+const CLAUDE_MODEL_FIELD_KEYS = new Set<string>([
+  ...CLAUDE_MODEL_ROWS.flatMap(({ modelKey, nameKey, oneMKey }) =>
+    oneMKey ? [modelKey, nameKey, oneMKey] : [modelKey, nameKey],
+  ),
+  CLAUDE_SUBAGENT_ROW.modelKey,
+  CLAUDE_SUBAGENT_ROW.oneMKey,
 ]);
 
 export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogProps) {
@@ -690,6 +701,11 @@ function ExtraField({
   );
 }
 
+/** Shared column template so the header row and every mapping row stay aligned. */
+const CLAUDE_MAPPING_COLUMNS = 'md:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_8.5rem]';
+/** A mapping row: a bordered card on narrow screens, a bare grid row from md up. */
+const CLAUDE_MAPPING_ROW = `grid gap-2 rounded-lg border bg-card/70 p-3 ${CLAUDE_MAPPING_COLUMNS} md:items-start md:gap-3 md:border-0 md:bg-transparent md:p-0`;
+
 function ClaudeModelMappingFields({
   fields,
   values,
@@ -702,7 +718,7 @@ function ClaudeModelMappingFields({
   onChange: (key: string, value: string) => void;
 }) {
   const fieldByKey = new Map(fields.map((field) => [field.key, field]));
-  const subagentField = fieldByKey.get('subagentModel');
+  const subagentField = fieldByKey.get(CLAUDE_SUBAGENT_ROW.modelKey);
 
   return (
     <section
@@ -712,28 +728,29 @@ function ClaudeModelMappingFields({
       <div className="space-y-1">
         <h3 className="text-base font-semibold">模型映射</h3>
         <p className="text-sm text-muted-foreground">
-          显示名称仅影响 Claude Code 的 /model 菜单；留空时显示对应的实际模型 ID。
+          显示名称仅影响 Claude Code 的 /model 菜单；留空时显示对应的实际模型 ID。开启「1M
+          上下文」会在模型 ID 末尾追加 [1m]，仅在该模型确实支持 1M 时开启。
         </p>
       </div>
 
-      <div className="hidden grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)] gap-3 px-1 text-xs font-medium text-muted-foreground md:grid">
+      <div
+        className={`hidden gap-3 px-1 text-xs font-medium text-muted-foreground md:grid ${CLAUDE_MAPPING_COLUMNS}`}
+      >
         <span>模型角色</span>
         <span>显示名称</span>
         <span>实际请求模型</span>
+        <span>1M 上下文</span>
       </div>
 
       <div className="space-y-3">
-        {CLAUDE_MODEL_ROWS.map(({ role, modelKey, nameKey }) => {
+        {CLAUDE_MODEL_ROWS.map(({ role, modelKey, nameKey, oneMKey }) => {
           const modelField = fieldByKey.get(modelKey);
           const nameField = fieldByKey.get(nameKey);
           if (!modelField || !nameField) return null;
           const modelError = errors[`extra:${modelKey}`];
           const nameError = errors[`extra:${nameKey}`];
           return (
-            <div
-              key={role}
-              className="grid gap-2 rounded-lg border bg-card/70 p-3 md:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-3 md:border-0 md:bg-transparent md:p-0"
-            >
+            <div key={role} className={CLAUDE_MAPPING_ROW}>
               <div className="flex h-10 items-center rounded-lg border bg-muted/45 px-3 text-sm font-medium">
                 {role}
                 {modelField.required ? <span className="ml-1 text-destructive">*</span> : null}
@@ -778,12 +795,19 @@ function ClaudeModelMappingFields({
                   </p>
                 ) : null}
               </div>
+              <OneMCell
+                role={role}
+                field={oneMKey ? fieldByKey.get(oneMKey) : undefined}
+                value={oneMKey ? values[oneMKey] : undefined}
+                error={oneMKey ? errors[`extra:${oneMKey}`] : undefined}
+                onChange={onChange}
+              />
             </div>
           );
         })}
 
         {subagentField ? (
-          <div className="grid gap-2 rounded-lg border bg-card/70 p-3 md:grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)] md:items-start md:gap-3 md:border-0 md:bg-transparent md:p-0">
+          <div className={CLAUDE_MAPPING_ROW}>
             <div className="flex h-10 items-center rounded-lg border bg-muted/45 px-3 text-sm font-medium">
               Subagent
             </div>
@@ -810,10 +834,78 @@ function ClaudeModelMappingFields({
                 </p>
               ) : null}
             </div>
+            <OneMCell
+              role="Subagent"
+              field={fieldByKey.get(CLAUDE_SUBAGENT_ROW.oneMKey)}
+              value={values[CLAUDE_SUBAGENT_ROW.oneMKey]}
+              error={errors[`extra:${CLAUDE_SUBAGENT_ROW.oneMKey}`]}
+              onChange={onChange}
+            />
           </div>
         ) : null}
       </div>
     </section>
+  );
+}
+
+/**
+ * The 1M column of a mapping row. A tier whose models have no 1M variant — Haiku — gets a
+ * spelled-out placeholder instead of a control, so the empty cell reads as "unsupported"
+ * rather than "we forgot to render something".
+ *
+ * The flag is a boolean to the user but a `'true'`/`'false'` string in `extras`, which is
+ * what the adapter reads when deciding whether to append the `[1m]` suffix.
+ */
+function OneMCell({
+  role,
+  field,
+  value,
+  error,
+  onChange,
+}: {
+  role: string;
+  /** Absent when the server described no 1M field for this tier. */
+  field: FieldSpec | undefined;
+  value: string | undefined;
+  error?: string;
+  onChange: (key: string, value: string) => void;
+}) {
+  if (!field) {
+    return (
+      <div
+        data-slot="one-m-unsupported"
+        className="flex h-10 items-center rounded-lg border border-dashed bg-muted/20 px-3 text-sm text-muted-foreground"
+      >
+        {role} 不支持 1M
+      </div>
+    );
+  }
+  const id = `extra-${field.key}`;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex h-10 items-center">
+        <label
+          htmlFor={id}
+          className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+        >
+          <Checkbox
+            id={id}
+            checked={value === 'true'}
+            aria-label={field.label}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? `${id}-error` : undefined}
+            onCheckedChange={(checked) => onChange(field.key, checked === true ? 'true' : 'false')}
+          />
+          <span className="md:hidden">{field.label}</span>
+          <span className="hidden md:inline">启用</span>
+        </label>
+      </div>
+      {error ? (
+        <p id={`${id}-error`} className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

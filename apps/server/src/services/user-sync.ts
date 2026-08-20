@@ -1,4 +1,6 @@
+import { isDeepStrictEqual } from 'node:util';
 import type {
+  HarnessId,
   TransferConflict,
   TransferConflictPolicy,
   UserSyncPreview,
@@ -6,9 +8,12 @@ import type {
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
+import { IActivationService } from './activation';
+import { ICodexLoginCacheService } from './codex-login-cache';
 import { ICryptoService } from './crypto';
 import { IEnvironmentService, type LocalUser } from './environment';
 import { IFileService } from './files';
+import { ILiveWriteService, type PlannedWrite } from './live-write';
 import type { ProfileStore, StoredProfile } from './profiles';
 import { IUserService } from './users';
 import type { VaultEntry, VaultStore } from './vault';
@@ -23,12 +28,25 @@ type PortableUserData = {
 export interface IUserSyncService {
   readonly _serviceBrand: undefined;
   preview(sourceUsername: string): UserSyncPreview;
-  sync(sourceUsername: string, conflictPolicy: TransferConflictPolicy): UserSyncResponse;
+  sync(
+    sourceUsername: string,
+    conflictPolicy: TransferConflictPolicy,
+    migrateCodexLoginCache: boolean,
+    overwriteHarnesses?: HarnessId[],
+  ): UserSyncResponse;
 }
 
 export const IUserSyncService = createDecorator<IUserSyncService>('userSyncService');
 
-@inject(IEnvironmentService, IUserService, IFileService, ICryptoService)
+@inject(
+  IEnvironmentService,
+  IUserService,
+  IFileService,
+  ICryptoService,
+  ICodexLoginCacheService,
+  ILiveWriteService,
+  IActivationService,
+)
 export class UserSyncService implements IUserSyncService {
   declare readonly _serviceBrand: undefined;
 
@@ -37,20 +55,27 @@ export class UserSyncService implements IUserSyncService {
     private readonly users: IUserService,
     private readonly files: IFileService,
     private readonly crypto: ICryptoService,
+    private readonly codexLoginCache: ICodexLoginCacheService,
+    private readonly liveWrite: ILiveWriteService,
+    private readonly activation: IActivationService,
   ) {}
 
   preview(sourceUsername: string): UserSyncPreview {
     const target = this.environment.currentUser;
     const source = this.requireSource(sourceUsername, target);
     const portable = this.readPortable(source);
-    const targetProfiles = this.readProfiles();
+    const targetPortable = this.readPortable(target);
     const conflicts: TransferConflict[] = [];
     let profileCount = 0;
     const referencedProviders = new Set<string>();
     for (const [harness, profiles] of Object.entries(portable.profiles)) {
       for (const [name, profile] of Object.entries(profiles)) {
         profileCount++;
-        if (targetProfiles[harness]?.[name]) {
+        const targetProfile = targetPortable.profiles[harness]?.[name];
+        if (
+          targetProfile &&
+          !this.profilesEqual(profile, portable.providers, targetProfile, targetPortable.providers)
+        ) {
           conflicts.push({ harness: harness as TransferConflict['harness'], name });
         }
         if (profile.provider_id) referencedProviders.add(profile.provider_id);
@@ -62,16 +87,43 @@ export class UserSyncService implements IUserSyncService {
       profileCount,
       providerCount: referencedProviders.size,
       conflicts,
+      codexLoginCache: {
+        available: this.environment.runAsUser(source, () => this.codexLoginCache.exists()),
+        targetExists: this.codexLoginCache.exists(),
+      },
     };
   }
 
-  sync(sourceUsername: string, conflictPolicy: TransferConflictPolicy): UserSyncResponse {
+  sync(
+    sourceUsername: string,
+    conflictPolicy: TransferConflictPolicy,
+    migrateCodexLoginCache: boolean,
+    overwriteHarnesses: HarnessId[] = [],
+  ): UserSyncResponse {
     if (conflictPolicy !== 'skip' && conflictPolicy !== 'overwrite') {
       throw new HttpError(400, 'invalid conflict policy');
     }
     const target = this.environment.currentUser;
     const source = this.requireSource(sourceUsername, target);
+    const selectiveOverwrites = new Set<HarnessId>(overwriteHarnesses);
+    const overwriteAll = conflictPolicy === 'overwrite';
     const portable = this.readPortable(source);
+    const targetPortable = this.readPortable(target);
+    const cacheContent = migrateCodexLoginCache
+      ? this.environment.runAsUser(source, () => this.codexLoginCache.readOptional())
+      : undefined;
+    if (migrateCodexLoginCache && cacheContent === undefined) {
+      throw new HttpError(400, '来源用户没有可迁移的 Codex 登录缓存');
+    }
+    const cacheWrite: PlannedWrite[] = cacheContent
+      ? [
+          {
+            ...this.codexLoginCache.prepareWrite(cacheContent),
+            format: 'json',
+            secret: true,
+          },
+        ]
+      : [];
     const profilesPath = this.environment.files.profiles;
     const vaultPath = this.environment.files.vault;
     const profileSnapshot = this.files.readOptional(profilesPath);
@@ -83,6 +135,7 @@ export class UserSyncService implements IUserSyncService {
       {},
     );
     const warnings: string[] = [];
+    const activeProfilesToReapply = new Map<HarnessId, string>();
 
     let imported = 0;
     let overwritten = 0;
@@ -91,7 +144,12 @@ export class UserSyncService implements IUserSyncService {
     for (const [harness, profiles] of Object.entries(portable.profiles)) {
       for (const [name, profile] of Object.entries(profiles)) {
         const exists = targetProfiles[harness]?.[name] !== undefined;
-        if (exists && conflictPolicy === 'skip') {
+        const targetProfile = targetPortable.profiles[harness]?.[name];
+        const unchanged =
+          targetProfile !== undefined &&
+          this.profilesEqual(profile, portable.providers, targetProfile, targetPortable.providers);
+        const overwrite = overwriteAll || selectiveOverwrites.has(harness as HarnessId);
+        if (unchanged || (exists && !overwrite)) {
           skipped++;
           continue;
         }
@@ -99,9 +157,7 @@ export class UserSyncService implements IUserSyncService {
         if (exists) {
           overwritten++;
           if (active[harness]?.name === name) {
-            warnings.push(
-              `${harness}/${name} 当前处于激活状态；已更新配置库但未改写原生文件，请手动重新激活`,
-            );
+            activeProfilesToReapply.set(harness as HarnessId, name);
           }
         } else imported++;
       }
@@ -143,13 +199,26 @@ export class UserSyncService implements IUserSyncService {
       };
     }
 
-    try {
-      this.files.writeJson(vaultPath, targetVault);
-      this.files.writeJson(profilesPath, targetProfiles);
-    } catch (error) {
-      this.restore(vaultPath, vaultSnapshot);
-      this.restore(profilesPath, profileSnapshot);
-      throw error;
+    this.liveWrite.transaction('codex', `同步-${source.username}`, cacheWrite, () => {
+      try {
+        this.files.writeJson(vaultPath, targetVault);
+        this.files.writeJson(profilesPath, targetProfiles);
+      } catch (error) {
+        this.restore(vaultPath, vaultSnapshot);
+        this.restore(profilesPath, profileSnapshot);
+        throw error;
+      }
+    });
+
+    for (const [harness, name] of activeProfilesToReapply) {
+      try {
+        const result = this.activation.activate(harness, name);
+        warnings.push(...result.warnings.map((warning) => `${harness}/${name}: ${warning}`));
+      } catch (error) {
+        warnings.push(
+          `${harness}/${name} 已更新配置库，但自动重新激活失败：${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
 
     return {
@@ -160,6 +229,7 @@ export class UserSyncService implements IUserSyncService {
       overwritten,
       skipped,
       providersCopied: providerMap.size,
+      codexLoginCacheMigrated: cacheWrite.length > 0,
       warnings,
     };
   }
@@ -178,18 +248,20 @@ export class UserSyncService implements IUserSyncService {
       const vault = this.readVault();
       const portableProviders: Record<string, PortableProvider> = {};
       for (const [id, entry] of Object.entries(vault.entries)) {
-        portableProviders[id] = { ...entry, apiKey: this.crypto.decrypt(entry.api_key) };
+        const { api_key: encryptedKey, ...provider } = entry;
+        portableProviders[id] = { ...provider, apiKey: this.crypto.decrypt(encryptedKey) };
       }
       const portableProfiles: PortableUserData['profiles'] = {};
       for (const [harness, entries] of Object.entries(profiles)) {
         portableProfiles[harness] = {};
         for (const [name, profile] of Object.entries(entries)) {
+          const { api_key: encryptedKey, ...storedProfile } = profile;
           const providerKey = profile.provider_id
             ? portableProviders[profile.provider_id]?.apiKey
             : undefined;
           portableProfiles[harness]![name] = {
-            ...profile,
-            apiKey: providerKey ?? this.crypto.decrypt(profile.api_key),
+            ...storedProfile,
+            apiKey: providerKey ?? this.crypto.decrypt(encryptedKey),
           };
         }
       }
@@ -199,6 +271,37 @@ export class UserSyncService implements IUserSyncService {
 
   private readProfiles(): ProfileStore {
     return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
+  }
+
+  private profilesEqual(
+    source: PortableProfile,
+    sourceProviders: Record<string, PortableProvider>,
+    target: PortableProfile,
+    targetProviders: Record<string, PortableProvider>,
+  ): boolean {
+    return isDeepStrictEqual(
+      this.comparableProfile(source, sourceProviders),
+      this.comparableProfile(target, targetProviders),
+    );
+  }
+
+  private comparableProfile(
+    profile: PortableProfile,
+    providers: Record<string, PortableProvider>,
+  ): Record<string, unknown> {
+    const { updated_at: _updatedAt, provider_id: providerId, ...content } = profile;
+    const provider = providerId ? providers[providerId] : undefined;
+    const comparableProvider = provider
+      ? {
+          name: provider.name,
+          notes: provider.notes,
+          endpoints: provider.endpoints,
+          apiKey: provider.apiKey,
+        }
+      : providerId
+        ? { missing: true }
+        : undefined;
+    return { ...content, provider: comparableProvider };
   }
 
   private readVault(): VaultStore {
