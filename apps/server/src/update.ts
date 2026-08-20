@@ -31,7 +31,9 @@ export function compareVersions(a: string, b: string): number {
 
 /**
  * Compares the running version against the latest release on the npm registry.
- * Registry failures degrade to "no update known" instead of failing the page.
+ * Registry failures degrade to "no update known" instead of failing the page, and
+ * are cached for the same TTL so repeated checks (doctor, dashboard) do not hammer
+ * a registry that is unreachable.
  */
 export async function checkForUpdate(force = false): Promise<UpdateCheck> {
   const current = await serverVersion();
@@ -59,6 +61,8 @@ export async function checkForUpdate(force = false): Promise<UpdateCheck> {
       updateAvailable: latest !== null && compareVersions(latest, current) > 0,
     };
   } catch {
+    // Cache the failure too: an unreachable registry stays unreachable for a while.
+    cached = { latest: null, at: Date.now() };
     return { current, latest: null, updateAvailable: false };
   }
 }
