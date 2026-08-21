@@ -1001,7 +1001,7 @@ describe('rest api', () => {
       }),
     });
     expect((await withoutCachePreview.json()) as TransferPreview).toMatchObject({
-      codexLoginCache: { available: false, targetExists: true },
+      codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
     });
 
     const withCache = await context.app.request('/api/transfer/export', {
@@ -1018,7 +1018,7 @@ describe('rest api', () => {
       body: JSON.stringify({ envelope, passphrase: 'portable-secret' }),
     });
     expect((await withCachePreview.json()) as TransferPreview).toMatchObject({
-      codexLoginCache: { available: true, targetExists: true },
+      codexLoginCache: { available: true, targetExists: true, migrationNeeded: false },
     });
 
     await writeFile(authPath, '{"tokens":{"access_token":"target-session"}}\n', { mode: 0o644 });
@@ -1053,6 +1053,21 @@ describe('rest api', () => {
     });
     expect(await readFile(authPath, 'utf8')).toBe(exportedCache);
     expect((await stat(authPath)).mode & 0o777).toBe(0o600);
+
+    const redundant = await context.app.request('/api/transfer/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
+      body: JSON.stringify({
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'skip',
+        restoreActive: false,
+        migrateCodexLoginCache: true,
+      }),
+    });
+    expect((await redundant.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
+      codexLoginCacheMigrated: false,
+    });
   });
 
   test('rejects semantically invalid portable active states before preview or import', async () => {

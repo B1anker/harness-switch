@@ -260,7 +260,11 @@ describe('local Unix users', () => {
       method: 'POST',
       body: JSON.stringify({ sourceUser: peer.username }),
     });
-    expect(preview.codexLoginCache).toEqual({ available: true, targetExists: true });
+    expect(preview.codexLoginCache).toEqual({
+      available: true,
+      targetExists: true,
+      migrationNeeded: true,
+    });
 
     const unchanged = await json(app, '/api/users/sync', firstCookie, {
       method: 'POST',
@@ -281,6 +285,29 @@ describe('local Unix users', () => {
     expect(readFileSync(sourceAuth, 'utf8')).toBe(sourceCache);
     expect(readFileSync(targetAuth, 'utf8')).toBe(sourceCache);
     expect(statSync(targetAuth).mode & 0o777).toBe(0o600);
+
+    const equivalentCache = '{\n  "tokens": { "access_token": "source-login-session" }\n}\n';
+    writeFileSync(targetAuth, equivalentCache, { mode: 0o600 });
+    const matchingPreview = await json(app, '/api/users/sync/preview', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({ sourceUser: peer.username }),
+    });
+    expect(matchingPreview.codexLoginCache).toEqual({
+      available: true,
+      targetExists: true,
+      migrationNeeded: false,
+    });
+
+    const redundant = await json(app, '/api/users/sync', firstCookie, {
+      method: 'POST',
+      body: JSON.stringify({
+        sourceUser: peer.username,
+        conflictPolicy: 'skip',
+        migrateCodexLoginCache: true,
+      }),
+    });
+    expect(redundant.codexLoginCacheMigrated).toBe(false);
+    expect(readFileSync(targetAuth, 'utf8')).toBe(equivalentCache);
   });
 
   test('rejects a malformed requested Codex login cache before touching the target', async () => {

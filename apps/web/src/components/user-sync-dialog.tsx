@@ -90,6 +90,8 @@ export function UserSyncDialog({
       });
       setPreview(inspected);
       setOverwriteHarnesses([]);
+      setMigrateCodexLoginCache(false);
+      setConfirmingCacheMigration(false);
     } catch (err) {
       setPreview(null);
       setOverwriteHarnesses([]);
@@ -217,7 +219,7 @@ export function UserSyncDialog({
                       </div>
                     </div>
                   ) : null}
-                  {preview.codexLoginCache.available ? (
+                  {preview.codexLoginCache.available && preview.codexLoginCache.migrationNeeded ? (
                     <label className="block space-y-3 rounded-xl border bg-background/70 p-3 text-sm">
                       <span className="flex cursor-pointer items-start gap-3">
                         <Checkbox

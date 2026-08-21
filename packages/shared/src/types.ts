@@ -114,6 +114,8 @@ export type UsersResponse = {
 export type CodexLoginCacheState = {
   available: boolean;
   targetExists: boolean;
+  /** True only when the source cache would change the target cache. */
+  migrationNeeded: boolean;
 };
 
 export type UserSyncRequest = {

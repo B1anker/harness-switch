@@ -65,6 +65,10 @@ export class UserSyncService implements IUserSyncService {
     const source = this.requireSource(sourceUsername, target);
     const portable = this.readPortable(source);
     const targetPortable = this.readPortable(target);
+    const sourceCodexLoginCache = this.environment.runAsUser(source, () =>
+      this.codexLoginCache.readOptional(),
+    );
+    const targetCodexLoginCacheExists = this.codexLoginCache.exists();
     const conflicts: TransferConflict[] = [];
     let profileCount = 0;
     const referencedProviders = new Set<string>();
@@ -88,8 +92,11 @@ export class UserSyncService implements IUserSyncService {
       providerCount: referencedProviders.size,
       conflicts,
       codexLoginCache: {
-        available: this.environment.runAsUser(source, () => this.codexLoginCache.exists()),
-        targetExists: this.codexLoginCache.exists(),
+        available: sourceCodexLoginCache !== undefined,
+        targetExists: targetCodexLoginCacheExists,
+        migrationNeeded:
+          sourceCodexLoginCache !== undefined &&
+          !this.codexLoginCache.matchesCurrent(sourceCodexLoginCache),
       },
     };
   }
@@ -115,15 +122,16 @@ export class UserSyncService implements IUserSyncService {
     if (migrateCodexLoginCache && cacheContent === undefined) {
       throw new HttpError(400, '来源用户没有可迁移的 Codex 登录缓存');
     }
-    const cacheWrite: PlannedWrite[] = cacheContent
-      ? [
-          {
-            ...this.codexLoginCache.prepareWrite(cacheContent),
-            format: 'json',
-            secret: true,
-          },
-        ]
-      : [];
+    const cacheWrite: PlannedWrite[] =
+      cacheContent && !this.codexLoginCache.matchesCurrent(cacheContent)
+        ? [
+            {
+              ...this.codexLoginCache.prepareWrite(cacheContent),
+              format: 'json',
+              secret: true,
+            },
+          ]
+        : [];
     const profilesPath = this.environment.files.profiles;
     const vaultPath = this.environment.files.vault;
     const profileSnapshot = this.files.readOptional(profilesPath);

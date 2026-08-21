@@ -108,7 +108,7 @@ test('previews file contents and conflicts before enabling import', async () => 
             conflictPolicy: 'skip',
             restoreActive: true,
             codexActivationAuthEffect: 'none',
-            codexLoginCache: { available: false, targetExists: false },
+            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
           };
     return new Response(JSON.stringify(body), {
       status: 200,
@@ -153,7 +153,7 @@ test('requires a separate import choice before writing a bundled Codex login cac
               conflictPolicy: 'skip',
               restoreActive: true,
               codexActivationAuthEffect: 'none',
-              codexLoginCache: { available: true, targetExists: true },
+              codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
             }
           : {
               ok: true,
@@ -218,7 +218,7 @@ test('re-checks activation effects before importing and requires final acknowled
               conflictPolicy: request.conflictPolicy ?? 'skip',
               restoreActive: request.restoreActive === true,
               codexActivationAuthEffect: request.restoreActive === true ? 'openai-api-key' : 'none',
-              codexLoginCache: { available: false, targetExists: true },
+              codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
             }
           : {
               ok: true,
@@ -283,7 +283,7 @@ test('closes on a successful import and reports the result in the toast', async 
               conflictPolicy: 'skip',
               restoreActive: true,
               codexActivationAuthEffect: 'none',
-              codexLoginCache: { available: false, targetExists: false },
+              codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
             }
           : {
               ok: true,

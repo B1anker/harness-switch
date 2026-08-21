@@ -1,5 +1,6 @@
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IEnvironmentService } from './environment';
@@ -14,6 +15,8 @@ export interface ICodexLoginCacheService {
   exists(): boolean;
   /** Reads and validates the selected user's cache, returning undefined only when absent. */
   readOptional(): string | undefined;
+  /** Compares validated JSON values, ignoring formatting and object key order. */
+  matchesCurrent(content: string): boolean;
   /** Validates content without writing it, for payload validation before a transaction starts. */
   validate(content: string): void;
   /** Validates the destination and returns its fixed adapter-owned path. */
@@ -53,6 +56,15 @@ export class CodexLoginCacheService implements ICodexLoginCacheService {
     }
     this.validate(content);
     return content;
+  }
+
+  matchesCurrent(content: string): boolean {
+    this.validate(content);
+    const current = this.readOptional();
+    return (
+      current !== undefined &&
+      isDeepStrictEqual(JSON.parse(content) as unknown, JSON.parse(current) as unknown)
+    );
   }
 
   validate(content: string): void {

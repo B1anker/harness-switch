@@ -386,7 +386,7 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                     .join('、')}
                 </div>
               ) : null}
-              {preview.codexLoginCache?.available ? (
+              {preview.codexLoginCache?.available && preview.codexLoginCache.migrationNeeded ? (
                 <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
                   <span className="flex cursor-pointer items-start gap-3">
                     <Checkbox

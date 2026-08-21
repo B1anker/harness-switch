@@ -169,6 +169,7 @@ export class TransferService implements ITransferService {
     const payload = this.decrypt(envelope, passphrase);
     const existing = this.readStore();
     const plan = this.planImport(payload, existing, conflictPolicy, restoreActive);
+    const targetCodexLoginCacheExists = this.codexLoginCache.exists();
     return {
       exportedAt: payload.exportedAt,
       profileCount: payload.profiles.length,
@@ -185,7 +186,10 @@ export class TransferService implements ITransferService {
       codexActivationAuthEffect: plan.codexActivationAuthEffect,
       codexLoginCache: {
         available: payload.codexLoginCache !== undefined,
-        targetExists: this.codexLoginCache.exists(),
+        targetExists: targetCodexLoginCacheExists,
+        migrationNeeded:
+          payload.codexLoginCache !== undefined &&
+          !this.codexLoginCache.matchesCurrent(payload.codexLoginCache),
       },
     };
   }
@@ -202,15 +206,16 @@ export class TransferService implements ITransferService {
     if (migrateCodexLoginCache && payload.codexLoginCache === undefined) {
       throw new HttpError(400, '导出包不包含可迁移的 Codex 登录缓存');
     }
-    const cacheWrite: PlannedWrite[] = migrateCodexLoginCache
-      ? [
-          {
-            ...this.codexLoginCache.prepareWrite(payload.codexLoginCache!),
-            format: 'json',
-            secret: true,
-          },
-        ]
-      : [];
+    const cacheWrite: PlannedWrite[] =
+      migrateCodexLoginCache && !this.codexLoginCache.matchesCurrent(payload.codexLoginCache!)
+        ? [
+            {
+              ...this.codexLoginCache.prepareWrite(payload.codexLoginCache!),
+              format: 'json',
+              secret: true,
+            },
+          ]
+        : [];
     const plan = this.planImport(payload, this.readStore(), conflictPolicy, restoreActive);
 
     const profilesPath = this.environment.files.profiles;

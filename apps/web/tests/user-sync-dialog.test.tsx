@@ -34,7 +34,7 @@ test('requires a final confirmation before migrating a source Codex login cache'
             profileCount: 1,
             providerCount: 0,
             conflicts: [],
-            codexLoginCache: { available: true, targetExists: true },
+            codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
           }
         : {
             ok: true,
@@ -79,6 +79,41 @@ test('requires a final confirmation before migrating a source Codex login cache'
   });
 });
 
+test('does not offer migration when the Codex login caches already match', async () => {
+  globalThis.fetch = (async (path: string) => {
+    const body =
+      path === '/api/users/sync/preview'
+        ? {
+            sourceUser: 'source',
+            targetUser: 'owner',
+            profileCount: 0,
+            providerCount: 0,
+            conflicts: [],
+            codexLoginCache: { available: true, targetExists: true, migrationNeeded: false },
+          }
+        : {
+            ok: true,
+            sourceUser: 'source',
+            targetUser: 'owner',
+            imported: 0,
+            overwritten: 0,
+            skipped: 0,
+            providersCopied: 0,
+            codexLoginCacheMigrated: false,
+            warnings: [],
+          };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof globalThis.fetch;
+
+  render(<UserSyncDialog open onOpenChange={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
+  await screen.findByText('配置 0');
+  expect(screen.queryByText('迁移 Codex 官方登录缓存（auth.json）')).toBeNull();
+});
+
 test('lets the user overwrite conflicts for selected harnesses only', async () => {
   const requests: Array<{ path: string; body: string }> = [];
   globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
@@ -95,7 +130,7 @@ test('lets the user overwrite conflicts for selected harnesses only', async () =
               { harness: 'claude', name: 'backup' },
               { harness: 'kimi', name: 'main' },
             ],
-            codexLoginCache: { available: false, targetExists: false },
+            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
           }
         : {
             ok: true,
@@ -144,7 +179,7 @@ test('closes on a successful sync and reports the result in the toast', async ()
             profileCount: 3,
             providerCount: 2,
             conflicts: [],
-            codexLoginCache: { available: false, targetExists: false },
+            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
           }
         : {
             ok: true,
@@ -188,7 +223,7 @@ test('keeps a failed sync on screen with its reason instead of closing', async (
             profileCount: 1,
             providerCount: 0,
             conflicts: [],
-            codexLoginCache: { available: false, targetExists: false },
+            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         )
