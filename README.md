@@ -33,6 +33,10 @@ ssh -N -L 8787:127.0.0.1:8787 user@your-server
 
 Then open <http://127.0.0.1:8787> in your local browser.
 
+### Interface language
+
+The web UI supports English and Simplified Chinese. Use the language button in the login page or dashboard header to switch languages. Chinese remains the default for existing behavior; your selection is stored in the browser and is reused on later visits. The setting affects only the web interface—it does not change profile data or generated configuration files.
+
 ## Configuration
 
 Create one or more profiles per harness in the web UI. A profile holds a display name, API Base URL, API key, model, notes, and whatever extra fields that harness needs. Select **Activate** to make a profile current.
@@ -70,7 +74,7 @@ Two known limitations:
 
 ### Advanced: taking over the raw file
 
-Any field the form does not expose can be set by editing the raw file content in the profile's **高级：原始配置** section. Once edited, that file is generated from your text instead of the form fields until you select **恢复为自动生成**. Content that cannot be parsed back is rejected before it reaches disk.
+Any field the form does not expose can be set by editing the raw file content in the profile's **Advanced: raw configuration** section. Once edited, that file is generated from your text instead of the form fields until you select **Restore automatic generation**. Content that cannot be parsed back is rejected before it reaches disk.
 
 ### Backups and rollback
 
@@ -82,7 +86,7 @@ Switching away from a profile first reads the live file back into that profile's
 
 ### Moving every profile to another machine
 
-Use **导入 / 导出** in the top bar to create one `.hsw-backup` file containing every Harness profile, API key, raw-file override, and current activation choice. The bundle is encrypted with a migration password you choose, so it does not depend on the source machine's `aes-256-gcm.key`.
+Use **Import / Export** in the top bar to create one `.hsw-backup` file containing every Harness profile, API key, raw-file override, and current activation choice. The bundle is encrypted with a migration password you choose, so it does not depend on the source machine's `aes-256-gcm.key`.
 
 On the destination machine, select the bundle and enter the migration password. The UI shows profile counts and same-name conflicts before it writes anything. Import keeps destination profiles by default; overwriting is an explicit choice. Restoring the exported activation state is optional.
 
@@ -92,7 +96,7 @@ Keep the migration password separately from the bundle. It cannot be recovered f
 
 ### Provider Vault: shared credentials
 
-The **凭据库 (Provider Vault)** stores an API key once under a named entry with one or more named endpoints (each a base URL), encrypted with the same AES-256-GCM key that protects `profiles.json`. A profile can reference a vault entry instead of carrying its own key:
+The **Provider Vault** stores an API key once under a named entry with one or more named endpoints (each a base URL), encrypted with the same AES-256-GCM key that protects `profiles.json`. A profile can reference a vault entry instead of carrying its own key:
 
 - The vault owns the credential; the profile keeps a materialized cache so existing readers (transfer export, `active.json`, `env.sh`) keep working unchanged.
 - Rotating the vault key or an endpoint re-applies every **active** profile that references the entry, so the live files follow immediately. Failures are reported as warnings.
@@ -101,7 +105,7 @@ The **凭据库 (Provider Vault)** stores an API key once under a named entry wi
 
 ### Configuration drift
 
-The dashboard's **配置漂移** panel compares what the active profile would render against the actual files on disk, using parsed-value comparison for JSON/TOML/YAML so a re-render that only reorders keys does not count as drift. Each file is reported as:
+The dashboard's **Configuration drift** panel compares what the active profile would render against the actual files on disk, using parsed-value comparison for JSON/TOML/YAML so a re-render that only reorders keys does not count as drift. Each file is reported as:
 
 - `in-sync` — disk matches what the profile would write,
 - `drifted` — disk differs from what the profile would write,
@@ -111,12 +115,12 @@ The dashboard's **配置漂移** panel compares what the active profile would re
 
 Two repair actions are offered per harness:
 
-- **重新应用 (re-apply)** rewrites the live files from the active profile, with the usual backup-before-write and all-or-nothing rollback.
-- **采纳现场配置 (adopt)** reads the live files back into the profile record (same path as the pre-switch backfill). It refuses with `409` when the profile has manual raw overrides, and never adopts content the tool itself could not parse.
+- **Re-apply** rewrites the live files from the active profile, with the usual backup-before-write and all-or-nothing rollback.
+- **Adopt live configuration** reads the live files back into the profile record (same path as the pre-switch backfill). It refuses with `409` when the profile has manual raw overrides, and never adopts content the tool itself could not parse.
 
 ### Diagnostics (Doctor)
 
-The **诊断 (Doctor)** panel runs read-only checks per harness: whether the tool's CLI is on `PATH` (`install`), whether each target's config directory exists (`configDir`), whether each target file exists and is readable/writable (`files`, with a warning when a config file holding credentials is group/other-readable), whether the files parse (`parse`), and whether live state drifts from the active profile (`drift`). A global update check reports whether a newer release exists (`updatedAvailable`).
+The **Diagnostics (Doctor)** panel runs read-only checks per harness: whether the tool's CLI is on `PATH` (`install`), whether each target's config directory exists (`configDir`), whether each target file exists and is readable/writable (`files`, with a warning when a config file holding credentials is group/other-readable), whether the files parse (`parse`), and whether live state drifts from the active profile (`drift`). A global update check reports whether a newer release exists (`updatedAvailable`).
 
 The connectivity probe is **disabled by default in the MVP**: passing `--probe` only records a `unknown`-status check that reports the active base URL and explains that no network request is made.
 

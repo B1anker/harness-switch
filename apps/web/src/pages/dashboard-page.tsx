@@ -17,6 +17,7 @@ import { DoctorDialog } from '@/components/doctor-dialog';
 import { DriftPanel } from '@/components/drift-panel';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
+import { LanguageToggle } from '@/components/language-toggle';
 import { NoticeToast } from '@/components/notice-toast';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
@@ -33,6 +34,7 @@ import {
 import { UpdateButton } from '@/components/update-button';
 import { UserSyncDialog } from '@/components/user-sync-dialog';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
+import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -42,6 +44,7 @@ type Editing = {
 };
 
 export function DashboardPage() {
+  const { locale } = useI18n();
   const harnesses = useAppStore((state) => state.harnesses);
   const envFile = useAppStore((state) => state.envFile);
   const logout = useAppStore((state) => state.logout);
@@ -113,6 +116,7 @@ export function DashboardPage() {
               <Stethoscope />
               <span className="hidden sm:inline">诊断</span>
             </Button>
+            <LanguageToggle />
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => void logout()}>
               <LogOut />
@@ -176,6 +180,7 @@ export function DashboardPage() {
           <ContextPanel
             harness={selectedHarness}
             latestBackup={backups.find((backup) => backup.harness === selectedHarness.id)}
+            locale={locale}
           />
         ) : null}
       </div>
@@ -286,8 +291,10 @@ function HarnessTabs({
 function ContextPanel({
   harness,
   latestBackup,
+  locale,
 }: {
   harness: HarnessSummary;
+  locale: string;
   latestBackup:
     | {
         profile: string;
@@ -335,8 +342,8 @@ function ContextPanel({
                 <p className="mt-1 truncate text-sm font-medium">{latestBackup.profile}</p>
               </div>
               <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">
-                {new Date(latestBackup.createdAt).toLocaleString()} · {latestBackup.files.length}{' '}
-                个文件
+                {new Date(latestBackup.createdAt).toLocaleString(locale)} ·{' '}
+                {latestBackup.files.length} 个文件
               </p>
             </div>
           ) : (

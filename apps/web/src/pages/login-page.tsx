@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +31,10 @@ export function LoginPage() {
             激活档案时直接写入各 CLI 自己的配置文件，不依赖你在某个 shell 里 source 过什么。
           </p>
         </div>
-        <ThemeToggle />
+        <div className="flex gap-2">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
       </section>
       <section className="flex items-center justify-center px-4 py-10">
         <form className="w-full max-w-sm space-y-5" onSubmit={onSubmit}>
@@ -39,7 +43,10 @@ export function LoginPage() {
               <p className="font-mono text-xs text-muted-foreground">HS / harness-switch</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight">服务器端配置中枢</h1>
             </div>
-            <ThemeToggle />
+            <div className="flex gap-2">
+              <LanguageToggle />
+              <ThemeToggle />
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">输入首次启动时终端打印的 Web 密码。</p>
           <div className="space-y-2">

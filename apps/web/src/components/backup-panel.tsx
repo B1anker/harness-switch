@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useI18n } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 
 type BackupPanelProps = {
@@ -19,6 +20,7 @@ type BackupPanelProps = {
 };
 
 export function BackupPanel({ harnessId }: BackupPanelProps) {
+  const { locale } = useI18n();
   const backups = useAppStore((state) => state.backups);
   const loadBackups = useAppStore((state) => state.loadBackups);
   const loadBackupDetail = useAppStore((state) => state.loadBackupDetail);
@@ -109,7 +111,7 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
                       {backup.current ? <Badge>当前</Badge> : null}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
-                      {formatBackupTime(backup.createdAt)} · {backup.files.length} 个文件
+                      {formatBackupTime(backup.createdAt, locale)} · {backup.files.length} 个文件
                       {backup.files.some((file) => !file.existed) ? ' · 含删除' : ''}
                     </p>
                   </div>
@@ -171,7 +173,7 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
   );
 }
 
-function formatBackupTime(value: string): string {
+function formatBackupTime(value: string, locale: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale);
 }

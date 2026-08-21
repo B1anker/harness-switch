@@ -24,6 +24,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useI18n } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 
 type ProviderVaultDialogProps = {
@@ -51,6 +52,7 @@ type EndpointFieldErrors = {
  * done by submitting a new key.
  */
 export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogProps) {
+  const { locale } = useI18n();
   const providers = useAppStore((state) => state.providers);
   const providersLoading = useAppStore((state) => state.providersLoading);
   const providersError = useAppStore((state) => state.providersError);
@@ -177,7 +179,7 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
                             <Badge variant="outline">未配置密钥</Badge>
                           )}
                           <span className="font-mono text-[11px] text-muted-foreground">
-                            {formatTime(entry.updatedAt)}
+                            {formatTime(entry.updatedAt, locale)}
                           </span>
                         </div>
                         {entry.notes ? (
@@ -549,7 +551,7 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
   );
 }
 
-function formatTime(value: string): string {
+function formatTime(value: string, locale: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale);
 }
