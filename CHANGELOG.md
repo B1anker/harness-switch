@@ -1,3 +1,10 @@
+# [0.16.0](https://github.com/B1anker/harness-switch/compare/v0.15.0...v0.16.0) (2026-08-21)
+
+
+### Features
+
+* add English web interface ([81aef0f](https://github.com/B1anker/harness-switch/commit/81aef0f60eacc3a9dd0640d5a1ec217a15cc19aa))
+
 # [0.15.0](https://github.com/B1anker/harness-switch/compare/v0.14.0...v0.15.0) (2026-08-20)
 
 
