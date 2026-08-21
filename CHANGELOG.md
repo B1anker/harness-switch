@@ -1,3 +1,10 @@
+## [0.16.1](https://github.com/B1anker/harness-switch/compare/v0.16.0...v0.16.1) (2026-08-21)
+
+
+### Bug Fixes
+
+* prompt only for changed Codex auth cache ([1d2bad1](https://github.com/B1anker/harness-switch/commit/1d2bad18f6c06080000f11cb0c14b6091e26319b))
+
 # [0.16.0](https://github.com/B1anker/harness-switch/compare/v0.15.0...v0.16.0) (2026-08-21)
 
 
