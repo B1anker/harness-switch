@@ -16,11 +16,19 @@ import type {
   HarnessId,
   HarnessSummary,
   LocalUserPublic,
+  MessageParams,
+  OperationReceipt,
+  OperationsResponse,
+  OperationUndoResponse,
   PreviewResponse,
   PreviewTarget,
   ProviderMutationResponse,
   ProviderPublic,
   ProvidersResponse,
+  ScanHarnessResult,
+  ScanImportResponse,
+  ScanImportSelection,
+  ScanResponse,
   SessionResponse,
   UpdateProfileRequest,
   UpdateProviderRequest,
@@ -35,11 +43,16 @@ import {
   driftAdoptPath,
   driftPath,
   driftReapplyPath,
+  operationsPath,
+  operationUndoPath,
   profilePath,
   profilesCollectionPath,
   providerPath,
   providersPath,
+  scanImportPath,
+  scanPath,
 } from '@/lib/api';
+import { errorLine, type MessageLine, messageLine } from '@/lib/messages';
 
 type AppState = {
   sessionChecked: boolean;
@@ -48,25 +61,38 @@ type AppState = {
   users: LocalUserPublic[];
   usersLoading: boolean;
   loading: boolean;
-  error: string | null;
+  error: MessageLine | null;
   envFile: string;
   harnesses: HarnessSummary[];
   backups: BackupEntry[];
-  notice: string | null;
+  /**
+   * Lines for the toast. Kept as keys rather than sentences because these are built
+   * outside React, where there is no `t` — and because an open toast should follow a
+   * language switch.
+   */
+  notice: MessageLine[] | null;
   /** Provider Vault entries; null until the first successful load. */
   providers: ProviderPublic[] | null;
   providersLoading: boolean;
-  providersError: string | null;
+  providersError: MessageLine | null;
   /** Doctor reports, one per harness; null until the first run. */
   doctor: DoctorReport[] | null;
   /** True when a newer release exists on the registry. */
   doctorUpdatedAvailable: boolean;
   doctorLoading: boolean;
-  doctorError: string | null;
+  doctorError: MessageLine | null;
   /** Drift report per harness; null until the first load. */
   drift: DriftSummary[] | null;
   driftLoading: boolean;
-  driftError: string | null;
+  driftError: MessageLine | null;
+  /** Configuration found on disk for the import wizard; null until the first scan. */
+  scan: ScanHarnessResult[] | null;
+  scanLoading: boolean;
+  scanError: MessageLine | null;
+  /** Operation receipts, newest first; null until the first load. */
+  operations: OperationReceipt[] | null;
+  operationsLoading: boolean;
+  operationsError: MessageLine | null;
   loadSession: () => Promise<void>;
   login: (password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -83,7 +109,7 @@ type AppState = {
   loadBackupDetail: (id: string) => Promise<BackupDetail>;
   restoreBackup: (id: string) => Promise<void>;
   /** Lets a dialog hand its success message to the toast so it can close itself. */
-  setNotice: (notice: string) => void;
+  setNotice: (notice: MessageLine[]) => void;
   clearNotice: () => void;
   loadProviders: () => Promise<void>;
   createProvider: (input: CreateProviderRequest) => Promise<void>;
@@ -95,7 +121,22 @@ type AppState = {
   loadDrift: () => Promise<void>;
   reapplyDrift: (harnessId: HarnessId) => Promise<DriftFileState[]>;
   adoptDrift: (harnessId: HarnessId) => Promise<DriftAdoptResponse>;
+  /** Reads what the five tools already have configured; never writes anything. */
+  loadScan: () => Promise<void>;
+  importScan: (selections: ScanImportSelection[]) => Promise<ScanImportResponse>;
+  loadOperations: () => Promise<void>;
+  undoOperation: (id: string) => Promise<void>;
 };
+
+/**
+ * The `user` interpolation for an activation notice. A username is data; the stand-in
+ * for "the current user" is copy, so it travels as a key and is translated on render.
+ */
+function activationLine(key: string, username: string, params: MessageParams): MessageLine {
+  return username
+    ? { key, params: { ...params, user: username } }
+    : { key, params, paramKeys: { user: 'notice.currentUser' } };
+}
 
 export const useAppStore = create<AppState>((set, get) => ({
   sessionChecked: false,
@@ -119,6 +160,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   drift: null,
   driftLoading: false,
   driftError: null,
+  scan: null,
+  scanLoading: false,
+  scanError: null,
+  operations: null,
+  operationsLoading: false,
+  operationsError: null,
 
   loadSession: async () => {
     try {
@@ -136,7 +183,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({
         authenticated: false,
         sessionChecked: true,
-        error: error instanceof ApiError && error.status === 401 ? null : (error as Error).message,
+        error: error instanceof ApiError && error.status === 401 ? null : errorLine(error),
       });
     }
   },
@@ -152,7 +199,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().loadUsers();
       await get().loadHarnesses();
     } catch (error) {
-      set({ loading: false, error: (error as Error).message });
+      set({ loading: false, error: errorLine(error) });
       throw error;
     }
   },
@@ -179,7 +226,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const data = await api<UsersResponse>('/api/users');
       set({ users: data.items, currentUser: data.currentUser, usersLoading: false });
     } catch (error) {
-      set({ usersLoading: false, error: (error as Error).message });
+      set({ usersLoading: false, error: errorLine(error) });
     }
   },
 
@@ -202,7 +249,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await Promise.all([get().loadHarnesses(), get().loadBackups()]);
       set({ usersLoading: false, loading: false });
     } catch (error) {
-      set({ usersLoading: false, loading: false, error: (error as Error).message });
+      set({ usersLoading: false, loading: false, error: errorLine(error) });
       throw error;
     }
   },
@@ -220,7 +267,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ authenticated: false, loading: false, harnesses: [] });
         return;
       }
-      set({ loading: false, error: (error as Error).message });
+      set({ loading: false, error: errorLine(error) });
     }
   },
 
@@ -250,13 +297,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       method: 'POST',
     });
     const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
-    const username = get().currentUser || '当前用户';
-    const lines = [
-      `${label} 已切换到「${name}」（用户：${username}），原生配置文件已写入。`,
-      'Claude Code 会立即生效；Codex、Kimi Code、Pi 需要重新启动进程。',
-      ...result.warnings.map((warning) => `注意：${warning}`),
-    ];
-    set({ notice: lines.join('\n') });
+    set({
+      notice: [
+        activationLine('notice.activated', get().currentUser, { harness: label, profile: name }),
+        { key: 'notice.activatedHint' },
+        ...result.warnings.map(messageLine),
+      ],
+    });
     await get().loadHarnesses();
   },
 
@@ -265,13 +312,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       method: 'POST',
     });
     const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
-    const username = get().currentUser || '当前用户';
-    const lines = [
-      `${label} 已切回官方登录（用户：${username}），第三方 API 路由已从原生配置中移除。`,
-      '如尚未登录，请在终端启动对应工具并完成一次官方登录。',
-      ...result.warnings.map((warning) => `注意：${warning}`),
-    ];
-    set({ notice: lines.join('\n') });
+    set({
+      notice: [
+        activationLine('notice.officialRestored', get().currentUser, { harness: label }),
+        { key: 'notice.officialHint' },
+        ...result.warnings.map(messageLine),
+      ],
+    });
     await get().loadHarnesses();
   },
 
@@ -286,7 +333,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ backups: data.items });
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 401)) {
-        set({ error: (error as Error).message });
+        set({ error: errorLine(error) });
       }
     }
   },
@@ -297,7 +344,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   restoreBackup: async (id) => {
     await api(`${backupsPath(id)}/restore`, { method: 'POST' });
-    set({ notice: '已把该历史快照的文件写回磁盘。' });
+    set({ notice: [{ key: 'backup.written' }] });
     await Promise.all([get().loadHarnesses(), get().loadBackups()]);
   },
 
@@ -311,7 +358,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ authenticated: false, providersLoading: false, providers: [] });
         return;
       }
-      set({ providersLoading: false, providersError: (error as Error).message });
+      set({ providersLoading: false, providersError: errorLine(error) });
     }
   },
 
@@ -356,7 +403,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ authenticated: false, doctorLoading: false, doctor: [] });
         return;
       }
-      set({ doctorLoading: false, doctorError: (error as Error).message });
+      set({ doctorLoading: false, doctorError: errorLine(error) });
     }
   },
 
@@ -370,7 +417,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ authenticated: false, driftLoading: false, drift: [] });
         return;
       }
-      set({ driftLoading: false, driftError: (error as Error).message });
+      set({ driftLoading: false, driftError: errorLine(error) });
     }
   },
 
@@ -379,7 +426,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       method: 'POST',
     });
     const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
-    set({ notice: `已按激活配置重新写入 ${label} 的原生配置文件。` });
+    set({ notice: [{ key: 'drift.reapplied', params: { harness: label } }] });
     await get().loadDrift();
     return result.files;
   },
@@ -389,11 +436,60 @@ export const useAppStore = create<AppState>((set, get) => ({
       method: 'POST',
     });
     const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
-    set({ notice: `已把 ${label} 现场配置回填进配置档案。` });
+    set({ notice: [{ key: 'drift.adopted', params: { harness: label } }] });
     // Adopting mutates the profile store, so the harness list (and via it the
     // drift view) must be refreshed.
     await get().loadHarnesses();
     return result;
+  },
+
+  loadScan: async () => {
+    set({ scanLoading: true, scanError: null });
+    try {
+      const data = await api<ScanResponse>(scanPath());
+      set({ scan: data.items, scanLoading: false });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        set({ authenticated: false, scanLoading: false, scan: [] });
+        return;
+      }
+      set({ scanLoading: false, scanError: errorLine(error) });
+    }
+  },
+
+  importScan: async (selections) => {
+    const result = await api<ScanImportResponse>(scanImportPath(), {
+      method: 'POST',
+      body: JSON.stringify({ selections }),
+    });
+    // The import only writes to this manager's own store, so nothing on the tool side
+    // changed and only the profile list needs refreshing.
+    await Promise.all([get().loadHarnesses(), get().loadProviders(), get().loadScan()]);
+    return result;
+  },
+
+  loadOperations: async () => {
+    set({ operationsLoading: true, operationsError: null });
+    try {
+      const data = await api<OperationsResponse>(operationsPath());
+      set({ operations: data.items, operationsLoading: false });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        set({ authenticated: false, operationsLoading: false, operations: [] });
+        return;
+      }
+      set({ operationsLoading: false, operationsError: errorLine(error) });
+    }
+  },
+
+  undoOperation: async (id) => {
+    const { receipt } = await api<OperationUndoResponse>(operationUndoPath(id), {
+      method: 'POST',
+    });
+    const label =
+      get().harnesses.find((item) => item.id === receipt.harness)?.label ?? receipt.harness;
+    set({ notice: [{ key: 'operations.undone', params: { harness: label } }] });
+    await Promise.all([get().loadHarnesses(), get().loadBackups(), get().loadOperations()]);
   },
 
   setNotice: (notice) => set({ notice }),

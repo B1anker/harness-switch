@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
+import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import { parseYamlDocument, slugify } from './serialize';
 import type {
   AdapterProfile,
@@ -101,10 +103,16 @@ export class DshAdapter implements HarnessAdapter {
 
   validate(profile: AdapterProfile): void {
     if (!profile.model.trim()) {
-      throw new HttpError(400, 'DeepSeek Harness 需要填写模型名称');
+      throw new HttpError(400, 'DeepSeek Harness 需要填写模型名称', {
+        code: ERROR_CODES.adapterModelRequired,
+        params: { harness: 'DeepSeek Harness' },
+      });
     }
     if (!profile.apiKey.trim()) {
-      throw new HttpError(400, 'DeepSeek Harness 需要填写 API key');
+      throw new HttpError(400, 'DeepSeek Harness 需要填写 API key', {
+        code: ERROR_CODES.adapterApiKeyRequired,
+        params: { harness: 'DeepSeek Harness' },
+      });
     }
   }
 
@@ -203,6 +211,36 @@ export class DshAdapter implements HarnessAdapter {
     } catch {
       return {};
     }
+  }
+
+  /**
+   * DSH keeps its routings under `llm-pi-ai.providers` and the credential itself in a
+   * separate file, which `backfill` already knows how to pair up.
+   */
+  detect(current: CurrentFiles): DetectedProfile[] {
+    let providers: Record<string, unknown> | undefined;
+    let selected = '';
+    try {
+      const settings = parseYamlDocument(current[SETTINGS]);
+      providers = toPlain(settings.getIn(['llm-pi-ai', 'providers']));
+      const active = settings.getIn(['agent-default-model', 'provider']);
+      selected = typeof active === 'string' ? active : '';
+    } catch {
+      return [];
+    }
+    if (!providers) {
+      return [];
+    }
+    return compact(
+      Object.entries(providers).map(([id, provider]) => {
+        const route = toPlain(provider);
+        if (!route) {
+          return null;
+        }
+        const seed = seedProfile({ providerId: id });
+        return toCandidate(id, seed, this.backfill(seed, current), id === selected);
+      }),
+    );
   }
 
   private providerId(profile: AdapterProfile): string {

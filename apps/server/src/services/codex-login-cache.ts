@@ -1,8 +1,10 @@
 import { lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
+import { CODEX_AUTH_TARGET } from './adapters/codex';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 
@@ -19,8 +21,8 @@ export interface ICodexLoginCacheService {
   matchesCurrent(content: string): boolean;
   /** Validates content without writing it, for payload validation before a transaction starts. */
   validate(content: string): void;
-  /** Validates the destination and returns its fixed adapter-owned path. */
-  prepareWrite(content: string): { path: string; content: string };
+  /** Validates the destination and returns its fixed adapter-owned target. */
+  prepareWrite(content: string): { key: string; path: string; content: string };
   /** Writes a validated cache as the selected user with restrictive permissions. */
   write(content: string): void;
 }
@@ -69,7 +71,9 @@ export class CodexLoginCacheService implements ICodexLoginCacheService {
 
   validate(content: string): void {
     if (Buffer.byteLength(content, 'utf8') > MAX_CACHE_BYTES) {
-      throw new HttpError(400, 'Codex 登录缓存过大，拒绝迁移');
+      throw new HttpError(400, 'Codex 登录缓存过大，拒绝迁移', {
+        code: ERROR_CODES.codexCacheTooLarge,
+      });
     }
     try {
       const value = JSON.parse(content) as unknown;
@@ -77,16 +81,18 @@ export class CodexLoginCacheService implements ICodexLoginCacheService {
         throw new Error('not an object');
       }
     } catch {
-      throw new HttpError(400, 'Codex 登录缓存不是有效的 JSON 对象，拒绝迁移');
+      throw new HttpError(400, 'Codex 登录缓存不是有效的 JSON 对象，拒绝迁移', {
+        code: ERROR_CODES.codexCacheInvalidJson,
+      });
     }
   }
 
-  prepareWrite(content: string): { path: string; content: string } {
+  prepareWrite(content: string): { key: string; path: string; content: string } {
     this.validate(content);
     const directory = this.assertDirectory(true);
     const path = join(directory, AUTH_FILE);
     this.assertRegularFile(path, false);
-    return { path, content };
+    return { key: CODEX_AUTH_TARGET, path, content };
   }
 
   write(content: string): void {
@@ -103,7 +109,9 @@ export class CodexLoginCacheService implements ICodexLoginCacheService {
     try {
       const stat = lstatSync(directory);
       if (stat.isSymbolicLink() || !stat.isDirectory()) {
-        throw new HttpError(400, 'Codex 配置目录必须是普通目录，拒绝迁移登录缓存');
+        throw new HttpError(400, 'Codex 配置目录必须是普通目录，拒绝迁移登录缓存', {
+          code: ERROR_CODES.codexConfigDirNotRegular,
+        });
       }
       return directory;
     } catch (error) {
@@ -116,7 +124,9 @@ export class CodexLoginCacheService implements ICodexLoginCacheService {
       this.files.ensureDir(directory);
       const created = lstatSync(directory);
       if (created.isSymbolicLink() || !created.isDirectory()) {
-        throw new HttpError(400, 'Codex 配置目录必须是普通目录，拒绝迁移登录缓存');
+        throw new HttpError(400, 'Codex 配置目录必须是普通目录，拒绝迁移登录缓存', {
+          code: ERROR_CODES.codexConfigDirNotRegular,
+        });
       }
       return directory;
     }
@@ -126,10 +136,14 @@ export class CodexLoginCacheService implements ICodexLoginCacheService {
     try {
       const stat = lstatSync(file);
       if (stat.isSymbolicLink() || !stat.isFile()) {
-        throw new HttpError(400, 'Codex 登录缓存必须是普通文件，拒绝迁移');
+        throw new HttpError(400, 'Codex 登录缓存必须是普通文件，拒绝迁移', {
+          code: ERROR_CODES.codexCacheNotRegular,
+        });
       }
       if (stat.size > MAX_CACHE_BYTES) {
-        throw new HttpError(400, 'Codex 登录缓存过大，拒绝迁移');
+        throw new HttpError(400, 'Codex 登录缓存过大，拒绝迁移', {
+          code: ERROR_CODES.codexCacheTooLarge,
+        });
       }
       return true;
     } catch (error) {

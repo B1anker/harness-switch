@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IEnvironmentService, type LocalUser } from './environment';
@@ -46,7 +47,10 @@ export class UserService implements IUserService {
     const normalized = String(username ?? '').trim();
     const user = this.list().find((candidate) => candidate.username === normalized);
     if (!user) {
-      throw new HttpError(404, `本地用户 ${normalized || '(empty)'} 不存在或未获准管理`);
+      throw new HttpError(404, `本地用户 ${normalized || '(empty)'} 不存在或未获准管理`, {
+        code: ERROR_CODES.userNotManageable,
+        params: { username: normalized || '(empty)' },
+      });
     }
     return user;
   }

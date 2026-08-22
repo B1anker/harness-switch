@@ -318,8 +318,9 @@ test('closes on a successful import and reports the result in the toast', async 
   // Import is the end of this flow, so the dialog gets out of the way instead of
   // leaving a finished form that looks like it still needs attention.
   await waitFor(() => expect(closes).toEqual([false]));
-  const notice = useAppStore.getState().notice;
-  expect(notice).toContain('导入完成：新增 2 项');
-  expect(notice).toContain('跳过 1 项');
+  const notice = useAppStore.getState().notice ?? [];
+  expect(notice[0]?.key).toBe('transfer.importedSummary');
+  expect(String(notice[0]?.params?.parts)).toContain('新增 2 项');
+  expect(String(notice[0]?.params?.parts)).toContain('跳过 1 项');
   expect(screen.queryByText(/导入完成：/)).toBeNull();
 });

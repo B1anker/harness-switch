@@ -1,4 +1,10 @@
+import type { ErrorCode, LocalizedMessage, MessageParams } from './errors';
 import type { HarnessId } from './harnesses';
+
+/**
+ * Response shapes live here. Request shapes live in `schemas.ts`, where the runtime
+ * validator is the single source of truth and the type is inferred from it.
+ */
 
 /**
  * How a harness stores providers in its own config file.
@@ -118,19 +124,6 @@ export type CodexLoginCacheState = {
   migrationNeeded: boolean;
 };
 
-export type UserSyncRequest = {
-  sourceUser: string;
-  /**
-   * Legacy all-or-nothing conflict behavior. New clients should keep this at `skip`
-   * and opt individual harnesses into replacement with `overwriteHarnesses`.
-   */
-  conflictPolicy?: TransferConflictPolicy;
-  /** Overwrite same-name profiles only for these harnesses. Defaults to none. */
-  overwriteHarnesses?: HarnessId[];
-  /** Explicitly copy the source user's Codex official-login cache. Defaults to false. */
-  migrateCodexLoginCache?: boolean;
-};
-
 export type UserSyncPreview = {
   sourceUser: string;
   targetUser: string;
@@ -149,38 +142,7 @@ export type UserSyncResponse = {
   skipped: number;
   providersCopied: number;
   codexLoginCacheMigrated: boolean;
-  warnings: string[];
-};
-
-export type LoginRequest = {
-  password: string;
-};
-
-export type CreateProfileRequest = {
-  name: string;
-  baseUrl: string;
-  apiKey?: string;
-  model?: string;
-  notes?: string;
-  extras?: Record<string, string>;
-  overrides?: Record<string, string>;
-  /** Reference a Provider Vault entry instead of an inline apiKey. */
-  providerId?: string;
-  /** Named endpoint under the vault entry; its base URL wins over baseUrl. */
-  providerEndpoint?: string;
-};
-
-export type UpdateProfileRequest = {
-  name?: string;
-  baseUrl?: string;
-  apiKey?: string;
-  model?: string;
-  notes?: string;
-  extras?: Record<string, string>;
-  overrides?: Record<string, string>;
-  /** Set to a vault entry id to reference it; set to '' (with apiKey) to detach. */
-  providerId?: string;
-  providerEndpoint?: string;
+  warnings: LocalizedMessage[];
 };
 
 /** One rendered config file, as it would be written to disk. */
@@ -204,7 +166,7 @@ export type ActivateResponse = {
   ok: true;
   envFile: string;
   /** Non-fatal problems from steps that ran after the switch already committed. */
-  warnings: string[];
+  warnings: LocalizedMessage[];
 };
 
 export type BackupFileEntry = {
@@ -298,7 +260,7 @@ export type TransferImportResponse = {
   skipped: number;
   activeRestored: number;
   codexLoginCacheMigrated: boolean;
-  warnings: string[];
+  warnings: LocalizedMessage[];
 };
 
 export type OkResponse = {
@@ -306,7 +268,11 @@ export type OkResponse = {
 };
 
 export type ErrorResponse = {
+  /** Human-readable prose. Always present so the CLI and older clients keep working. */
   error: string;
+  /** Stable identifier the web UI translates; absent for not-yet-migrated errors. */
+  code?: ErrorCode;
+  params?: MessageParams;
 };
 
 /* ------------------------------------------------------------------ */
@@ -338,26 +304,10 @@ export type ProvidersResponse = {
   items: ProviderPublic[];
 };
 
-export type CreateProviderRequest = {
-  name: string;
-  apiKey: string;
-  endpoints?: ProviderEndpoint[];
-  notes?: string;
-};
-
-export type UpdateProviderRequest = {
-  name?: string;
-  /** Present and non-empty rotates the credential; empty or absent keeps it. */
-  apiKey?: string;
-  /** Full replacement of the named endpoints. */
-  endpoints?: ProviderEndpoint[];
-  notes?: string;
-};
-
 export type ProviderMutationResponse = {
   provider: ProviderPublic;
   /** Non-fatal problems while re-applying profiles that reference this entry. */
-  warnings: string[];
+  warnings: LocalizedMessage[];
 };
 
 /* ------------------------------------------------------------------ */
@@ -403,7 +353,7 @@ export type DriftAdoptResponse = {
   ok: true;
   summary: DriftSummary;
   /** Non-fatal problems while reading the live files back. */
-  warnings: string[];
+  warnings: LocalizedMessage[];
 };
 
 /** Request body for POST /api/drift/:harnessId/adopt (no options yet). */
@@ -413,6 +363,137 @@ export type AdoptRequest = object;
 export type ApproveDriftRequest = object;
 
 /* ------------------------------------------------------------------ */
+/* Scan and import                                                     */
+/* ------------------------------------------------------------------ */
+
+/** One config file the scan looked at, so the wizard can say where it read from. */
+export type ScanSource = {
+  key: string;
+  label: string;
+  path: string;
+  exists: boolean;
+  /** False when the file is there but the tool's own parser would reject it. */
+  parsable: boolean;
+};
+
+/** A provider found in a tool's own config, offered for import. */
+export type ScanCandidate = {
+  /** Stable handle the import request refers back to. */
+  id: string;
+  harness: HarnessId;
+  /** The provider id as it appears in the tool's own file. */
+  sourceKey: string;
+  suggestedName: string;
+  baseUrl: string;
+  model: string;
+  extras: Record<string, string>;
+  /**
+   * Masked credential. The plaintext never leaves the server: an import re-reads it
+   * from disk rather than taking it back from the browser.
+   */
+  apiKeyPreview: string;
+  apiKeyPresent: boolean;
+  /** True when the tool is currently pointed at this provider. */
+  active: boolean;
+  /** Set when a profile of the suggested name already exists. */
+  conflictsWith?: string;
+  /** Set when a vault entry already holds this exact credential. */
+  matchesProvider?: string;
+};
+
+export type ScanHarnessResult = {
+  harness: HarnessId;
+  label: string;
+  sources: ScanSource[];
+  candidates: ScanCandidate[];
+  /** Explains an empty candidate list. The server's own prose, printed by the CLI. */
+  note?: string;
+  /** The same explanation as a stable code the web UI can translate. See `SCAN_NOTE_CODES`. */
+  noteCode?: string;
+};
+
+export type ScanResponse = {
+  items: ScanHarnessResult[];
+};
+
+export type ScanImportResponse = {
+  ok: true;
+  imported: number;
+  skipped: number;
+  providersCreated: number;
+  /** Non-fatal problems; the successful selections are still saved. */
+  warnings: LocalizedMessage[];
+};
+
+/* ------------------------------------------------------------------ */
+/* Operation journal                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Where an operation got to before the process stopped looking at it.
+ *
+ * The boundary that matters for crash recovery is `metadata-committed`: everything the
+ * operation set out to change is already on disk by then, so a restart rolls it forward
+ * to `committed` instead of undoing work that actually succeeded. Anything still at
+ * `applying` may be half written and gets rolled back.
+ */
+export type OperationState =
+  | 'prepared'
+  | 'applying'
+  | 'metadata-committed'
+  | 'committed'
+  | 'rolled-back'
+  | 'degraded';
+
+export type OperationKind =
+  | 'activate'
+  | 'activate-official'
+  | 'revoke'
+  | 'reapply'
+  | 'import'
+  | 'sync';
+
+/** Store files an operation changed alongside the native config files. */
+export type OperationMetadataKey = 'profiles' | 'active' | 'vault';
+
+export type OperationFile = {
+  key: string;
+  path: string;
+  /** Whether the file existed before the operation; an undo deletes it again if not. */
+  existed: boolean;
+};
+
+/** The audit record and undo point for one complete business operation. */
+export type OperationReceipt = {
+  id: string;
+  state: OperationState;
+  kind: OperationKind;
+  harness: HarnessId;
+  profile: string;
+  /** The Unix account the operation was performed for. */
+  user: string;
+  startedAt: string;
+  finishedAt?: string;
+  /** Snapshot holding the previous content of every file below. */
+  backupId: string | null;
+  files: OperationFile[];
+  metadata: OperationMetadataKey[];
+  /** False once the snapshot has been rotated away or the operation was already undone. */
+  undoable: boolean;
+  /** Why a recovery could not finish cleanly. */
+  note?: string;
+};
+
+export type OperationsResponse = {
+  items: OperationReceipt[];
+};
+
+export type OperationUndoResponse = {
+  ok: true;
+  receipt: OperationReceipt;
+};
+
+/* ------------------------------------------------------------------ */
 /* Doctor                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -420,8 +501,16 @@ export type DoctorCheckStatus = 'ok' | 'warn' | 'error' | 'unknown';
 
 export type DoctorCheck = {
   id: string;
+  /** The server's own prose, printed by the CLI and used as the UI's fallback. */
   label: string;
   status: DoctorCheckStatus;
+  /**
+   * Stable identifier for what this check reports, so the web UI can render the
+   * same fact in the viewer's language. See `DOCTOR_CODES`.
+   */
+  code?: string;
+  /** Values `code` interpolates — paths, modes, counts. Data, never keys. */
+  params?: MessageParams;
   /** Human-readable message plus machine-readable extras. */
   detail?: unknown;
 };

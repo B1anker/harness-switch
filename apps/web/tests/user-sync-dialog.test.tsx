@@ -190,7 +190,7 @@ test('closes on a successful sync and reports the result in the toast', async ()
             skipped: 1,
             providersCopied: 2,
             codexLoginCacheMigrated: false,
-            warnings: ['kimi 的凭据缺少密钥'],
+            warnings: [{ message: 'kimi 的凭据缺少密钥' }],
           };
     return new Response(JSON.stringify(body), {
       status: 200,
@@ -205,10 +205,13 @@ test('closes on a successful sync and reports the result in the toast', async ()
 
   // Leaving the dialog open made users think the sync had not finished, so they ran it twice.
   await waitFor(() => expect(closes).toEqual([false]));
-  const notice = useAppStore.getState().notice;
-  expect(notice).toContain('同步完成：新增 3，覆盖 0，跳过 1，复制凭据 2');
-  expect(notice).toContain('Codex 登录缓存未迁移');
-  expect(notice).toContain('kimi 的凭据缺少密钥');
+  const notice = useAppStore.getState().notice ?? [];
+  expect(notice[0]).toMatchObject({
+    key: 'sync.done',
+    params: { imported: 3, overwritten: 0, skipped: 1, providersCopied: 2 },
+  });
+  expect(notice[1]?.key).toBe('sync.cacheNotMigrated');
+  expect(notice[2]?.fallback).toContain('kimi 的凭据缺少密钥');
   // The result now lives in the toast, so the dialog no longer repeats it inline.
   expect(screen.queryByText(/同步完成：/)).toBeNull();
 });

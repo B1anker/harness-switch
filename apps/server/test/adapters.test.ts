@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
 import { ClaudeAdapter } from '../src/services/adapters/claude';
@@ -8,6 +9,7 @@ import { KimiAdapter } from '../src/services/adapters/kimi';
 import { PiAdapter } from '../src/services/adapters/pi';
 import type { AdapterProfile } from '../src/services/adapters/types';
 import type { IEnvironmentService } from '../src/services/environment';
+import { expectHttpError } from './support/http-error';
 
 const environment = {
   harnessHomes: {
@@ -382,7 +384,11 @@ describe('kimi adapter', () => {
 
   test('rejects a profile without a model because the models entry needs one', () => {
     const adapter = new KimiAdapter(environment);
-    expect(() => adapter.render(profile({ model: '' }), {})).toThrow(/模型名称/);
+    expectHttpError(
+      () => adapter.render(profile({ model: '' }), {}),
+      ERROR_CODES.adapterModelRequired,
+      400,
+    );
   });
 
   test('revoking leaves an absent config file absent', () => {
@@ -501,7 +507,11 @@ describe('pi adapter', () => {
 
   test('requires an api key because pi hides keyless custom models', () => {
     const adapter = new PiAdapter(environment);
-    expect(() => adapter.render(profile({ apiKey: '' }), {})).toThrow(/API key/);
+    expectHttpError(
+      () => adapter.render(profile({ apiKey: '' }), {}),
+      ERROR_CODES.adapterApiKeyRequired,
+      400,
+    );
   });
 });
 
@@ -592,8 +602,16 @@ describe('dsh adapter', () => {
 
   test('rejects an empty model or key', () => {
     const adapter = new DshAdapter(environment);
-    expect(() => adapter.render(profile({ model: '' }), {})).toThrow(/模型名称/);
-    expect(() => adapter.render(profile({ apiKey: '' }), {})).toThrow(/API key/);
+    expectHttpError(
+      () => adapter.render(profile({ model: '' }), {}),
+      ERROR_CODES.adapterModelRequired,
+      400,
+    );
+    expectHttpError(
+      () => adapter.render(profile({ apiKey: '' }), {}),
+      ERROR_CODES.adapterApiKeyRequired,
+      400,
+    );
   });
 
   test('declares selectable reasoning efforts for hand-written models', () => {

@@ -12,7 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, useTranslation } from '@/lib/i18n';
+import { errorLineWith, lineText, type MessageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
 type BackupPanelProps = {
@@ -21,6 +22,7 @@ type BackupPanelProps = {
 
 export function BackupPanel({ harnessId }: BackupPanelProps) {
   const { locale } = useI18n();
+  const { t } = useTranslation();
   const backups = useAppStore((state) => state.backups);
   const loadBackups = useAppStore((state) => state.loadBackups);
   const loadBackupDetail = useAppStore((state) => state.loadBackupDetail);
@@ -28,7 +30,7 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
   const [open, setOpen] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [detail, setDetail] = useState<BackupDetail | null>(null);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<MessageLine | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const items = backups.filter((item) => item.harness === harnessId);
   const pending = backups.find((item) => item.id === pendingId) ?? null;
@@ -62,7 +64,7 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setDetailError(error instanceof Error ? error.message : '加载差异失败');
+          setDetailError(errorLineWith(error, 'backup.diffFailed'));
         }
       })
       .finally(() => {
@@ -84,20 +86,17 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
         onClick={() => setOpen(true)}
       >
         <History />
-        配置历史
+        {t('backup.history')}
         {items.length > 0 ? <Badge variant="secondary">{items.length}</Badge> : null}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>{label} 配置历史</DialogTitle>
-            <DialogDescription>
-              每次写入前都会把原文件快照到数据目录，保留最近 10
-              份。这里只显示当前工具的历史；与磁盘一致的条目会标成「当前」。
-            </DialogDescription>
+            <DialogTitle>{t('backup.historyTitle', { harness: label })}</DialogTitle>
+            <DialogDescription>{t('backup.historyIntro')}</DialogDescription>
           </DialogHeader>
           {items.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">还没有历史快照</p>
+            <p className="py-6 text-center text-sm text-muted-foreground">{t('backup.empty')}</p>
           ) : (
             <ul className="max-h-80 divide-y overflow-y-auto rounded-xl border">
               {items.map((backup) => (
@@ -108,11 +107,14 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <p className="truncate text-sm font-medium">{backup.profile}</p>
-                      {backup.current ? <Badge>当前</Badge> : null}
+                      {backup.current ? <Badge>{t('backup.currentBadge')}</Badge> : null}
                     </div>
                     <p className="truncate text-xs text-muted-foreground">
-                      {formatBackupTime(backup.createdAt, locale)} · {backup.files.length} 个文件
-                      {backup.files.some((file) => !file.existed) ? ' · 含删除' : ''}
+                      {formatBackupTime(backup.createdAt, locale)} ·{' '}
+                      {t('backup.fileCount', { count: backup.files.length })}
+                      {backup.files.some((file) => !file.existed)
+                        ? ` · ${t('backup.withDeletions')}`
+                        : ''}
                     </p>
                   </div>
                   {backup.current ? null : (
@@ -122,7 +124,7 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
                       className="shrink-0"
                       onClick={() => setPendingId(backup.id)}
                     >
-                      恢复
+                      {t('backup.restore')}
                     </Button>
                   )}
                 </li>
@@ -134,24 +136,25 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
       <Dialog open={pending !== null} onOpenChange={(next) => !next && setPendingId(null)}>
         <DialogContent className="flex max-h-[85vh] w-[min(64rem,calc(100vw-2rem))] max-w-5xl flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>恢复这份历史？</DialogTitle>
-            <DialogDescription>
-              红是当前将丢失的内容，绿是恢复后的内容。确认后会按历史快照覆盖磁盘文件，harness-switch
-              记录的「当前激活」不会随之回退。
-            </DialogDescription>
+            <DialogTitle>{t('backup.restoreHistoryTitle')}</DialogTitle>
+            <DialogDescription>{t('backup.restoreHistoryBody')}</DialogDescription>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {detailLoading ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">正在对比差异…</p>
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                {t('backup.comparing')}
+              </p>
             ) : null}
             {detailError ? (
-              <p className="py-8 text-center text-sm text-destructive">{detailError}</p>
+              <p className="py-8 text-center text-sm text-destructive">
+                {lineText(t, detailError)}
+              </p>
             ) : null}
             {detail ? <ConfigDiffs files={detail.files} /> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingId(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               disabled={detailLoading || detailError !== null || detail === null}
@@ -164,7 +167,7 @@ export function BackupPanel({ harnessId }: BackupPanelProps) {
                 }
               }}
             >
-              确认恢复
+              {t('backup.confirmRestore')}
             </Button>
           </DialogFooter>
         </DialogContent>

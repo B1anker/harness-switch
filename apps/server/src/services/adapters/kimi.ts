@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
+import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
   isPlainObject,
@@ -84,7 +86,10 @@ export class KimiAdapter implements HarnessAdapter {
 
   validate(profile: AdapterProfile): void {
     if (!profile.model.trim()) {
-      throw new HttpError(400, 'Kimi Code 需要填写模型名称，否则无法生成 models 条目');
+      throw new HttpError(400, 'Kimi Code 需要填写模型名称，否则无法生成 models 条目', {
+        code: ERROR_CODES.adapterModelRequired,
+        params: { harness: 'Kimi Code' },
+      });
     }
   }
 
@@ -160,6 +165,36 @@ export class KimiAdapter implements HarnessAdapter {
     };
   }
 
+  /** One candidate per `providers` entry; `default_model` names the one in use. */
+  detect(current: CurrentFiles): DetectedProfile[] {
+    let config: Record<string, unknown>;
+    try {
+      config = parseTomlObject(current[CONFIG]);
+    } catch {
+      return [];
+    }
+    const providers = config.providers;
+    if (!isPlainObject(providers)) {
+      return [];
+    }
+    const models = isPlainObject(config.models) ? config.models : {};
+    const selected = readString(config, 'default_model');
+    return compact(
+      Object.entries(providers).map(([id, provider]) => {
+        if (!isPlainObject(provider)) {
+          return null;
+        }
+        const model = models[id];
+        const seed = seedProfile({
+          providerId: id,
+          providerType: readString(provider, 'type') || 'kimi',
+          maxContextSize: contextString(isPlainObject(model) ? model.max_context_size : undefined),
+        });
+        return toCandidate(id, seed, this.backfill(seed, current), id === selected);
+      }),
+    );
+  }
+
   private providerId(profile: AdapterProfile): string {
     return slugify(profile.extras.providerId || profile.name, 'provider');
   }
@@ -168,4 +203,10 @@ export class KimiAdapter implements HarnessAdapter {
     const parsed = Number(profile.extras.maxContextSize);
     return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : DEFAULT_CONTEXT;
   }
+}
+
+function contextString(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? String(Math.trunc(value))
+    : String(DEFAULT_CONTEXT);
 }

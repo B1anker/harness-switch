@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import type { IEnvironmentService } from '../environment';
+import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
   isPlainObject,
@@ -20,7 +21,9 @@ import type {
 } from './types';
 
 const CONFIG = 'config';
-const AUTH = 'auth';
+/** Exported so the login-cache service can plan a write against the same target. */
+export const CODEX_AUTH_TARGET = 'auth';
+const AUTH = CODEX_AUTH_TARGET;
 const DEFAULT_ENV_KEY = 'OPENAI_API_KEY';
 
 /**
@@ -202,6 +205,47 @@ export class CodexAdapter implements HarnessAdapter {
       model: readString(config, 'model'),
       apiKey: token || profile.apiKey,
     };
+  }
+
+  /**
+   * Every entry under `model_providers` is a routing the user set up, so each becomes a
+   * candidate. Which of the three mutually exclusive credential keys the entry carries
+   * identifies its auth mode, and `env_key` deliberately yields no key: that one lives
+   * in the shell environment, not in a file this can read.
+   */
+  detect(current: CurrentFiles): DetectedProfile[] {
+    let config: Record<string, unknown>;
+    try {
+      config = parseTomlObject(current[CONFIG]);
+    } catch {
+      return [];
+    }
+    const providers = config.model_providers;
+    if (!isPlainObject(providers)) {
+      return [];
+    }
+    const selected = readString(config, 'model_provider');
+    return compact(
+      Object.entries(providers).map(([id, provider]) => {
+        if (!isPlainObject(provider)) {
+          return null;
+        }
+        const mode: CodexAuthMode = provider.requires_openai_auth
+          ? 'openai_auth'
+          : typeof provider.env_key === 'string'
+            ? 'env_key'
+            : 'bearer_token';
+        const seed = seedProfile({
+          providerId: id,
+          authMode: mode,
+          ...(mode === 'env_key' ? { envKeyName: provider.env_key as string } : {}),
+          ...(readString(config, 'model_reasoning_effort')
+            ? { reasoningEffort: readString(config, 'model_reasoning_effort') }
+            : {}),
+        });
+        return toCandidate(id, seed, this.backfill(seed, current), id === selected);
+      }),
+    );
   }
 
   private authMode(profile: AdapterProfile): CodexAuthMode {

@@ -1,9 +1,11 @@
 import type {
   CreateProviderRequest,
   ProviderEndpoint,
+  ProviderEndpointRequest,
   ProviderPublic,
   UpdateProviderRequest,
 } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { type EncryptedValue, ICryptoService } from './crypto';
@@ -146,6 +148,7 @@ export class VaultService implements IVaultService {
       throw new HttpError(
         409,
         `Provider 正被 ${references.length} 个配置引用，请先移除这些引用再删除`,
+        { code: ERROR_CODES.providerInUse, params: { count: references.length } },
       );
     }
     delete store.entries[id];
@@ -156,7 +159,10 @@ export class VaultService implements IVaultService {
     const entry = this.require(id);
     const plain = this.crypto.decrypt(entry.api_key);
     if (!plain) {
-      throw new HttpError(500, `provider ${id} 的凭据无法解密`);
+      throw new HttpError(500, `provider ${id} 的凭据无法解密`, {
+        code: ERROR_CODES.providerCredentialUnreadable,
+        params: { id },
+      });
     }
     return plain;
   }
@@ -211,7 +217,11 @@ export class VaultService implements IVaultService {
     };
   }
 
-  private validateEndpoints(endpoints: ProviderEndpoint[] | undefined): ProviderEndpoint[] {
+  /**
+   * Also reached from the CLI, which does not pass through the HTTP schema, so the
+   * checks stay here rather than moving wholesale into the request validator.
+   */
+  private validateEndpoints(endpoints: ProviderEndpointRequest[] | undefined): ProviderEndpoint[] {
     if (endpoints === undefined) {
       return [];
     }

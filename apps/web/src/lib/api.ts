@@ -1,12 +1,22 @@
-import type { HarnessId } from '@seaveyon/harness-switch-shared';
+import type { HarnessId, MessageParams } from '@seaveyon/harness-switch-shared';
 
+/**
+ * A failed request. `message` is the server's own prose, kept so anything without a
+ * translation still reads; `code` is the stable identifier the UI translates instead.
+ */
 export class ApiError extends Error {
+  readonly code?: string;
+  readonly params?: MessageParams;
+
   constructor(
     readonly status: number,
     message: string,
+    options: { code?: string; params?: MessageParams } = {},
   ) {
     super(message);
     this.name = 'ApiError';
+    this.code = options.code;
+    this.params = options.params;
   }
 }
 
@@ -48,6 +58,24 @@ export function driftAdoptPath(harnessId: HarnessId | string): string {
   return `${driftPath(harnessId)}/adopt`;
 }
 
+/** Read-only inspection of the config the five tools already have on disk. */
+export function scanPath(): string {
+  return '/api/scan';
+}
+
+export function scanImportPath(): string {
+  return `${scanPath()}/import`;
+}
+
+/** Receipts for completed operations, and the undo built on them. */
+export function operationsPath(): string {
+  return '/api/operations';
+}
+
+export function operationUndoPath(id: string): string {
+  return `${operationsPath()}/${encodeURIComponent(id)}/undo`;
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has('Content-Type')) {
@@ -60,7 +88,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(response.status, payload.error || '请求失败');
+    throw new ApiError(response.status, payload.error ?? '', {
+      code: payload.code,
+      params: payload.params,
+    });
   }
   return payload as T;
 }

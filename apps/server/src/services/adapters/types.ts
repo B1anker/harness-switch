@@ -4,6 +4,7 @@ import type {
   HarnessMode,
   TargetSpec,
 } from '@seaveyon/harness-switch-shared';
+import type { DetectedProfile } from './detect';
 
 /** The profile values an adapter renders from. */
 export type AdapterProfile = {
@@ -74,4 +75,11 @@ export interface HarnessAdapter {
    * CLI tool survive a switch. Only returns keys it can confidently recover.
    */
   backfill?(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile>;
+
+  /**
+   * Enumerate the providers already configured in the tool's own files, for the import
+   * wizard. Unlike `backfill` this has no profile to tell it where to look, so an
+   * additive harness reports one candidate per provider entry it finds.
+   */
+  detect?(current: CurrentFiles): DetectedProfile[];
 }

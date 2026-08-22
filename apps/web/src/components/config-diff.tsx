@@ -1,6 +1,7 @@
 import type { BackupFileDetail } from '@seaveyon/harness-switch-shared';
 import { Component, lazy, type ReactNode, Suspense } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { useTranslation } from '@/lib/i18n';
 
 const PierreFileDiff = lazy(async () => {
   const mod = await import('./pierre-file-diff');
@@ -8,13 +9,6 @@ const PierreFileDiff = lazy(async () => {
 });
 
 export type ChangeKind = 'delete' | 'create' | 'replace' | 'same';
-
-export const CHANGE_KIND_LABEL: Record<ChangeKind, string> = {
-  delete: '将删除',
-  create: '将新建',
-  replace: '将覆盖',
-  same: '无变更',
-};
 
 export function changeKind(file: BackupFileDetail): ChangeKind {
   if (file.content === null && file.currentContent === null) {
@@ -40,6 +34,7 @@ export function ConfigDiffs({ files }: { files: BackupFileDetail[] }) {
 }
 
 function ConfigFileDiff({ file }: { file: BackupFileDetail }) {
+  const { t } = useTranslation();
   const kind = changeKind(file);
   return (
     <div className="overflow-hidden rounded-xl border">
@@ -47,11 +42,13 @@ function ConfigFileDiff({ file }: { file: BackupFileDetail }) {
         <p className="min-w-0 truncate font-mono text-xs" title={file.path}>
           {file.path}
         </p>
-        <Badge variant="secondary">{CHANGE_KIND_LABEL[kind]}</Badge>
+        <Badge variant="secondary">{t(`diff.${kind}`)}</Badge>
       </div>
       <DiffErrorBoundary fallback={<PlainFileDiff file={file} />}>
         <Suspense
-          fallback={<p className="px-3 py-4 text-sm text-muted-foreground">正在渲染差异…</p>}
+          fallback={
+            <p className="px-3 py-4 text-sm text-muted-foreground">{t('diff.rendering')}</p>
+          }
         >
           <PierreFileDiff file={file} />
         </Suspense>
@@ -61,14 +58,15 @@ function ConfigFileDiff({ file }: { file: BackupFileDetail }) {
 }
 
 function PlainFileDiff({ file }: { file: BackupFileDetail }) {
+  const { t } = useTranslation();
   return (
     <div className="grid gap-2 p-3 font-mono text-xs">
       <pre className="whitespace-pre-wrap text-red-400/90">
-        {file.currentContent ?? '（当前不存在）'}
+        {file.currentContent ?? t('diff.absent')}
       </pre>
-      <p className="font-sans text-muted-foreground">↓ 恢复后</p>
+      <p className="font-sans text-muted-foreground">{t('diff.afterRestore')}</p>
       <pre className="whitespace-pre-wrap text-emerald-400/90">
-        {file.content ?? '（恢复后删除）'}
+        {file.content ?? t('diff.deletedAfterRestore')}
       </pre>
     </div>
   );

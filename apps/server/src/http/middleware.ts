@@ -1,3 +1,4 @@
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import type { MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { HttpError } from '../common/errors';
@@ -21,7 +22,9 @@ export function createOriginGuard(): MiddlewareHandler {
         const host = c.req.header('host');
         const allowed = [`http://${host}`, `https://${host}`];
         if (!allowed.includes(origin)) {
-          throw new HttpError(403, 'cross-origin request denied');
+          throw new HttpError(403, 'cross-origin request denied', {
+            code: ERROR_CODES.crossOriginDenied,
+          });
         }
       }
     }
@@ -36,7 +39,9 @@ export function createAuthGuard(services: InstantiationService): MiddlewareHandl
   return async (c, next) => {
     const token = getCookie(c, environment.cookieName);
     if (!auth.isAuthenticated(token)) {
-      throw new HttpError(401, 'authentication required');
+      throw new HttpError(401, 'authentication required', {
+        code: ERROR_CODES.authenticationRequired,
+      });
     }
     const username = auth.userForToken(token) ?? environment.defaultUser.username;
     const user = users.require(username);

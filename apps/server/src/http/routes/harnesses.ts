@@ -1,6 +1,9 @@
 import type { HarnessId } from '@seaveyon/harness-switch-shared';
+import {
+  createProfileRequestSchema,
+  updateProfileRequestSchema,
+} from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
-import { HttpError } from '../../common/errors';
 import type { InstantiationService } from '../../di';
 import { IActivationService } from '../../services/activation';
 import { IAdapterRegistry } from '../../services/adapters';
@@ -9,18 +12,7 @@ import { IFileService } from '../../services/files';
 import { ILogService } from '../../services/log';
 import { IProfileService } from '../../services/profiles';
 import { IHarnessRegistry } from '../../services/registry';
-
-type ProfileBody = {
-  name?: string;
-  baseUrl?: string;
-  apiKey?: string;
-  model?: string;
-  notes?: string;
-  extras?: Record<string, string>;
-  overrides?: Record<string, string>;
-  providerId?: string;
-  providerEndpoint?: string;
-};
+import { readJsonBody } from '../validate';
 
 export function createHarnessRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -60,11 +52,11 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
 
   app.post('/:harnessId/profiles', async (c) => {
     const harnessId = harnesses.require(c.req.param('harnessId'));
-    const body = await readBody(c.req.json.bind(c.req));
+    const body = await readJsonBody(c, createProfileRequestSchema);
     const profile = profiles.upsert(
       harnessId,
       {
-        name: String(body.name ?? ''),
+        name: body.name,
         baseUrl: body.baseUrl,
         apiKey: body.apiKey,
         model: body.model,
@@ -82,7 +74,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   app.patch('/:harnessId/profiles/:name', async (c) => {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const name = decodeURIComponent(c.req.param('name'));
-    const body = await readBody(c.req.json.bind(c.req));
+    const body = await readJsonBody(c, updateProfileRequestSchema);
     const wasActive = activation.getActive(harnessId)?.name === name;
     // Snapshot the store before touching it: a live-file rewrite that fails part
     // way must not leave the persisted profile, the active pointer and the live
@@ -93,7 +85,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       const profile = profiles.upsert(
         harnessId,
         {
-          name: String(body.name ?? name),
+          name: body.name ?? name,
           sourceName: name,
           baseUrl: body.baseUrl,
           apiKey: body.apiKey,
@@ -156,12 +148,6 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   });
 
   return app;
-}
-
-async function readBody(read: () => Promise<ProfileBody>): Promise<ProfileBody> {
-  return read().catch(() => {
-    throw new HttpError(400, 'invalid json');
-  });
 }
 
 function restoreProfileStore(

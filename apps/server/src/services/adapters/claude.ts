@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import type { IEnvironmentService } from '../environment';
+import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
   type JsonObject,
@@ -314,6 +315,18 @@ export class ClaudeAdapter implements HarnessAdapter {
         ),
       },
     };
+  }
+
+  /**
+   * Claude Code holds exactly one routing in the `env` block, so a scan yields at most
+   * one candidate. Which credential variable is present also tells us which one the user
+   * chose, and backfill needs that seeded before it can find the key.
+   */
+  detect(current: CurrentFiles): DetectedProfile[] {
+    const env = safeParse(current[SETTINGS]).env;
+    const authVar = AUTH_VARS.find((name) => readString(env, name)) ?? AUTH_VARS[0];
+    const seed = seedProfile({ authVar });
+    return compact([toCandidate('claude', seed, this.backfill(seed, current), true)]);
   }
 
   private authVar(profile: AdapterProfile): string {

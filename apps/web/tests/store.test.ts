@@ -143,7 +143,10 @@ test('an expired session drops the user back to the login screen without an erro
 test('a real failure surfaces the server message', async () => {
   responder = () => ({ status: 500, body: { error: 'disk full' } });
   await useAppStore.getState().loadHarnesses();
-  expect(useAppStore.getState().error).toBe('disk full');
+  expect(useAppStore.getState().error).toMatchObject({
+    key: 'error.unknown',
+    fallback: 'disk full',
+  });
 });
 
 test('loading the session also refreshes drift without blocking on its failure', async () => {
@@ -171,10 +174,12 @@ test('activating explains what took effect and when', async () => {
 
   await useAppStore.getState().activateProfile('claude', 'openrouter-main');
 
-  const notice = useAppStore.getState().notice ?? '';
-  expect(notice).toContain('Claude Code 已切换到「openrouter-main」');
-  // The old copy told people to source env.sh, which is no longer how a switch works.
-  expect(notice).not.toContain('source');
+  const notice = useAppStore.getState().notice ?? [];
+  expect(notice[0]).toMatchObject({
+    key: 'notice.activated',
+    params: { harness: 'Claude Code', profile: 'openrouter-main' },
+  });
+  expect(notice.some((line) => line.key === 'notice.activatedHint')).toBe(true);
   expect(requests[0]).toMatchObject({
     path: '/api/harnesses/claude/profiles/openrouter-main/activate',
     method: 'POST',
@@ -186,12 +191,30 @@ test('warnings from steps after the switch committed are shown, not swallowed', 
     path.endsWith('/activate')
       ? {
           status: 200,
-          body: { ok: true, envFile: '/env.sh', warnings: ['未能把 main 的现有配置回填保存'] },
+          body: {
+            ok: true,
+            envFile: '/env.sh',
+            warnings: [
+              {
+                code: 'warning.activation.backfillFailed',
+                message: '未能把 main 的现有配置回填保存',
+                params: { profile: 'main' },
+              },
+            ],
+          },
         }
       : { status: 200, body: harnessResponse() };
 
   await useAppStore.getState().activateProfile('claude', 'spare');
-  expect(useAppStore.getState().notice).toContain('注意：未能把 main 的现有配置回填保存');
+  const notice = useAppStore.getState().notice ?? [];
+  expect(notice).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        key: 'warning.activation.backfillFailed',
+        fallback: '未能把 main 的现有配置回填保存',
+      }),
+    ]),
+  );
 });
 
 test('creating and updating hit the right paths and refresh the list plus drift', async () => {
@@ -261,7 +284,7 @@ test('restoring a backup reports it and reloads the harnesses', async () => {
   await useAppStore.getState().restoreBackup('2026-08-13T00-00-00-000Z-claude-main');
 
   expect(requests[0]?.path).toBe('/api/backups/2026-08-13T00-00-00-000Z-claude-main/restore');
-  expect(useAppStore.getState().notice).toContain('历史');
+  expect(useAppStore.getState().notice).toEqual([{ key: 'backup.written' }]);
 });
 
 test('logging out clears everything the session loaded', async () => {
@@ -287,15 +310,17 @@ test('logging out clears everything the session loaded', async () => {
 });
 
 test('dismissing the notice clears it', () => {
-  useAppStore.setState({ notice: 'something happened' });
+  useAppStore.setState({ notice: [{ key: 'notice.activatedHint' }] });
   useAppStore.getState().clearNotice();
   expect(useAppStore.getState().notice).toBeNull();
 });
 
 test('a dialog can hand its own success message to the toast', () => {
   // Dialogs that finish a job close themselves, so their result has to survive the unmount.
-  useAppStore.getState().setNotice('同步完成：新增 3。');
-  expect(useAppStore.getState().notice).toBe('同步完成：新增 3。');
+  useAppStore.getState().setNotice([{ key: 'notice.userSynced', fallback: '同步完成：新增 3。' }]);
+  expect(useAppStore.getState().notice).toEqual([
+    { key: 'notice.userSynced', fallback: '同步完成：新增 3。' },
+  ]);
 });
 
 test('loading providers stores the list without ever exposing a key', async () => {
@@ -407,7 +432,9 @@ test('reapplying drift posts to the harness and reloads the view', async () => {
 
   expect(requests[0]?.path).toBe('/api/drift/claude/reapply');
   expect(files).toEqual([]);
-  expect(useAppStore.getState().notice).toContain('Claude Code');
+  expect(useAppStore.getState().notice).toEqual([
+    { key: 'drift.reapplied', params: { harness: 'Claude Code' } },
+  ]);
 });
 
 test('adopting the live files reloads the harness list and drift', async () => {
@@ -431,6 +458,8 @@ test('adopting the live files reloads the harness list and drift', async () => {
 
   expect(requests[0]?.path).toBe('/api/drift/claude/adopt');
   expect(result.summary.harness).toBe('claude');
-  expect(useAppStore.getState().notice).toContain('Claude Code');
+  expect(useAppStore.getState().notice).toEqual([
+    { key: 'drift.adopted', params: { harness: 'Claude Code' } },
+  ]);
   expect(requests.some((request) => request.path === '/api/harnesses')).toBe(true);
 });

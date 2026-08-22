@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
+import { isInside } from '../common/paths';
 import { createDecorator } from '../di';
 
 export type LocalUser = {
@@ -35,8 +36,16 @@ export interface IEnvironmentService {
   readonly managerFiles: Pick<EnvironmentFiles, 'password' | 'sessions'>;
   readonly backupsDir: string;
   readonly backupRetainCount: number;
+  readonly journalDir: string;
+  readonly journalRetainCount: number;
   readonly currentUser: LocalUser;
   readonly defaultUser: LocalUser;
+  /**
+   * Directories the manager may read or write for the request's selected user. A path
+   * that resolves outside all of them is refused, so a symlinked config directory
+   * cannot redirect a root-owned write into another account's home.
+   */
+  readonly writeRoots: string[];
   /** Config roots of the managed harnesses for the request's selected Unix user. */
   readonly harnessHomes: {
     claude: string;
@@ -60,6 +69,7 @@ export class EnvironmentService implements IEnvironmentService {
   readonly sessionTtlMs = resolveSessionTtlMs();
   readonly cookieName = 'hsw_session';
   readonly backupRetainCount = Math.max(1, Number(process.env.HSW_BACKUP_RETAIN || 10));
+  readonly journalRetainCount = Math.max(1, Number(process.env.HSW_JOURNAL_RETAIN || 50));
   readonly defaultUser = resolveDefaultUser();
   readonly managerDataDir =
     process.env.HSW_DATA_DIR || join(this.defaultUser.homeDir, '.harness-switch');
@@ -103,24 +113,30 @@ export class EnvironmentService implements IEnvironmentService {
     return join(this.dataDir, 'backups');
   }
 
+  get journalDir(): string {
+    return join(this.dataDir, 'journal');
+  }
+
   get harnessHomes() {
-    const isDefault = this.currentUser.username === this.defaultUser.username;
     return {
       claude: join(this.homeDir, '.claude'),
-      // Process-wide overrides belong to the account that launched the service;
-      // applying them to every Unix user would make their files collide.
-      codex:
-        isDefault && process.env.CODEX_HOME ? process.env.CODEX_HOME : join(this.homeDir, '.codex'),
-      kimiCode:
-        isDefault && process.env.KIMI_CODE_HOME
-          ? process.env.KIMI_CODE_HOME
-          : join(this.homeDir, '.kimi-code'),
-      piAgent:
-        isDefault && process.env.PI_CODING_AGENT_DIR
-          ? process.env.PI_CODING_AGENT_DIR
-          : join(this.homeDir, '.pi', 'agent'),
-      dsh: isDefault && process.env.DSH_HOME ? process.env.DSH_HOME : join(this.homeDir, '.dsh'),
+      codex: this.overriddenHome('CODEX_HOME', join(this.homeDir, '.codex')),
+      kimiCode: this.overriddenHome('KIMI_CODE_HOME', join(this.homeDir, '.kimi-code')),
+      piAgent: this.overriddenHome('PI_CODING_AGENT_DIR', join(this.homeDir, '.pi', 'agent')),
+      dsh: this.overriddenHome('DSH_HOME', join(this.homeDir, '.dsh')),
     };
+  }
+
+  get writeRoots(): string[] {
+    // Home already covers every default location. An env override is set by whoever
+    // launched the service, so it stays trusted even when it points outside home.
+    const roots = [this.homeDir, this.dataDir, this.managerDataDir];
+    for (const home of Object.values(this.harnessHomes)) {
+      if (!isInside(this.homeDir, home)) {
+        roots.push(home);
+      }
+    }
+    return roots;
   }
 
   ensureDataDir(): void {
@@ -129,6 +145,17 @@ export class EnvironmentService implements IEnvironmentService {
 
   runAsUser<T>(user: LocalUser, callback: () => T): T {
     return this.userContext.run(user, callback);
+  }
+
+  /**
+   * Process-wide overrides belong to the account that launched the service; applying
+   * them to every Unix user would make their files collide.
+   */
+  private overriddenHome(variable: string, fallback: string): string {
+    const override = process.env[variable];
+    return this.currentUser.username === this.defaultUser.username && override
+      ? override
+      : fallback;
   }
 }
 

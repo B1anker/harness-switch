@@ -1,5 +1,6 @@
 import { MultiFileDiff } from '@pierre/diffs/react';
 import type { BackupFileDetail } from '@seaveyon/harness-switch-shared';
+import { useTranslation } from '@/lib/i18n';
 
 const DIFF_OPTIONS = {
   themeType: 'dark' as const,
@@ -11,6 +12,7 @@ const DIFF_OPTIONS = {
 };
 
 export function PierreFileDiff({ file }: { file: BackupFileDetail }) {
+  const { t } = useTranslation();
   const name = file.path;
   const oldFile = file.currentContent === null ? null : { name, contents: file.currentContent };
   const newFile = file.content === null ? null : { name, contents: file.content };
@@ -30,5 +32,5 @@ export function PierreFileDiff({ file }: { file: BackupFileDetail }) {
       <MultiFileDiff disableWorkerPool oldFile={null} newFile={newFile} options={DIFF_OPTIONS} />
     );
   }
-  return <p className="px-3 py-4 text-sm text-muted-foreground">两侧都不存在</p>;
+  return <p className="px-3 py-4 text-sm text-muted-foreground">{t('diff.bothAbsent')}</p>;
 }

@@ -1,4 +1,10 @@
-import type { ActivePublic, HarnessId, PreviewTarget } from '@seaveyon/harness-switch-shared';
+import type {
+  ActivePublic,
+  HarnessId,
+  LocalizedMessage,
+  PreviewTarget,
+} from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, WARNING_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import type { AdapterProfile, AdapterTarget, CurrentFiles, HarnessAdapter } from './adapters';
@@ -23,7 +29,7 @@ type ActiveStore = Record<string, ActiveEntry>;
 
 export type ActivationResult = {
   envFile: string;
-  warnings: string[];
+  warnings: LocalizedMessage[];
 };
 
 export interface IActivationService {
@@ -85,24 +91,27 @@ export class ActivationService implements IActivationService {
     const profile = this.profiles.decrypt(harness, name);
     adapter.validate?.(profile);
 
-    const warnings: string[] = [];
+    const warnings: LocalizedMessage[] = [];
     const active = this.read();
     this.backfillPrevious(adapter, active[harness], name, warnings);
 
     const writes = this.expectedNamedWrites(harness, name);
-    this.liveWrite.apply(harness, name, writes);
-
-    // Committed only after the live files are on disk, so a failed write never leaves
-    // a record claiming the switch happened.
-    active[harness] = {
-      name: profile.name,
-      base_url: profile.baseUrl,
-      api_key: profile.apiKey,
-      model: profile.model,
-      extras: profile.extras,
-      official: false,
-    };
-    this.files.writeJson(this.environment.files.active, active);
+    // The active pointer commits inside the transaction, so the live files and the
+    // record of what is live can never end up describing different profiles.
+    this.liveWrite.transaction(
+      { kind: 'activate', harness, profile: name, writes, metadata: ['active'] },
+      () => {
+        active[harness] = {
+          name: profile.name,
+          base_url: profile.baseUrl,
+          api_key: profile.apiKey,
+          model: profile.model,
+          extras: profile.extras,
+          official: false,
+        };
+        this.files.writeJson(this.environment.files.active, active);
+      },
+    );
 
     // The switch is already effective here, so a failure below is reported rather than
     // raised: throwing would tell the user it failed when it did not.
@@ -110,7 +119,10 @@ export class ActivationService implements IActivationService {
       this.writeEnv(active);
     } catch (error) {
       this.log.error('failed to rebuild env file', error);
-      warnings.push('原生配置已写入，但重建 env.sh 失败');
+      warnings.push({
+        message: '原生配置已写入，但重建 env.sh 失败',
+        code: WARNING_CODES.envRebuildFailed,
+      });
     }
 
     return { envFile: this.environment.files.env, warnings };
@@ -119,10 +131,13 @@ export class ActivationService implements IActivationService {
   activateOfficial(harness: HarnessId): ActivationResult {
     const adapter = this.adapters.get(harness);
     if (!adapter.renderOfficial) {
-      throw new HttpError(400, `${this.harnesses.label(harness)} 不支持官方账号登录模式`);
+      throw new HttpError(400, `${this.harnesses.label(harness)} 不支持官方账号登录模式`, {
+        code: ERROR_CODES.officialLoginUnsupported,
+        params: { harness: this.harnesses.label(harness) },
+      });
     }
 
-    const warnings: string[] = [];
+    const warnings: LocalizedMessage[] = [];
     const active = this.read();
     const previous = active[harness];
     const alreadyOfficial = previous?.official === true;
@@ -133,23 +148,35 @@ export class ActivationService implements IActivationService {
       this.backfillPrevious(adapter, previous, '__official__', warnings);
     }
     const writes = this.expectedOfficialWrites(harness);
-    this.liveWrite.apply(harness, '官方登录', writes);
-
-    active[harness] = {
-      name: '官方登录',
-      base_url: '',
-      api_key: '',
-      model: '',
-      extras: {},
-      official: true,
-    };
-    this.files.writeJson(this.environment.files.active, active);
+    this.liveWrite.transaction(
+      {
+        kind: 'activate-official',
+        harness,
+        profile: '官方登录',
+        writes,
+        metadata: ['active'],
+      },
+      () => {
+        active[harness] = {
+          name: '官方登录',
+          base_url: '',
+          api_key: '',
+          model: '',
+          extras: {},
+          official: true,
+        };
+        this.files.writeJson(this.environment.files.active, active);
+      },
+    );
 
     try {
       this.writeEnv(active);
     } catch (error) {
       this.log.error('failed to rebuild env file', error);
-      warnings.push('已恢复官方登录，但重建 env.sh 失败');
+      warnings.push({
+        message: '已恢复官方登录，但重建 env.sh 失败',
+        code: WARNING_CODES.officialEnvRebuildFailed,
+      });
     }
     return { envFile: this.environment.files.env, warnings };
   }
@@ -183,7 +210,12 @@ export class ActivationService implements IActivationService {
       const previousProfile = { ...profile, name: previousName };
       const targets = adapter.targets();
       const rendered = adapter.revoke(previousProfile, this.readCurrent(targets));
-      this.liveWrite.apply(harness, previousName, this.toWrites(targets, rendered));
+      this.liveWrite.apply({
+        kind: 'revoke',
+        harness,
+        profile: previousName,
+        writes: this.toWrites(targets, rendered),
+      });
     }
 
     if (this.read()[harness]?.name !== previousName) {
@@ -197,6 +229,7 @@ export class ActivationService implements IActivationService {
       throw new HttpError(
         409,
         '不能删除当前已激活的配置，请先激活另一个配置，否则工具的 live 配置会留下孤儿条目',
+        { code: ERROR_CODES.profileActiveDeleteForbidden },
       );
     }
     const adapter = this.adapters.get(harness);
@@ -209,7 +242,12 @@ export class ActivationService implements IActivationService {
     const profile = this.profiles.decrypt(harness, name);
     const targets = adapter.targets();
     const rendered = adapter.revoke(profile, this.readCurrent(targets));
-    this.liveWrite.apply(harness, name, this.toWrites(targets, rendered));
+    this.liveWrite.apply({
+      kind: 'revoke',
+      harness,
+      profile: name,
+      writes: this.toWrites(targets, rendered),
+    });
   }
 
   /**
@@ -220,7 +258,7 @@ export class ActivationService implements IActivationService {
     adapter: HarnessAdapter,
     previous: ActiveEntry | undefined,
     nextName: string,
-    warnings: string[],
+    warnings: LocalizedMessage[],
   ): void {
     if (!adapter.backfill || !previous || previous.official || previous.name === nextName) {
       return;
@@ -240,7 +278,11 @@ export class ActivationService implements IActivationService {
       this.profiles.applyBackfill(adapter.id, previous.name, values);
     } catch (error) {
       this.log.error(`failed to backfill ${adapter.id}/${previous.name}`, error);
-      warnings.push(`未能把 ${previous.name} 的现有配置回填保存`);
+      warnings.push({
+        message: `未能把 ${previous.name} 的现有配置回填保存`,
+        code: WARNING_CODES.backfillFailed,
+        params: { profile: previous.name },
+      });
     }
   }
 
@@ -251,7 +293,9 @@ export class ActivationService implements IActivationService {
   expectedWrites(harness: HarnessId): PlannedWrite[] {
     const active = this.read()[harness];
     if (!active) {
-      throw new HttpError(400, '该工具未激活任何配置，无可渲染的内容');
+      throw new HttpError(400, '该工具未激活任何配置，无可渲染的内容', {
+        code: ERROR_CODES.noActiveProfile,
+      });
     }
     if (active.official === true) {
       return this.expectedOfficialWrites(harness);
@@ -299,7 +343,7 @@ export class ActivationService implements IActivationService {
   private toWrites(targets: AdapterTarget[], rendered: Record<string, string>): PlannedWrite[] {
     return Object.entries(rendered).map(([key, content]) => {
       const target = this.requireTarget(targets, key);
-      return { path: target.path, format: target.format, content };
+      return { key: target.key, path: target.path, format: target.format, content };
     });
   }
 

@@ -11,6 +11,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useTranslation } from '@/lib/i18n';
+import { errorLine, lineText, type MessageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
 type ActivateDialogProps = {
@@ -25,11 +27,12 @@ type ActivateDialogProps = {
  * that would be written and shows the diff against the live files.
  */
 export function ActivateDialog({ harness, profile, open, onOpenChange }: ActivateDialogProps) {
+  const { t } = useTranslation();
   const previewProfile = useAppStore((state) => state.previewProfile);
   const activateProfile = useAppStore((state) => state.activateProfile);
   const currentUser = useAppStore((state) => state.currentUser);
   const [targets, setTargets] = useState<PreviewTarget[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageLine | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -43,7 +46,7 @@ export function ActivateDialog({ harness, profile, open, onOpenChange }: Activat
         if (!cancelled) setTargets(result);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : '未知错误');
+        if (!cancelled) setError(errorLine(err));
       });
     return () => {
       cancelled = true;
@@ -63,31 +66,36 @@ export function ActivateDialog({ harness, profile, open, onOpenChange }: Activat
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <AlertDialogHeader>
-          <AlertDialogTitle>激活配置？</AlertDialogTitle>
+          <AlertDialogTitle>{t('activate.title')}</AlertDialogTitle>
           <AlertDialogDescription>
-            将把 {harness.label} 切换到「{profile.name}」并写入原生配置文件
-            {changedCount > 0 ? `，其中 ${changedCount} 个文件将变更` : ''}。目标本地用户：
-            {currentUser || '当前用户'}。写入前会自动备份。
+            {t('activate.body', {
+              harness: harness.label,
+              profile: profile.name,
+              changed: changedCount > 0 ? t('activate.changedFiles', { count: changedCount }) : '',
+              user: currentUser || t('notice.currentUser'),
+            })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {error ? (
-          <p className="text-sm text-destructive">无法读取将要写入的内容：{error}</p>
+          <p className="text-sm text-destructive">
+            {t('activate.loadFailed', { reason: lineText(t, error) })}
+          </p>
         ) : targets === null ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">正在读取将要写入的内容…</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('activate.loading')}</p>
         ) : (
           <div className="max-h-[52dvh] overflow-y-auto rounded-xl border p-3">
             <ConfigDiffs files={files} />
           </div>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
+          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => {
               void activateProfile(harness.id, profile.name);
               onOpenChange(false);
             }}
           >
-            确认激活
+            {t('activate.confirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

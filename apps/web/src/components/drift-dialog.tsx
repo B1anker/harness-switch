@@ -21,20 +21,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useTranslation } from '@/lib/i18n';
+import { errorLineWith, lineText, type MessageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
 type DriftDialogProps = {
   harness: HarnessSummary;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-};
-
-export const DRIFT_STATUS_LABEL: Record<DriftStatus, string> = {
-  'in-sync': '一致',
-  drifted: '已修改',
-  missing: '缺失',
-  invalid: '无法解析',
-  unknown: '未知',
 };
 
 /** Badge styling: in-sync is calm, drifted/missing/invalid stand out. */
@@ -54,16 +48,17 @@ export function driftStatusClasses(status: DriftStatus): string {
 
 /**
  * Drift: compares what the active profile would render against what is on disk.
- * 重新应用 writes the expected content back (with a backup first); 采纳现场配置
+ * Reapplying writes the expected content back (with a backup first); adopting
  * reads the live files back into the profile store instead.
  */
 export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
+  const { t } = useTranslation();
   const drift = useAppStore((state) => state.drift);
   const driftLoading = useAppStore((state) => state.driftLoading);
   const reapplyDrift = useAppStore((state) => state.reapplyDrift);
   const adoptDrift = useAppStore((state) => state.adoptDrift);
   const [confirm, setConfirm] = useState<'reapply' | 'adopt' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageLine | null>(null);
 
   const report = useMemo(
     () => drift?.find((item) => item.harness === harness.id) ?? null,
@@ -77,29 +72,29 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] w-[min(64rem,calc(100vw-2rem))] max-w-5xl flex-col overflow-hidden">
         <DialogHeader>
-          <DialogTitle>{harness.label} 配置漂移</DialogTitle>
+          <DialogTitle>{t('drift.dialogTitle', { harness: harness.label })}</DialogTitle>
           <DialogDescription>
-            {active ? '红色是磁盘现状，绿色是按激活配置应写入的内容。' : '该工具未激活任何配置。'}
+            {active ? t('drift.legend') : t('drift.noActiveProfile')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {driftLoading && report === null ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">正在检查漂移…</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('drift.checking')}</p>
           ) : null}
           {report === null && !driftLoading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">暂无漂移数据。</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('drift.noData')}</p>
           ) : null}
           {report && !active ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              未激活任何配置，没有可对比的内容。
+              {t('drift.nothingToCompare')}
             </p>
           ) : null}
           {report && active ? (
             <div className="space-y-3">
               {blockedFiles.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted-foreground">
-                  所有文件与激活配置一致。
+                  {t('drift.allInSync')}
                 </p>
               ) : (
                 blockedFiles.map((file) => <DriftFileRow key={file.key} file={file} />)
@@ -108,7 +103,7 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
           ) : null}
         </div>
 
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{lineText(t, error)}</p> : null}
 
         <DialogFooter>
           <Button
@@ -116,10 +111,10 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
             disabled={report === null || !active}
             onClick={() => setConfirm('adopt')}
           >
-            采纳现场配置
+            {t('drift.adopt')}
           </Button>
           <Button disabled={report === null || !active} onClick={() => setConfirm('reapply')}>
-            重新应用
+            {t('drift.reapply')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -127,14 +122,13 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
       <AlertDialog open={confirm === 'reapply'} onOpenChange={(next) => !next && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>重新应用激活配置？</AlertDialogTitle>
+            <AlertDialogTitle>{t('drift.reapplyTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              将按激活配置重新写入 {harness.label}{' '}
-              的原生配置文件，覆盖磁盘上的现场修改。写入前会自动备份。
+              {t('drift.reapplyBody', { harness: harness.label })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setConfirm(null);
@@ -142,11 +136,11 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
                 void reapplyDrift(harness.id)
                   .then(() => onOpenChange(false))
                   .catch((err: unknown) => {
-                    setError(err instanceof Error ? err.message : '重新应用失败');
+                    setError(errorLineWith(err, 'drift.reapplyFailed'));
                   });
               }}
             >
-              确认重新应用
+              {t('drift.confirmReapply')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -155,13 +149,11 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
       <AlertDialog open={confirm === 'adopt'} onOpenChange={(next) => !next && setConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>采纳现场配置？</AlertDialogTitle>
-            <AlertDialogDescription>
-              将把磁盘上的当前内容回填进配置档案，之后的写入会以现场为准。此操作不可撤销。
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t('drift.adoptTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>{t('drift.adoptBody')}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 setConfirm(null);
@@ -169,11 +161,11 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
                 void adoptDrift(harness.id)
                   .then(() => onOpenChange(false))
                   .catch((err: unknown) => {
-                    setError(err instanceof Error ? err.message : '采纳失败');
+                    setError(errorLineWith(err, 'drift.adoptFailed'));
                   });
               }}
             >
-              确认采纳
+              {t('drift.confirmAdopt')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -183,10 +175,13 @@ export function DriftDialog({ harness, open, onOpenChange }: DriftDialogProps) {
 }
 
 function DriftFileRow({ file }: { file: DriftFileState }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-1.5">
       <div className="flex items-center gap-2 px-1">
-        <Badge className={driftStatusClasses(file.status)}>{DRIFT_STATUS_LABEL[file.status]}</Badge>
+        <Badge className={driftStatusClasses(file.status)}>
+          {t(`drift.status.${file.status}`)}
+        </Badge>
         <p className="min-w-0 truncate font-mono text-xs text-muted-foreground" title={file.path}>
           {file.path}
         </p>

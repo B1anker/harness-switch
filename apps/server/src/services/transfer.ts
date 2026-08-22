@@ -4,11 +4,13 @@ import {
   HARNESS_IDS,
   type HarnessId,
   isHarnessId,
+  type LocalizedMessage,
   type TransferConflictPolicy,
   type TransferEnvelope,
   type TransferExportPreview,
   type TransferImportResponse,
   type TransferPreview,
+  WARNING_CODES,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
@@ -220,16 +222,25 @@ export class TransferService implements ITransferService {
 
     const profilesPath = this.environment.files.profiles;
     const profileSnapshot = this.files.readOptional(profilesPath);
-    this.liveWrite.transaction('codex', '导入登录缓存', cacheWrite, () => {
-      try {
-        this.files.writeJson(profilesPath, plan.store);
-      } catch (error) {
-        this.restore(profilesPath, profileSnapshot);
-        throw error;
-      }
-    });
+    this.liveWrite.transaction(
+      {
+        kind: 'import',
+        harness: 'codex',
+        profile: '导入登录缓存',
+        writes: cacheWrite,
+        metadata: ['profiles'],
+      },
+      () => {
+        try {
+          this.files.writeJson(profilesPath, plan.store);
+        } catch (error) {
+          this.restore(profilesPath, profileSnapshot);
+          throw error;
+        }
+      },
+    );
 
-    const warnings: string[] = [];
+    const warnings: LocalizedMessage[] = [];
     let activeRestored = 0;
     if (restoreActive) {
       for (const active of payload.active) {
@@ -243,9 +254,12 @@ export class TransferService implements ITransferService {
           }
           activeRestored++;
         } catch (error) {
-          warnings.push(
-            `${active.harness}/${active.name} 未能恢复激活状态：${(error as Error).message}`,
-          );
+          const reason = (error as Error).message;
+          warnings.push({
+            message: `${active.harness}/${active.name} 未能恢复激活状态：${reason}`,
+            code: WARNING_CODES.transferActiveRestoreFailed,
+            params: { harness: active.harness, profile: active.name, reason },
+          });
         }
       }
     }

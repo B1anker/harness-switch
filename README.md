@@ -80,9 +80,38 @@ Any field the form does not expose can be set by editing the raw file content in
 
 Before every write, the previous content of each target file is snapshotted into `~/.harness-switch/backups/`, keeping the most recent 10. The backup panel restores a snapshot verbatim, comments included. Snapshots never land next to the live file, because tools like Claude Code scan their own config directory.
 
-A write either lands completely or not at all: content is validated first, and a failure part way through restores the previous state, deleting files that did not exist before rather than leaving them empty.
+A write either lands completely or not at all: content is validated first, and a failure part way through restores the previous state, deleting files that did not exist before rather than leaving them empty. A restore carries the same guarantee and snapshots the live files it is about to overwrite, so the restore itself can be undone.
+
+Backup directories live in the managed user's own home, so on a root-run service that account can rewrite its own manifests. Nothing in a manifest is therefore treated as a destination: it records the harness and the target key, the path is re-derived from that harness's adapter at restore time, and a payload name has to be a plain regular file inside the backup directory. Any path that resolves outside the user's manageable directories — a `~/.claude` symlinked elsewhere, for instance — is refused for both reads and writes.
 
 Switching away from a profile first reads the live file back into that profile's record, so edits you made directly in the CLI tool are not lost on the next switch.
+
+### Operation receipts and undo
+
+An in-process `try/catch` only covers a thrown error. A power cut, SIGKILL, OOM or an upgrade restart never gives it the chance to run, and the native config, the profile store and the recorded active profile can be left describing three different states.
+
+So before any native file is written, a record lands in `~/.harness-switch/journal/` and advances with the operation:
+
+```
+PREPARED → APPLYING → METADATA_COMMITTED → COMMITTED
+                              ↘ ROLLED_BACK / DEGRADED
+```
+
+On startup the service settles whatever it finds, for every account it may manage. The boundary that matters is `METADATA_COMMITTED`: by then everything the operation set out to change is already on disk, so it rolls forward to `COMMITTED` rather than undoing a switch the user saw succeed. Anything still at `APPLYING` may be half written and is rolled back whole. A rollback that itself fails is recorded as `DEGRADED` and surfaced in the UI for a human.
+
+Writing `active.json` now happens inside the same transaction as the native files, so the config on disk and the record of what is live can no longer disagree. Each record doubles as a receipt: the files it changed, the backup id, the target user and where it got to. The **Operation log** in the top bar lists them and offers a one-click undo that puts the native files *and* `active.json` back together, rather than just restoring a few files. The undo takes its own snapshot first. Once a backup has been rotated away, its receipt is automatically marked as no longer undoable.
+
+`HSW_JOURNAL_RETAIN` controls how many receipts are kept; the default is 50.
+
+### Importing configuration you already have
+
+If you configured these tools by hand before installing harness-switch, **Import existing config** in the top bar adopts that setup instead of making you retype it.
+
+The scan reads what the five tools currently have on disk and lists every provider it finds. The additive tools (Codex, Kimi Code, Pi, DeepSeek Harness) report one candidate per provider entry, with the one currently in use flagged; Claude Code holds a single routing, so it yields at most one. Credentials are not returned with the scan — the UI only ever sees a mask — and an import re-reads them from disk server-side, so the plaintext never passes through the browser.
+
+Each candidate is decided on its own: store it as a standalone profile, or extract the credential into the Provider Vault and reference it. When the vault already holds the identical credential, the wizard offers to reuse that entry instead of creating a duplicate. A name collision is skipped unless you explicitly ask to overwrite. Some providers read their key from the environment instead of a file (Codex's `env_key` mode, for example); those have nothing on disk to import, so the wizard asks you to supply one.
+
+**Neither the scan nor the import touches the tools' own config files.** An import writes only to harness-switch's own profile store and vault; making it take effect still requires an explicit activation. A config file that exists but cannot be parsed causes that tool to be skipped with a reason, rather than guessed at.
 
 ### Moving every profile to another machine
 
@@ -151,6 +180,11 @@ harness-switch activate codex main --user alice --yes
 harness-switch sync --from root --to alice   # one-time copy; skips conflicts
 harness-switch sync --from root --to alice --overwrite
 harness-switch sync --from root --to alice --copy-codex-auth  # explicitly copy Codex auth.json
+harness-switch scan                          # providers the five tools already have on disk
+harness-switch import codex:alpha --name main   # save as a profile; tools untouched
+harness-switch import claude:claude --vault  # extract the credential into the vault
+harness-switch operations                    # operation receipts, newest first
+harness-switch undo <operation-id>           # revert one complete operation
 ```
 
 `plan <harness>` prints the drift inspection of the active profile (expected vs. current content per file); without an active profile it reports `status: unknown`. `activate` prompts for confirmation on a TTY and requires `--yes` in non-interactive terminals (CI). JSON output mirrors the HTTP API response shapes (`HarnessesResponse`, `ProvidersResponse`, `DoctorResponse`, `DriftSummary`, `ActivateResponse`), so scripts can reuse the same field names. `HSW_DATA_DIR` and `HSW_HOME_DIR` override where it reads state (defaults: `~/.harness-switch` and `$HOME`).
@@ -179,6 +213,7 @@ This protects against accidental plaintext disclosure in profile storage, but do
 | `HSW_UPDATE_CHECK` | `1` | Set to `0` to skip npm registry update checks. The local development command sets this automatically. |
 | `HSW_SESSION_TTL_HOURS` | `24` | How long a Web login stays valid. Sessions survive a service restart. |
 | `HSW_BACKUP_RETAIN` | `10` | Number of snapshots to keep. |
+| `HSW_JOURNAL_RETAIN` | `50` | Number of operation receipts to keep. |
 | `HSW_PUBLIC_DIR` | auto | Optional override for the built frontend directory. |
 
 The tools' own overrides are honoured when locating their config: `CODEX_HOME`, `KIMI_CODE_HOME`, and `PI_CODING_AGENT_DIR`.
@@ -217,6 +252,13 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `POST` | `/api/drift/:harnessId/reapply` | Rewrite live files from the active profile |
 | `POST` | `/api/drift/:harnessId/adopt` | Read live files back into the profile record |
 | `GET` | `/api/doctor` | Read-only diagnostics (`?probe=1` includes the MVP-disabled, non-network probe check) |
+| `GET` | `/api/scan` | Providers the five tools already have on disk; read-only, credentials masked |
+| `POST` | `/api/scan/import` | Save selected candidates as profiles or vault entries; the tools' own config is untouched |
+| `GET` | `/api/operations` | Operation receipts, newest first |
+| `GET` | `/api/operations/:id` | One receipt |
+| `POST` | `/api/operations/:id/undo` | Put the native files and the active profile back to before that operation |
+
+Every POST/PATCH body is validated against a shared Zod schema (`packages/shared/src/schemas.ts`) that the server and the web client both build on. A malformed shape is rejected with a `400` naming the field *before* it reaches storage, instead of being persisted and only surfacing as a `500` on the next activation. Unknown fields are dropped rather than rejected, so an older client keeps working while nothing unrecognised enters the store.
 
 ## Background daemon (bunx / npx)
 

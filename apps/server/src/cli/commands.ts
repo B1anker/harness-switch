@@ -4,8 +4,12 @@ import type {
   ActivateResponse,
   DoctorResponse,
   HarnessesResponse,
+  OperationsResponse,
+  OperationUndoResponse,
   PreviewResponse,
   ProvidersResponse,
+  ScanImportResponse,
+  ScanResponse,
   UserSyncResponse,
   UsersResponse,
 } from '@seaveyon/harness-switch-shared';
@@ -18,8 +22,10 @@ import {
   printDoctorHuman,
   printJson,
   printListHuman,
+  printOperationsHuman,
   printPlanHuman,
   printProvidersHuman,
+  printScanHuman,
 } from './output';
 
 /**
@@ -62,6 +68,14 @@ export async function runCli(
         return await cmdUsers(client, json);
       case 'sync':
         return await cmdSync(client, flags, json);
+      case 'scan':
+        return await cmdScan(client, json);
+      case 'import':
+        return await cmdImport(client, positional, flags, json);
+      case 'operations':
+        return await cmdOperations(client, json);
+      case 'undo':
+        return await cmdUndo(client, positional, json);
       default:
         console.error(cliUsage());
         throw new CliError(`unknown command: ${command}`);
@@ -206,6 +220,80 @@ async function cmdActivate(
     printJson({ harness, profile, ...payload });
   } else {
     printActivateHuman(harness, profile, payload);
+  }
+  return 0;
+}
+
+async function cmdScan(client: CliClient, json: OutputMode): Promise<number> {
+  const payload = (await client.get('/api/scan')) as ScanResponse;
+  if (json === 'json') {
+    printJson(payload);
+  } else {
+    printScanHuman(payload.items);
+  }
+  return 0;
+}
+
+async function cmdImport(
+  client: CliClient,
+  positional: string[],
+  flags: CliFlags,
+  json: OutputMode,
+): Promise<number> {
+  if (positional.length === 0) {
+    throw new CliError('import 需要至少一个候选 id，可先运行 harness-switch scan 查看');
+  }
+  const target = hasFlag(flags, 'vault') ? 'vault' : 'profile';
+  const name = flagValue(flags, 'name');
+  if (name && positional.length > 1) {
+    throw new CliError('--name 只能用于单条导入');
+  }
+  const apiKey = flagValue(flags, 'api-key');
+  const overwrite = hasFlag(flags, 'overwrite');
+  const selections = positional.map((id) => ({
+    id,
+    // The provider id in the tool's own file is already the most recognisable name.
+    name: name || id.split(':').slice(1).join(':') || id,
+    target,
+    ...(apiKey ? { apiKey } : {}),
+    ...(overwrite ? { overwrite: true } : {}),
+  }));
+
+  const payload = (await client.post('/api/scan/import', { selections })) as ScanImportResponse;
+  if (json === 'json') {
+    printJson(payload);
+  } else {
+    console.log(
+      `导入=${payload.imported} 跳过=${payload.skipped} 新建Vault条目=${payload.providersCreated}`,
+    );
+    for (const warning of payload.warnings) {
+      console.log(`warning: ${warning.message}`);
+    }
+    console.log('工具本身的配置文件未被修改；需要生效请再执行 activate。');
+  }
+  return payload.skipped > 0 && payload.imported === 0 ? 1 : 0;
+}
+
+async function cmdOperations(client: CliClient, json: OutputMode): Promise<number> {
+  const payload = (await client.get('/api/operations')) as OperationsResponse;
+  if (json === 'json') {
+    printJson(payload);
+  } else {
+    printOperationsHuman(payload.items);
+  }
+  return 0;
+}
+
+async function cmdUndo(client: CliClient, positional: string[], json: OutputMode): Promise<number> {
+  const id = requirePositional(positional, 0, 'operation-id');
+  const payload = (await client.post(
+    `/api/operations/${encodeURIComponent(id)}/undo`,
+  )) as OperationUndoResponse;
+  if (json === 'json') {
+    printJson(payload);
+  } else {
+    const { receipt } = payload;
+    console.log(`已撤销 ${receipt.kind} ${receipt.harness}/${receipt.profile}`);
   }
   return 0;
 }

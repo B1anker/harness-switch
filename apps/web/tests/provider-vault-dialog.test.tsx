@@ -2,6 +2,7 @@ import { expect, test } from '@rstest/core';
 import type { ProviderPublic } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
+import { ApiError } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 import { providerFixture } from './fixtures';
 
@@ -193,7 +194,10 @@ test('a referenced provider shows the 409 reason instead of deleting', async () 
   useAppStore.setState({
     providers: [providerFixture()],
     deleteProvider: async () => {
-      throw new Error('Provider 正被 2 个配置引用，请先移除这些引用再删除');
+      throw new ApiError(409, 'Provider 正被 2 个配置引用，请先移除这些引用再删除', {
+        code: 'provider.inUse',
+        params: { count: 2 },
+      });
     },
   } as Partial<ReturnType<typeof useAppStore.getState>> as never);
   renderDialog();
@@ -201,8 +205,7 @@ test('a referenced provider shows the 409 reason instead of deleting', async () 
   fireEvent.click(screen.getByRole('button', { name: '删除 OpenRouter' }));
   fireEvent.click(screen.getByRole('button', { name: '删除' }));
 
-  expect(await screen.findByText(/被引用无法删除/)).toBeInTheDocument();
-  expect(screen.getByText(/Provider 正被 2 个配置引用/)).toBeInTheDocument();
+  expect(await screen.findByText(/该凭据正被 2 个配置引用/)).toBeInTheDocument();
 });
 
 test('revealing toggles the plaintext key from the store action', async () => {

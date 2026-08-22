@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ErrorResponse } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { HttpError } from './common/errors';
@@ -10,7 +11,9 @@ import { createBackupRoutes } from './http/routes/backups';
 import { createDoctorRoutes } from './http/routes/doctor';
 import { createDriftRoutes } from './http/routes/drift';
 import { createHarnessRoutes } from './http/routes/harnesses';
+import { createOperationRoutes } from './http/routes/operations';
 import { createProviderRoutes } from './http/routes/providers';
+import { createScanRoutes } from './http/routes/scan';
 import { createTransferRoutes } from './http/routes/transfer';
 import { createUpdateRoutes } from './http/routes/update';
 import { createUserRoutes } from './http/routes/users';
@@ -42,6 +45,12 @@ export function createApp(services: InstantiationService): Hono {
   api.use('/backups/*', createAuthGuard(services));
   api.use('/backups', createAuthGuard(services));
   api.route('/backups', createBackupRoutes(services));
+  api.use('/scan/*', createAuthGuard(services));
+  api.use('/scan', createAuthGuard(services));
+  api.route('/scan', createScanRoutes(services));
+  api.use('/operations/*', createAuthGuard(services));
+  api.use('/operations', createAuthGuard(services));
+  api.route('/operations', createOperationRoutes(services));
   api.use('/transfer/*', createAuthGuard(services));
   api.route('/transfer', createTransferRoutes(services));
   api.use('/update/*', createAuthGuard(services));
@@ -81,7 +90,15 @@ export function createApp(services: InstantiationService): Hono {
   app.notFound((c) => c.json({ error: 'not found' }, 404));
   app.onError((error, c) => {
     if (error instanceof HttpError) {
-      return c.json({ error: error.message }, error.status as 400);
+      // `error` stays the prose the CLI prints; `code` lets the web UI localize it.
+      return c.json(
+        {
+          error: error.message,
+          ...(error.code ? { code: error.code } : {}),
+          ...(error.params ? { params: error.params } : {}),
+        } satisfies ErrorResponse,
+        error.status as 400,
+      );
     }
     log.error('unhandled error', error);
     return c.json({ error: 'internal server error' }, 500);

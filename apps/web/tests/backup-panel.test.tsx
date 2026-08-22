@@ -75,7 +75,7 @@ const claudeEntry: BackupEntry = {
 };
 
 function openHistory() {
-  fireEvent.click(screen.getByRole('button', { name: /配置历史/ }));
+  fireEvent.click(screen.getByRole('button', { name: /历史快照/ }));
 }
 
 test('loads history on mount but keeps the list hidden until the button is clicked', async () => {

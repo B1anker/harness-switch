@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { createServices } from '../src/bootstrap';
 import { ICryptoService } from '../src/services/crypto';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import { IProfileService } from '../src/services/profiles';
+import { expectHttpError } from './support/http-error';
 
 let homeDir = '';
 let services: ReturnType<typeof createServices>;
@@ -118,9 +120,11 @@ describe('profile storage', () => {
 
   test('lets the adapter refuse a profile it could not express', () => {
     const profiles = services.get(IProfileService);
-    expect(() =>
-      profiles.upsert('kimi', { name: 'main', baseUrl: 'https://a', apiKey: 'sk' }, true),
-    ).toThrow(/模型名称/);
+    expectHttpError(
+      () => profiles.upsert('kimi', { name: 'main', baseUrl: 'https://a', apiKey: 'sk' }, true),
+      ERROR_CODES.adapterModelRequired,
+      400,
+    );
   });
 
   test('defaults extras and overrides so adapters never see undefined', () => {
@@ -288,7 +292,10 @@ describe('file service', () => {
     const file = join(homeDir, 'store.json');
     files.writeUserFile(file, '{ nope');
 
-    expect(() => files.readJsonStrict(file, { fallback: true })).toThrow(/已隔离/);
+    expectHttpError(
+      () => files.readJsonStrict(file, { fallback: true }),
+      ERROR_CODES.storageCorruptQuarantined,
+    );
     expect(files.exists(file)).toBe(false);
     const quarantined = readdirSync(homeDir).find((name) => name.startsWith('store.json.corrupt-'));
     expect(quarantined).toBeDefined();
@@ -302,7 +309,7 @@ describe('file service', () => {
     const store = join(homeDir, '.harness-switch', 'profiles.json');
     services.get(IFileService).writeUserFile(store, '{ nope');
 
-    expect(() => profiles.list('claude')).toThrow(/已隔离/);
+    expectHttpError(() => profiles.list('claude'), ERROR_CODES.storageCorruptQuarantined);
     expect(services.get(IFileService).exists(store)).toBe(false);
   });
 });

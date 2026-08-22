@@ -145,9 +145,10 @@ export function driftSummaryFixture(overrides: Partial<DriftSummary> = {}): Drif
 export function doctorCheckFixture(overrides: Partial<DoctorCheck> = {}): DoctorCheck {
   return {
     id: 'claude.install',
-    label: 'claude.install',
+    label: '已找到可执行文件 claude',
     status: 'ok',
-    detail: '已找到可执行文件 claude',
+    code: 'doctor.check.installFound',
+    params: { bin: 'claude' },
     ...overrides,
   };
 }
@@ -159,9 +160,10 @@ export function doctorReportFixture(overrides: Partial<DoctorReport> = {}): Doct
       doctorCheckFixture(),
       doctorCheckFixture({
         id: 'claude.drift',
-        label: 'claude.drift',
+        label: '2 个文件与激活配置不一致（drifted）',
         status: 'warn',
-        detail: '2 个文件与激活配置不一致（drifted）',
+        code: 'doctor.check.driftMismatch',
+        params: { count: 2, status: 'drifted' },
       }),
     ],
     ...overrides,

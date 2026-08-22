@@ -1,9 +1,11 @@
 import type { DriftSummary, HarnessSummary } from '@seaveyon/harness-switch-shared';
 import { GitCompareArrows, RefreshCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { DRIFT_STATUS_LABEL, DriftDialog, driftStatusClasses } from '@/components/drift-dialog';
+import { DriftDialog, driftStatusClasses } from '@/components/drift-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/lib/i18n';
+import { lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
 type DriftPanelProps = {
@@ -12,10 +14,10 @@ type DriftPanelProps = {
 
 /**
  * Right-column card: how far the live files have drifted from what the active
- * profile would render. Clicking 查看差异 opens the per-file diff and the
- * reapply / adopt actions.
+ * profile would render. Opening the diff exposes the reapply / adopt actions.
  */
 export function DriftPanel({ harness }: DriftPanelProps) {
+  const { t } = useTranslation();
   const drift = useAppStore((state) => state.drift);
   const driftLoading = useAppStore((state) => state.driftLoading);
   const driftError = useAppStore((state) => state.driftError);
@@ -35,12 +37,12 @@ export function DriftPanel({ harness }: DriftPanelProps) {
     <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
       <div className="flex items-center gap-2">
         <GitCompareArrows className="size-4 text-primary" />
-        <h3 className="font-semibold">配置漂移</h3>
+        <h3 className="font-semibold">{t('drift.title')}</h3>
         <span className="ml-auto">
           <Button
             size="icon"
             variant="ghost"
-            aria-label="重新检查漂移"
+            aria-label={t('drift.recheck')}
             onClick={() => void loadDrift()}
           >
             <RefreshCcw className={driftLoading ? 'animate-spin' : undefined} />
@@ -50,9 +52,9 @@ export function DriftPanel({ harness }: DriftPanelProps) {
 
       <div className="mt-4">
         {driftError ? (
-          <p className="text-sm text-destructive">{driftError}</p>
+          <p className="text-sm text-destructive">{lineText(t, driftError)}</p>
         ) : report === null ? (
-          <p className="text-sm text-muted-foreground">正在检查漂移…</p>
+          <p className="text-sm text-muted-foreground">{t('drift.checking')}</p>
         ) : (
           <DriftBadge report={report} />
         )}
@@ -67,13 +69,13 @@ export function DriftPanel({ harness }: DriftPanelProps) {
                 {file.path.split('/').pop()}
               </span>
               <span className="ml-auto shrink-0 font-mono text-[11px] text-muted-foreground">
-                {DRIFT_STATUS_LABEL[file.status]}
+                {t(`drift.status.${file.status}`)}
               </span>
             </li>
           ))}
           {changed.length > 3 ? (
             <li className="pl-3.5 text-xs text-muted-foreground">
-              还有 {changed.length - 3} 个文件…
+              {t('drift.moreFiles', { count: changed.length - 3 })}
             </li>
           ) : null}
         </ul>
@@ -86,7 +88,7 @@ export function DriftPanel({ harness }: DriftPanelProps) {
         disabled={report === null || !report.active}
         onClick={() => setOpen(true)}
       >
-        查看差异
+        {t('drift.viewDiff')}
       </Button>
 
       <DriftDialog harness={harness} open={open} onOpenChange={setOpen} />
@@ -95,21 +97,24 @@ export function DriftPanel({ harness }: DriftPanelProps) {
 }
 
 function DriftBadge({ report }: { report: DriftSummary }) {
+  const { t } = useTranslation();
   if (!report.active) {
-    return <Badge variant="secondary">未激活</Badge>;
+    return <Badge variant="secondary">{t('harness.inactive')}</Badge>;
   }
   if (report.status === 'in-sync') {
-    return <Badge variant="secondary">无漂移</Badge>;
+    return <Badge variant="secondary">{t('drift.none')}</Badge>;
   }
   if (report.status === 'drifted') {
     const count = report.files.filter((file) => file.status !== 'in-sync').length;
     return (
       <Badge variant="outline" className="border-amber-500/30 text-amber-700 dark:text-amber-300">
-        {count} 个文件不一致
+        {t('drift.mismatch', { count })}
       </Badge>
     );
   }
   return (
-    <Badge className={driftStatusClasses(report.status)}>{DRIFT_STATUS_LABEL[report.status]}</Badge>
+    <Badge className={driftStatusClasses(report.status)}>
+      {t(`drift.status.${report.status}`)}
+    </Badge>
   );
 }

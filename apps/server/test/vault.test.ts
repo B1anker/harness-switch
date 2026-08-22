@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { createServices } from '../src/bootstrap';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import { IProfileService } from '../src/services/profiles';
 import { IVaultService } from '../src/services/vault';
+import { expectHttpError } from './support/http-error';
 
 let homeDir = '';
 let services: ReturnType<typeof createServices>;
@@ -103,7 +105,8 @@ describe('provider vault', () => {
       true,
     );
     expect(vault().references('acme')).toEqual([{ harness: 'claude', name: 'via-vault' }]);
-    expect(() => vault().remove('acme')).toThrow(/正被 1 个配置引用/);
+    const inUse = expectHttpError(() => vault().remove('acme'), ERROR_CODES.providerInUse, 409);
+    expect(inUse.params).toEqual({ count: 1 });
     profiles().remove('claude', 'via-vault');
     vault().remove('acme');
     expect(() => vault().get('acme')).toThrow(/not found/);
@@ -112,7 +115,7 @@ describe('provider vault', () => {
   test('a corrupt vault store fails closed instead of being overwritten as empty', () => {
     const file = services.get(IEnvironmentService).files.vault;
     services.get(IFileService).writeUserFile(file, '{ nope');
-    expect(() => vault().list()).toThrow(/已隔离/);
+    expectHttpError(() => vault().list(), ERROR_CODES.storageCorruptQuarantined);
     expect(services.get(IFileService).exists(file)).toBe(false);
   });
 });

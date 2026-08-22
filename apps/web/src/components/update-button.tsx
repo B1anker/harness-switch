@@ -2,6 +2,7 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import { useTranslation } from '@/lib/i18n';
 
 type UpdateCheck = { current: string; latest: string | null; updateAvailable: boolean };
 
@@ -14,6 +15,7 @@ const POLL_TIMEOUT_MS = 180_000;
  * once the new version answers.
  */
 export function UpdateButton() {
+  const { t } = useTranslation();
   const [current, setCurrent] = useState<string | null>(null);
   const [latest, setLatest] = useState<string | null>(null);
   const [phase, setPhase] = useState<'idle' | 'updating' | 'failed'>('idle');
@@ -61,17 +63,17 @@ export function UpdateButton() {
     return (
       <span className="flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-muted/70 px-2 font-mono text-[11px] text-muted-foreground">
         <Loader2 className="size-3 shrink-0 animate-spin" />
-        更新中…
+        {t('update.updating')}
       </span>
     );
   }
   if (phase === 'failed') {
     return (
       <span
-        title="手动运行 bunx @seaveyon/harness-switch@latest"
+        title={t('update.failedHint')}
         className="flex h-6 shrink-0 items-center whitespace-nowrap rounded-md bg-destructive/10 px-2 font-mono text-[11px] text-destructive"
       >
-        更新失败
+        {t('update.failed')}
       </span>
     );
   }
@@ -82,13 +84,13 @@ export function UpdateButton() {
     <Button
       variant="outline"
       size="sm"
-      aria-label={`更新到 v${latest}`}
+      aria-label={t('update.toVersion', { version: latest })}
       className="h-6 shrink-0 gap-1 whitespace-nowrap px-2 font-mono text-[11px]"
       onClick={() => void update()}
     >
       <Sparkles className="size-3 shrink-0" />
-      <span className="sm:hidden">更新</span>
-      <span className="hidden sm:inline">更新到 v{latest}</span>
+      <span className="sm:hidden">{t('update.short')}</span>
+      <span className="hidden sm:inline">{t('update.toVersion', { version: latest })}</span>
     </Button>
   );
 }

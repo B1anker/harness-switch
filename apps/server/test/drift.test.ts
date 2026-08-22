@@ -3,11 +3,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DriftSummary } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { createServices } from '../src/bootstrap';
 import { IActivationService } from '../src/services/activation';
 import { IDriftService, semanticEqual } from '../src/services/drift';
 import { IEnvironmentService } from '../src/services/environment';
 import { IProfileService } from '../src/services/profiles';
+import { expectHttpError } from './support/http-error';
 
 let homeDir = '';
 let services: ReturnType<typeof createServices>;
@@ -164,7 +166,7 @@ describe('drift reapply', () => {
   });
 
   test('rejects reapply when nothing is active', () => {
-    expect(() => drift().reapply('claude')).toThrow(/未激活/);
+    expectHttpError(() => drift().reapply('claude'), ERROR_CODES.noActiveProfile, 400);
   });
 });
 
@@ -218,7 +220,7 @@ describe('drift adopt', () => {
     );
     activation().activate('claude', 'main');
     activation().activateOfficial('claude');
-    expect(() => drift().adopt('claude')).toThrow(/官方登录/);
+    expectHttpError(() => drift().adopt('claude'), ERROR_CODES.officialProfileCannotAdopt, 400);
   });
 
   test('adopting a codex config with semantic drift keeps the file parseable', () => {

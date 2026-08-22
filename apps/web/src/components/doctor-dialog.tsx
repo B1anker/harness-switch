@@ -1,4 +1,10 @@
-import type { DoctorCheck, DoctorCheckStatus, DoctorReport } from '@seaveyon/harness-switch-shared';
+import {
+  type DoctorCheck,
+  type DoctorCheckStatus,
+  type DoctorReport,
+  HARNESS_LABELS,
+  isHarnessId,
+} from '@seaveyon/harness-switch-shared';
 import { RefreshCcw, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useTranslation } from '@/lib/i18n';
+import { lineText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -26,18 +34,12 @@ const STATUS_DOT: Record<DoctorCheckStatus, string> = {
   unknown: 'bg-slate-400',
 };
 
-const STATUS_LABEL: Record<DoctorCheckStatus, string> = {
-  ok: '正常',
-  warn: '警告',
-  error: '错误',
-  unknown: '未知',
-};
-
 /**
  * Doctor: one-shot local health report per harness. Each check carries a status
- * dot and a label; 重新诊断 re-runs the whole report.
+ * dot and a label; re-running rebuilds the whole report.
  */
 export function DoctorDialog({ open, onOpenChange }: DoctorDialogProps) {
+  const { t } = useTranslation();
   const doctor = useAppStore((state) => state.doctor);
   const doctorLoading = useAppStore((state) => state.doctorLoading);
   const doctorError = useAppStore((state) => state.doctorError);
@@ -57,39 +59,45 @@ export function DoctorDialog({ open, onOpenChange }: DoctorDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>诊断</DialogTitle>
-          <DialogDescription>
-            检查工具安装、配置文件可读可写可解析、存储权限与漂移状态。
-          </DialogDescription>
+          <DialogTitle>{t('doctor.title')}</DialogTitle>
+          <DialogDescription>{t('doctor.intro')}</DialogDescription>
         </DialogHeader>
 
         {doctorLoading && reports.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">正在检查…</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('doctor.checking')}</p>
         ) : null}
-        {doctorError ? <p className="text-sm text-destructive">{doctorError}</p> : null}
+        {doctorError ? (
+          <p className="text-sm text-destructive">{lineText(t, doctorError)}</p>
+        ) : null}
 
         {reports.length > 0 ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              {summary.ok > 0 ? <Badge variant="secondary">{summary.ok} 项正常</Badge> : null}
+              {summary.ok > 0 ? (
+                <Badge variant="secondary">{t('doctor.countOk', { count: summary.ok })}</Badge>
+              ) : null}
               {summary.warn > 0 ? (
                 <Badge
                   variant="outline"
                   className="border-amber-500/30 text-amber-700 dark:text-amber-300"
                 >
-                  {summary.warn} 项警告
+                  {t('doctor.countWarn', { count: summary.warn })}
                 </Badge>
               ) : null}
               {summary.error > 0 ? (
-                <Badge variant="destructive">{summary.error} 项错误</Badge>
+                <Badge variant="destructive">
+                  {t('doctor.countError', { count: summary.error })}
+                </Badge>
               ) : null}
               {summary.unknown > 0 ? (
-                <Badge variant="outline">{summary.unknown} 项未知</Badge>
+                <Badge variant="outline">
+                  {t('doctor.countUnknown', { count: summary.unknown })}
+                </Badge>
               ) : null}
               {doctorUpdatedAvailable ? (
                 <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                   <Sparkles className="size-3.5" />
-                  有新版本可用
+                  {t('doctor.updateAvailable')}
                 </span>
               ) : null}
             </div>
@@ -108,15 +116,15 @@ export function DoctorDialog({ open, onOpenChange }: DoctorDialogProps) {
           </>
         ) : null}
         {reports.length === 0 && !doctorLoading && !doctorError ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">尚未运行诊断</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('doctor.notRun')}</p>
         ) : null}
 
         <DialogFooter>
           <Button variant="outline" disabled={doctorLoading} onClick={() => void loadDoctor()}>
             <RefreshCcw className={doctorLoading ? 'animate-spin' : undefined} />
-            重新诊断
+            {t('doctor.rerun')}
           </Button>
-          <Button onClick={() => onOpenChange(false)}>关闭</Button>
+          <Button onClick={() => onOpenChange(false)}>{t('doctor.close')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -124,8 +132,9 @@ export function DoctorDialog({ open, onOpenChange }: DoctorDialogProps) {
 }
 
 function CheckList({ checks }: { checks: DoctorCheck[] }) {
+  const { t } = useTranslation();
   if (checks.length === 0) {
-    return <p className="text-sm text-muted-foreground">没有可检查的项目</p>;
+    return <p className="text-sm text-muted-foreground">{t('doctor.noChecks')}</p>;
   }
   return (
     <ul className="divide-y rounded-xl border">
@@ -137,16 +146,13 @@ function CheckList({ checks }: { checks: DoctorCheck[] }) {
           />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <p className="text-sm leading-relaxed">{check.label}</p>
+              <p className="text-sm leading-relaxed">
+                {lineText(t, { key: checkKey(check), params: check.params, fallback: check.label })}
+              </p>
               <span className="font-mono text-[10px] uppercase text-muted-foreground">
-                {STATUS_LABEL[check.status]}
+                {t(`doctor.status.${check.status}`)}
               </span>
             </div>
-            {check.detail !== undefined ? (
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                {formatDetail(check.detail)}
-              </p>
-            ) : null}
           </div>
         </li>
       ))}
@@ -154,26 +160,16 @@ function CheckList({ checks }: { checks: DoctorCheck[] }) {
   );
 }
 
-function formatDetail(detail: unknown): string {
-  if (typeof detail === 'string') {
-    return detail;
-  }
-  try {
-    return JSON.stringify(detail);
-  } catch {
-    return String(detail);
-  }
+/**
+ * Catalog key for a check. A server that predates the code contract sends none, and
+ * `lineText` then renders the `label` prose it did send.
+ */
+function checkKey(check: DoctorCheck): string {
+  return check.code ?? 'doctor.unknownCheck';
 }
 
 function harnessLabel(harness: string): string {
-  const known: Record<string, string> = {
-    claude: 'Claude Code',
-    codex: 'Codex',
-    kimi: 'Kimi Code',
-    pi: 'Pi',
-    dsh: 'DeepSeek Harness',
-  };
-  return known[harness] ?? harness;
+  return isHarnessId(harness) ? HARNESS_LABELS[harness] : harness;
 }
 
 type Summary = { ok: number; warn: number; error: number; unknown: number };

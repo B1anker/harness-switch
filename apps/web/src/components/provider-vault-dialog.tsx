@@ -24,7 +24,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, useTranslation } from '@/lib/i18n';
+import { errorLineWith, lineText, type MessageLine, messageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
 type ProviderVaultDialogProps = {
@@ -41,9 +42,12 @@ type EndpointDraft = {
 };
 
 type EndpointFieldErrors = {
-  key?: string;
-  baseUrl?: string;
+  key?: MessageLine;
+  baseUrl?: MessageLine;
 };
+
+/** Longest endpoint id the server accepts. */
+const ENDPOINT_KEY_MAX_LENGTH = 60;
 
 /**
  * Provider Vault: one place to see every stored provider entry (name, key
@@ -53,16 +57,17 @@ type EndpointFieldErrors = {
  */
 export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogProps) {
   const { locale } = useI18n();
+  const { t } = useTranslation();
   const providers = useAppStore((state) => state.providers);
   const providersLoading = useAppStore((state) => state.providersLoading);
   const providersError = useAppStore((state) => state.providersError);
   const loadProviders = useAppStore((state) => state.loadProviders);
   const deleteProvider = useAppStore((state) => state.deleteProvider);
   const [view, setView] = useState<View>({ kind: 'list' });
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<MessageLine[] | null>(null);
+  const [error, setError] = useState<MessageLine | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ProviderPublic | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<MessageLine | null>(null);
   /** Plaintext keys the user chose to reveal, keyed by entry id. */
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const revealProvider = useAppStore((state) => state.revealProvider);
@@ -72,9 +77,9 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
     try {
       await deleteProvider(entry.id);
       setPendingDelete(null);
-      setMessage('已删除。');
+      setMessage([{ key: 'vault.deleted' }]);
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : '删除失败');
+      setDeleteError(errorLineWith(err, 'vault.deleteFailed'));
     }
   }
 
@@ -91,7 +96,7 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
       const { apiKey } = await revealProvider(entry.id);
       setRevealed((current) => ({ ...current, [entry.id]: apiKey }));
     } catch (err) {
-      setError(err instanceof Error ? err.message : '无法读取密钥');
+      setError(errorLineWith(err, 'vault.revealFailed'));
     }
   }
 
@@ -116,22 +121,22 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
         <DialogHeader>
           <DialogTitle>
             {view.kind === 'create'
-              ? '新增 Provider'
+              ? t('vault.createTitle')
               : view.kind === 'edit'
-                ? `编辑 ${view.entry.name}`
-                : '凭据库'}
+                ? t('vault.editTitle', { name: view.entry.name })
+                : t('vault.title')}
           </DialogTitle>
           <DialogDescription>
-            {view.kind === 'list'
-              ? 'Provider 条目集中保存 API Key（AES-256-GCM 加密，默认不显示明文），并附带可复用的 endpoint。配置档案可以引用这里的条目，而不是各自保存一份密钥。'
-              : '配置凭据和可复用的命名 Endpoint；保存后返回凭据库列表。'}
+            {view.kind === 'list' ? t('vault.intro') : t('vault.formIntro')}
           </DialogDescription>
         </DialogHeader>
 
         {providersLoading && entries.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">正在读取凭据库…</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">{t('vault.loading')}</p>
         ) : null}
-        {providersError ? <p className="text-sm text-destructive">{providersError}</p> : null}
+        {providersError ? (
+          <p className="text-sm text-destructive">{lineText(t, providersError)}</p>
+        ) : null}
 
         {view.kind === 'create' || view.kind === 'edit' ? (
           <EntryForm
@@ -140,31 +145,33 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
               setView({ kind: 'list' });
               setError(null);
             }}
-            onSaved={(text) => {
+            onSaved={(lines) => {
               setView({ kind: 'list' });
-              setMessage(text);
+              setMessage(lines);
               setError(null);
             }}
           />
         ) : (
           <>
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-muted-foreground">{entries.length} 个 Provider 条目</p>
+              <p className="text-xs text-muted-foreground">
+                {t('vault.entryCount', { count: entries.length })}
+              </p>
               <Button size="sm" onClick={() => setView({ kind: 'create' })}>
                 <Plus />
-                新增凭据
+                {t('vault.add')}
               </Button>
             </div>
             {message ? (
-              <p className="rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
-                {message}
-              </p>
+              <div className="rounded-xl bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
+                {message.map((line) => (
+                  <p key={line.key + line.scope}>{lineText(t, line)}</p>
+                ))}
+              </div>
             ) : null}
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{lineText(t, error)}</p> : null}
             {entries.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                凭据库为空，先新增一个 Provider。
-              </p>
+              <p className="py-6 text-center text-sm text-muted-foreground">{t('vault.empty')}</p>
             ) : (
               <ul className="max-h-80 divide-y overflow-y-auto rounded-xl border">
                 {entries.map((entry) => (
@@ -174,9 +181,9 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium">{entry.name}</p>
                           {entry.apiKeyConfigured ? (
-                            <Badge variant="secondary">密钥已配置</Badge>
+                            <Badge variant="secondary">{t('vault.keyConfigured')}</Badge>
                           ) : (
-                            <Badge variant="outline">未配置密钥</Badge>
+                            <Badge variant="outline">{t('vault.keyMissing')}</Badge>
                           )}
                           <span className="font-mono text-[11px] text-muted-foreground">
                             {formatTime(entry.updatedAt, locale)}
@@ -200,14 +207,20 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
                             ))}
                           </ul>
                         ) : (
-                          <p className="mt-1 text-xs text-muted-foreground">没有命名 endpoint</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t('vault.noEndpoints')}
+                          </p>
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <Button
                           size="icon"
                           variant="ghost"
-                          aria-label={`${revealed[entry.id] !== undefined ? '隐藏' : '显示'} ${entry.name} 的密钥`}
+                          aria-label={
+                            revealed[entry.id] !== undefined
+                              ? t('vault.hide', { name: entry.name })
+                              : t('vault.reveal', { name: entry.name })
+                          }
                           onClick={() => void toggleReveal(entry)}
                         >
                           {revealed[entry.id] !== undefined ? <EyeOff /> : <Eye />}
@@ -215,7 +228,7 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
                         <Button
                           size="icon"
                           variant="ghost"
-                          aria-label={`编辑 ${entry.name}`}
+                          aria-label={t('vault.edit', { name: entry.name })}
                           onClick={() => {
                             setView({ kind: 'edit', entry });
                             setError(null);
@@ -226,7 +239,7 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
                         <Button
                           size="icon"
                           variant="ghost"
-                          aria-label={`删除 ${entry.name}`}
+                          aria-label={t('vault.delete', { name: entry.name })}
                           onClick={() => {
                             setDeleteError(null);
                             setPendingDelete(entry);
@@ -251,7 +264,7 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
         {view.kind === 'list' ? (
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
-              关闭
+              {t('vault.close')}
             </Button>
           </DialogFooter>
         ) : null}
@@ -263,16 +276,16 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除这个 Provider？</AlertDialogTitle>
+            <AlertDialogTitle>{t('vault.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              将删除「{pendingDelete?.name}」。被配置档案引用的条目无法删除，请先移除引用。
+              {t('vault.deleteBody', { name: pendingDelete?.name ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {deleteError ? (
-            <p className="text-sm text-destructive">被引用无法删除：{deleteError}</p>
+            <p className="text-sm text-destructive">{lineText(t, deleteError)}</p>
           ) : null}
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(event) => {
                 // Keep the dialog open on failure so the 409 reason is visible;
@@ -283,7 +296,7 @@ export function ProviderVaultDialog({ open, onOpenChange }: ProviderVaultDialogP
                 }
               }}
             >
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -296,10 +309,12 @@ type EntryFormProps = {
   /** null creates a new entry; otherwise the entry being edited. */
   entry: ProviderPublic | null;
   onCancel: () => void;
-  onSaved: (message: string) => void;
+  /** Confirmation plus any warnings, as lines the list view resolves. */
+  onSaved: (message: MessageLine[]) => void;
 };
 
 function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
+  const { t } = useTranslation();
   const createProvider = useAppStore((state) => state.createProvider);
   const updateProvider = useAppStore((state) => state.updateProvider);
   const isEdit = entry !== null;
@@ -314,8 +329,8 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
     })),
   );
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<{ name?: string; apiKey?: string }>({});
+  const [error, setError] = useState<MessageLine | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ name?: MessageLine; apiKey?: MessageLine }>({});
   const [endpointErrors, setEndpointErrors] = useState<Record<number, EndpointFieldErrors>>({});
 
   function updateEndpoint(index: number, patch: Partial<EndpointDraft>) {
@@ -342,8 +357,8 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
       baseUrl: endpoint.baseUrl.trim(),
     }));
     const nextFieldErrors = {
-      ...(!name.trim() ? { name: '请输入 Provider 名称' } : {}),
-      ...(!isEdit && !apiKey.trim() ? { apiKey: '请输入 API Key' } : {}),
+      ...(!name.trim() ? { name: { key: 'vault.error.nameRequired' } } : {}),
+      ...(!isEdit && !apiKey.trim() ? { apiKey: { key: 'vault.error.apiKeyRequired' } } : {}),
     };
     const keyCounts = new Map<string, number>();
     for (const endpoint of normalizedEndpoints) {
@@ -352,22 +367,26 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
     const nextEndpointErrors = Object.fromEntries(
       normalizedEndpoints.flatMap((endpoint, index) => {
         const errors: EndpointFieldErrors = {};
-        if (!endpoint.key) errors.key = '请输入 Endpoint 标识';
+        if (!endpoint.key) errors.key = { key: 'vault.error.endpointKeyRequired' };
         else if (
           endpoint.key.includes('/') ||
           endpoint.key.includes('\\') ||
-          endpoint.key.length > 60
+          endpoint.key.length > ENDPOINT_KEY_MAX_LENGTH
         )
-          errors.key = '不能包含 / 或 \\，且最多 60 个字符';
-        else if ((keyCounts.get(endpoint.key) ?? 0) > 1) errors.key = 'Endpoint 标识不能重复';
-        if (!endpoint.baseUrl) errors.baseUrl = '请输入 Base URL';
+          errors.key = {
+            key: 'vault.error.endpointKeyInvalid',
+            params: { max: ENDPOINT_KEY_MAX_LENGTH },
+          };
+        else if ((keyCounts.get(endpoint.key) ?? 0) > 1)
+          errors.key = { key: 'vault.error.endpointKeyDuplicate' };
+        if (!endpoint.baseUrl) errors.baseUrl = { key: 'vault.error.endpointUrlRequired' };
         return Object.keys(errors).length > 0 ? [[index, errors] as const] : [];
       }),
     );
     setFieldErrors(nextFieldErrors);
     setEndpointErrors(nextEndpointErrors);
     if (Object.keys(nextFieldErrors).length > 0 || Object.keys(nextEndpointErrors).length > 0) {
-      setError('请检查标红的必填项。');
+      setError({ key: 'vault.error.checkFields' });
       return;
     }
     const body = {
@@ -383,17 +402,13 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
           ...body,
           ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
         });
-        const parts = ['已更新。'];
-        if (result.warnings.length > 0) {
-          parts.push(result.warnings.join('；'));
-        }
-        onSaved(parts.join(' '));
+        onSaved([{ key: 'vault.updated' }, ...result.warnings.map(messageLine)]);
       } else {
         await createProvider({ ...body, apiKey: apiKey.trim() });
-        onSaved('已新增 Provider 条目。');
+        onSaved([{ key: 'vault.created' }]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败');
+      setError(errorLineWith(err, 'vault.saveFailed'));
     } finally {
       setPending(false);
     }
@@ -403,7 +418,7 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
     <form onSubmit={onSubmit} noValidate className="space-y-4">
       <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="provider-name">名称</Label>
+          <Label htmlFor="provider-name">{t('vault.name')}</Label>
           <Input
             id="provider-name"
             value={name}
@@ -411,18 +426,18 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
               setName(event.target.value);
               setFieldErrors((current) => ({ ...current, name: undefined }));
             }}
-            placeholder="例如：openrouter"
+            placeholder={t('vault.namePlaceholder')}
             aria-invalid={fieldErrors.name ? true : undefined}
             aria-describedby={fieldErrors.name ? 'provider-name-error' : undefined}
           />
           {fieldErrors.name ? (
             <p id="provider-name-error" className="text-xs text-destructive">
-              {fieldErrors.name}
+              {lineText(t, fieldErrors.name)}
             </p>
           ) : null}
         </div>
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="provider-api-key">API Key</Label>
+          <Label htmlFor="provider-api-key">{t('vault.apiKey')}</Label>
           <Input
             id="provider-api-key"
             type="password"
@@ -431,18 +446,18 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
               setApiKey(event.target.value);
               setFieldErrors((current) => ({ ...current, apiKey: undefined }));
             }}
-            placeholder={isEdit ? '留空表示保持不变' : '必填'}
+            placeholder={isEdit ? t('vault.apiKeyKeep') : t('vault.apiKeyRequiredPlaceholder')}
             aria-invalid={fieldErrors.apiKey ? true : undefined}
             aria-describedby={fieldErrors.apiKey ? 'provider-api-key-error' : undefined}
           />
           {fieldErrors.apiKey ? (
             <p id="provider-api-key-error" className="text-xs text-destructive">
-              {fieldErrors.apiKey}
+              {lineText(t, fieldErrors.apiKey)}
             </p>
           ) : null}
         </div>
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="provider-notes">备注（可选）</Label>
+          <Label htmlFor="provider-notes">{t('vault.notes')}</Label>
           <Textarea
             id="provider-notes"
             rows={2}
@@ -453,13 +468,11 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label>命名 Endpoint（可选）</Label>
-        <p className="text-xs text-muted-foreground">
-          配置档案引用此 Provider 时可以选择某个 endpoint，其 Base URL 优先于配置自身的地址。
-        </p>
+        <Label>{t('vault.endpoints')}</Label>
+        <p className="text-xs text-muted-foreground">{t('vault.endpointsHint')}</p>
         {endpoints.length === 0 ? (
           <p className="rounded-xl border border-dashed px-3 py-3 text-center text-xs text-muted-foreground">
-            还没有 endpoint
+            {t('vault.noEndpointDrafts')}
           </p>
         ) : (
           <div className="space-y-2">
@@ -470,10 +483,10 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
               >
                 <div className="space-y-1.5">
                   <Input
-                    aria-label={`Endpoint ${index + 1} 名称`}
+                    aria-label={t('vault.endpointKeyLabel', { index: index + 1 })}
                     value={endpoint.key}
                     onChange={(event) => updateEndpoint(index, { key: event.target.value })}
-                    placeholder="标识，如 default"
+                    placeholder={t('vault.endpointKeyPlaceholder')}
                     aria-invalid={endpointErrors[index]?.key ? true : undefined}
                     aria-describedby={
                       endpointErrors[index]?.key ? `endpoint-${index}-key-error` : undefined
@@ -481,16 +494,16 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
                   />
                   {endpointErrors[index]?.key ? (
                     <p id={`endpoint-${index}-key-error`} className="text-xs text-destructive">
-                      {endpointErrors[index].key}
+                      {lineText(t, endpointErrors[index].key)}
                     </p>
                   ) : null}
                 </div>
                 <div className="space-y-1.5">
                   <Input
-                    aria-label={`Endpoint ${index + 1} Base URL`}
+                    aria-label={t('vault.endpointUrlLabel', { index: index + 1 })}
                     value={endpoint.baseUrl}
                     onChange={(event) => updateEndpoint(index, { baseUrl: event.target.value })}
-                    placeholder="https://api.example.com/v1"
+                    placeholder={t('vault.endpointUrlPlaceholder')}
                     aria-invalid={endpointErrors[index]?.baseUrl ? true : undefined}
                     aria-describedby={
                       endpointErrors[index]?.baseUrl ? `endpoint-${index}-url-error` : undefined
@@ -498,21 +511,21 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
                   />
                   {endpointErrors[index]?.baseUrl ? (
                     <p id={`endpoint-${index}-url-error`} className="text-xs text-destructive">
-                      {endpointErrors[index].baseUrl}
+                      {lineText(t, endpointErrors[index].baseUrl)}
                     </p>
                   ) : null}
                 </div>
                 <Input
-                  aria-label={`Endpoint ${index + 1} 标签`}
+                  aria-label={t('vault.endpointLabelLabel', { index: index + 1 })}
                   value={endpoint.label}
                   onChange={(event) => updateEndpoint(index, { label: event.target.value })}
-                  placeholder="显示标签（可选）"
+                  placeholder={t('vault.endpointLabelPlaceholder')}
                 />
                 <Button
                   type="button"
                   size="icon"
                   variant="ghost"
-                  aria-label={`移除 Endpoint ${index + 1}`}
+                  aria-label={t('vault.removeEndpoint', { index: index + 1 })}
                   onClick={() => {
                     setEndpoints((current) => current.filter((_, i) => i !== index));
                     setEndpointErrors({});
@@ -533,18 +546,18 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
           }
         >
           <Plus />
-          添加 endpoint
+          {t('vault.addEndpoint')}
         </Button>
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{lineText(t, error)}</p> : null}
 
       <DialogFooter className="flex-row justify-end gap-2 space-x-0">
         <Button type="button" variant="outline" className="min-w-24" onClick={onCancel}>
-          取消
+          {t('common.cancel')}
         </Button>
         <Button type="submit" className="min-w-24" disabled={pending}>
-          {pending ? '保存中…' : isEdit ? '保存修改' : '新增凭据'}
+          {pending ? t('vault.saving') : isEdit ? t('vault.saveChanges') : t('vault.add')}
         </Button>
       </DialogFooter>
     </form>

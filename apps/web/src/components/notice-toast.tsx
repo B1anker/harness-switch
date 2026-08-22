@@ -1,8 +1,11 @@
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '@/lib/i18n';
+import { lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
 export function NoticeToast() {
+  const { t } = useTranslation();
   const notice = useAppStore((state) => state.notice);
   const clearNotice = useAppStore((state) => state.clearNotice);
 
@@ -24,14 +27,19 @@ export function NoticeToast() {
       className="fixed bottom-4 right-4 z-50 w-[min(28rem,calc(100vw-2rem))] rounded-2xl border bg-card p-4 shadow-[0_18px_50px_-24px_rgb(36_39_70/0.45)]"
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium">已写入磁盘</p>
+        <p className="text-sm font-medium">{t('notice.title')}</p>
         <Button size="sm" variant="ghost" onClick={clearNotice}>
-          关闭
+          {t('notice.close')}
         </Button>
       </div>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-        {notice}
-      </p>
+      {notice.map((line) => (
+        <p
+          key={`${line.key}-${line.scope ?? ''}`}
+          className="mt-2 text-sm leading-relaxed text-muted-foreground"
+        >
+          {lineText(t, line)}
+        </p>
+      ))}
     </div>
   );
 }

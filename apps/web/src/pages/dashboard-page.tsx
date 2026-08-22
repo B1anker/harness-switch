@@ -2,6 +2,8 @@ import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness
 import {
   ArrowRightLeft,
   ChevronDown,
+  FileSearch,
+  History,
   KeyRound,
   LogOut,
   Plus,
@@ -17,8 +19,10 @@ import { DoctorDialog } from '@/components/doctor-dialog';
 import { DriftPanel } from '@/components/drift-panel';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
+import { ImportWizardDialog } from '@/components/import-wizard-dialog';
 import { LanguageToggle } from '@/components/language-toggle';
 import { NoticeToast } from '@/components/notice-toast';
+import { OperationsDialog } from '@/components/operations-dialog';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -34,7 +38,7 @@ import {
 import { UpdateButton } from '@/components/update-button';
 import { UserSyncDialog } from '@/components/user-sync-dialog';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
-import { useI18n } from '@/lib/i18n';
+import { useI18n, useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -45,6 +49,7 @@ type Editing = {
 
 export function DashboardPage() {
   const { locale } = useI18n();
+  const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
   const envFile = useAppStore((state) => state.envFile);
   const logout = useAppStore((state) => state.logout);
@@ -58,6 +63,8 @@ export function DashboardPage() {
   const [vaultOpen, setVaultOpen] = useState(false);
   const [doctorOpen, setDoctorOpen] = useState(false);
   const [userSyncOpen, setUserSyncOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [operationsOpen, setOperationsOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
@@ -79,7 +86,7 @@ export function DashboardPage() {
                 <DevModeBadge />
                 <UpdateButton />
               </div>
-              <p className="truncate text-xs text-muted-foreground">写入原生配置</p>
+              <p className="truncate text-xs text-muted-foreground">{t('app.tagline')}</p>
             </div>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -88,9 +95,9 @@ export function DashboardPage() {
               onValueChange={(username) => void switchUser(username)}
               disabled={usersLoading || users.length === 0}
             >
-              <SelectTrigger className="w-[8.5rem]" aria-label="当前本地用户">
+              <SelectTrigger className="w-[8.5rem]" aria-label={t('nav.currentLocalUser')}>
                 <UserRound className="size-4 shrink-0" />
-                <SelectValue placeholder="本地用户" />
+                <SelectValue placeholder={t('nav.localUser')} />
               </SelectTrigger>
               <SelectContent>
                 {users.map((user) => (
@@ -102,25 +109,33 @@ export function DashboardPage() {
             </Select>
             <Button variant="outline" size="sm" onClick={() => setUserSyncOpen(true)}>
               <RefreshCw />
-              <span className="hidden lg:inline">同步用户配置</span>
+              <span className="hidden lg:inline">{t('nav.syncUserConfig')}</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <FileSearch />
+              <span className="hidden lg:inline">{t('nav.importExisting')}</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setOperationsOpen(true)}>
+              <History />
+              <span className="hidden lg:inline">{t('nav.operations')}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft />
-              <span className="hidden sm:inline">导入 / 导出</span>
+              <span className="hidden sm:inline">{t('nav.transfer')}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setVaultOpen(true)}>
               <KeyRound />
-              <span className="hidden sm:inline">凭据库</span>
+              <span className="hidden sm:inline">{t('nav.vault')}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setDoctorOpen(true)}>
               <Stethoscope />
-              <span className="hidden sm:inline">诊断</span>
+              <span className="hidden sm:inline">{t('nav.doctor')}</span>
             </Button>
             <LanguageToggle />
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={() => void logout()}>
               <LogOut />
-              退出
+              {t('nav.signOut')}
             </Button>
           </div>
         </div>
@@ -141,16 +156,14 @@ export function DashboardPage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-2xl font-semibold tracking-tight">{selectedHarness.label}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  管理配置档案并安全写入该工具的原生配置文件。
-                </p>
+                <p className="mt-1 text-sm text-muted-foreground">{t('harness.subtitle')}</p>
               </div>
               <Button
                 className="self-start sm:self-auto"
                 onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
               >
                 <Plus />
-                新增配置
+                {t('harness.newProfile')}
               </Button>
             </div>
             <HarnessCard
@@ -160,19 +173,14 @@ export function DashboardPage() {
             />
             <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
-                <span className="font-mono text-[13px]">环境变量文件兼容性</span>
+                <span className="font-mono text-[13px]">{t('env.title')}</span>
                 <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
               </summary>
-              <p className="mt-4 leading-relaxed text-muted-foreground">
-                切换本身不需要它。只有 Codex 选择「环境变量」认证方式时才需要在对应 shell 执行：
-              </p>
+              <p className="mt-4 leading-relaxed text-muted-foreground">{t('env.intro')}</p>
               <code className="mt-3 block rounded-xl bg-muted/70 px-4 py-3 font-mono text-[13px]">
                 source {envFile || '~/.harness-switch/env.sh'}
               </code>
-              <p className="mt-3 leading-relaxed text-muted-foreground">
-                文件里只会写入对应工具确实认识的变量。Kimi Code 与 Pi 不从 shell
-                读取凭据，所以它们只有一行注释。
-              </p>
+              <p className="mt-3 leading-relaxed text-muted-foreground">{t('env.note')}</p>
             </details>
           </main>
         ) : null}
@@ -196,6 +204,8 @@ export function DashboardPage() {
       <ProviderVaultDialog open={vaultOpen} onOpenChange={setVaultOpen} />
       <DoctorDialog open={doctorOpen} onOpenChange={setDoctorOpen} />
       <UserSyncDialog open={userSyncOpen} onOpenChange={setUserSyncOpen} />
+      <ImportWizardDialog open={importOpen} onOpenChange={setImportOpen} />
+      <OperationsDialog open={operationsOpen} onOpenChange={setOperationsOpen} />
       <NoticeToast />
     </div>
   );
@@ -210,6 +220,8 @@ function HarnessTabs({
   value: HarnessId | undefined;
   onChange: (id: HarnessId) => void;
 }) {
+  const { t } = useTranslation();
+
   function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
     const backward = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
     const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
@@ -238,12 +250,15 @@ function HarnessTabs({
   return (
     <div
       role="tablist"
-      aria-label="切换 Harness"
+      aria-label={t('nav.switchHarness')}
       aria-orientation="vertical"
       className="flex gap-2 overflow-x-auto border-b bg-card/45 p-3 xl:min-h-[calc(100dvh-80px)] xl:flex-col xl:overflow-x-visible xl:border-b-0 xl:border-r xl:p-4"
     >
       {harnesses.map((harness, index) => {
         const selected = harness.id === value;
+        const activeLabel = harness.active?.official
+          ? t('harness.official')
+          : (harness.active?.name ?? null);
         return (
           <button
             key={harness.id}
@@ -275,7 +290,9 @@ function HarnessTabs({
                 {harness.label}
               </span>
               <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">
-                {harness.active ? `当前：${harness.active.name}` : '当前：未激活'}
+                {activeLabel === null
+                  ? t('harness.currentInactive')
+                  : t('harness.current', { name: activeLabel })}
               </span>
             </span>
             <span className="font-mono text-[11px] text-muted-foreground">
@@ -303,17 +320,18 @@ function ContextPanel({
       }
     | undefined;
 }) {
+  const { t } = useTranslation();
   return (
     <aside className="border-t bg-card/35 p-4 sm:p-6 xl:min-h-[calc(100dvh-80px)] xl:border-l xl:border-t-0 xl:p-5">
       <div className="space-y-4 xl:sticky xl:top-[100px]">
         <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
           <div className="flex items-center gap-2">
             <Server className="size-4 text-primary" />
-            <h3 className="font-semibold">写入目标</h3>
+            <h3 className="font-semibold">{t('harness.writeTargets')}</h3>
           </div>
           <div className="mt-5 space-y-4">
             <div>
-              <p className="text-xs text-muted-foreground">应用</p>
+              <p className="text-xs text-muted-foreground">{t('harness.application')}</p>
               <p className="mt-1 text-sm font-medium">{harness.label}</p>
             </div>
             {harness.targets.map((target) => (
@@ -323,9 +341,9 @@ function ContextPanel({
               </div>
             ))}
             <div>
-              <p className="text-xs text-muted-foreground">写入模式</p>
+              <p className="text-xs text-muted-foreground">{t('harness.writeMode')}</p>
               <p className="mt-1 text-sm">
-                {harness.mode === 'replace' ? '替换当前配置' : '保留并切换指针'}
+                {harness.mode === 'replace' ? t('harness.modeReplace') : t('harness.modeAdditive')}
               </p>
             </div>
           </div>
@@ -334,20 +352,20 @@ function ContextPanel({
         <DriftPanel harness={harness} />
 
         <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
-          <h3 className="font-semibold">最近备份</h3>
+          <h3 className="font-semibold">{t('backup.latest')}</h3>
           {latestBackup ? (
             <div className="mt-4 space-y-3">
               <div>
-                <p className="text-xs text-muted-foreground">配置档案</p>
+                <p className="text-xs text-muted-foreground">{t('backup.profile')}</p>
                 <p className="mt-1 truncate text-sm font-medium">{latestBackup.profile}</p>
               </div>
               <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">
                 {new Date(latestBackup.createdAt).toLocaleString(locale)} ·{' '}
-                {latestBackup.files.length} 个文件
+                {t('backup.fileCount', { count: latestBackup.files.length })}
               </p>
             </div>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">还没有历史快照</p>
+            <p className="mt-3 text-sm text-muted-foreground">{t('backup.empty')}</p>
           )}
           <div className="mt-4 border-t pt-4">
             <BackupPanel harnessId={harness.id} />

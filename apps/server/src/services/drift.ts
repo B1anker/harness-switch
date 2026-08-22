@@ -8,6 +8,7 @@ import type {
   HarnessId,
   PreviewTarget,
 } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { parse as parseTomlText } from 'smol-toml';
 import { parseDocument } from 'yaml';
 import { HttpError } from '../common/errors';
@@ -78,24 +79,37 @@ export class DriftService implements IDriftService {
   reapply(harness: HarnessId): DriftReapplyResponse {
     const active = this.activation.getActive(harness);
     if (!active) {
-      throw new HttpError(400, '该工具未激活任何配置，无可重应用的内容');
+      throw new HttpError(400, '该工具未激活任何配置，无可重应用的内容', {
+        code: ERROR_CODES.noActiveProfile,
+      });
     }
     const writes = this.activation.expectedWrites(harness);
-    this.liveWrite.apply(harness, active.official === true ? '官方登录' : active.name, writes);
+    this.liveWrite.apply({
+      kind: 'reapply',
+      harness,
+      profile: active.official === true ? '官方登录' : active.name,
+      writes,
+    });
     return { ok: true, files: this.inspect(harness).files };
   }
 
   adopt(harness: HarnessId): DriftAdoptResponse {
     const active = this.activation.getActive(harness);
     if (!active) {
-      throw new HttpError(400, '该工具未激活任何配置，无可采纳的内容');
+      throw new HttpError(400, '该工具未激活任何配置，无可采纳的内容', {
+        code: ERROR_CODES.noActiveProfile,
+      });
     }
     if (active.official === true) {
-      throw new HttpError(400, '官方登录模式下没有可采纳的配置');
+      throw new HttpError(400, '官方登录模式下没有可采纳的配置', {
+        code: ERROR_CODES.officialProfileCannotAdopt,
+      });
     }
     const adapter = this.adapters.get(harness);
     if (!adapter.backfill) {
-      throw new HttpError(400, '该工具不支持从 live 文件回读配置');
+      throw new HttpError(400, '该工具不支持从 live 文件回读配置', {
+        code: ERROR_CODES.adoptUnsupported,
+      });
     }
     const profile = this.profiles.decrypt(harness, active.name);
     if (Object.keys(profile.overrides).length > 0) {

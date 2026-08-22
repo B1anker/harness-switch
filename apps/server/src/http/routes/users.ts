@@ -1,9 +1,4 @@
-import {
-  type HarnessId,
-  isHarnessId,
-  type UserSyncRequest,
-  type UsersResponse,
-} from '@seaveyon/harness-switch-shared';
+import { type UsersResponse, userSyncRequestSchema } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { HttpError } from '../../common/errors';
@@ -12,6 +7,7 @@ import { IAuthService } from '../../services/auth';
 import { IEnvironmentService } from '../../services/environment';
 import { IUserSyncService } from '../../services/user-sync';
 import { IUserService } from '../../services/users';
+import { readJsonBody } from '../validate';
 
 export function createUserRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -29,18 +25,18 @@ export function createUserRoutes(services: InstantiationService): Hono {
   });
 
   app.post('/sync/preview', async (c) => {
-    const body = await readBody(c.req.json.bind(c.req));
-    return c.json(sync.preview(String(body.sourceUser ?? '')));
+    const body = await readJsonBody(c, userSyncRequestSchema);
+    return c.json(sync.preview(body.sourceUser));
   });
 
   app.post('/sync', async (c) => {
-    const body = await readBody(c.req.json.bind(c.req));
+    const body = await readJsonBody(c, userSyncRequestSchema);
     return c.json(
       sync.sync(
-        String(body.sourceUser ?? ''),
+        body.sourceUser,
         body.conflictPolicy ?? 'skip',
         body.migrateCodexLoginCache === true,
-        parseOverwriteHarnesses(body.overwriteHarnesses),
+        [...new Set(body.overwriteHarnesses ?? [])],
       ),
     );
   });
@@ -54,18 +50,4 @@ export function createUserRoutes(services: InstantiationService): Hono {
   });
 
   return app;
-}
-
-async function readBody(read: () => Promise<UserSyncRequest>): Promise<UserSyncRequest> {
-  return read().catch(() => {
-    throw new HttpError(400, 'invalid json');
-  });
-}
-
-function parseOverwriteHarnesses(value: UserSyncRequest['overwriteHarnesses']): HarnessId[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value) || value.some((item) => !isHarnessId(item))) {
-    throw new HttpError(400, 'invalid overwrite harnesses');
-  }
-  return [...new Set(value)];
 }

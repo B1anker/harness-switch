@@ -3,6 +3,7 @@ import {
   chmodSync,
   chownSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -12,7 +13,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname } from 'node:path';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
+import { isInside, realPath } from '../common/paths';
 import { createDecorator, inject } from '../di';
 import { IEnvironmentService } from './environment';
 
@@ -22,6 +25,18 @@ export interface IFileService {
   readText(file: string): string;
   /** Returns undefined when the file does not exist, so callers can tell it apart from an empty file. */
   readOptional(file: string): string | undefined;
+  /**
+   * Reads a file that has to be a regular file. A symlink is refused instead of
+   * followed, so content the manager stores for itself cannot be turned into a window
+   * onto files the requesting user may not read.
+   */
+  readRegularOptional(file: string): string | undefined;
+  /**
+   * Refuses a path that resolves outside the selected user's home and the explicitly
+   * configured harness directories. Writes and removes check this on their own; callers
+   * that only read a user-supplied destination have to ask for it.
+   */
+  assertManaged(file: string): void;
   /**
    * Reads a JSON document that may be absent but must be valid when present.
    * A corrupt file is quarantined aside (so a later write can never overwrite
@@ -74,6 +89,33 @@ export class FileService implements IFileService {
     }
   }
 
+  readRegularOptional(file: string): string | undefined {
+    let stat: ReturnType<typeof lstatSync>;
+    try {
+      stat = lstatSync(file);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return undefined;
+      }
+      throw error;
+    }
+    if (!stat.isFile()) {
+      throw new HttpError(400, `${file} 不是普通文件，拒绝读取`);
+    }
+    return this.readText(file);
+  }
+
+  assertManaged(file: string): void {
+    const resolved = realPath(file);
+    if (this.environment.writeRoots.some((root) => isInside(realPath(root), resolved))) {
+      return;
+    }
+    throw new HttpError(
+      403,
+      `${file} 解析后落在 ${this.environment.currentUser.username} 的可管理目录之外，拒绝操作`,
+    );
+  }
+
   readJsonStrict<T>(file: string, fallback: T): T {
     if (!existsSync(file)) {
       return fallback;
@@ -82,7 +124,10 @@ export class FileService implements IFileService {
     try {
       text = this.readText(file);
     } catch {
-      throw new HttpError(500, `数据存储不可读：${file}`);
+      throw new HttpError(500, `数据存储不可读：${file}`, {
+        code: ERROR_CODES.storageUnreadable,
+        params: { file },
+      });
     }
     try {
       return JSON.parse(text) as T;
@@ -91,11 +136,18 @@ export class FileService implements IFileService {
       try {
         renameSync(file, quarantine);
       } catch {
-        throw new HttpError(500, `数据存储损坏且无法隔离：${file}`);
+        throw new HttpError(500, `数据存储损坏且无法隔离：${file}`, {
+          code: ERROR_CODES.storageQuarantineFailed,
+          params: { file },
+        });
       }
       throw new HttpError(
         500,
         `数据存储已损坏，原文件已隔离为 ${basename(quarantine)}，请从备份恢复后再继续`,
+        {
+          code: ERROR_CODES.storageCorruptQuarantined,
+          params: { quarantine: basename(quarantine) },
+        },
       );
     }
   }
@@ -128,6 +180,7 @@ export class FileService implements IFileService {
   }
 
   ensureDir(dir: string): void {
+    this.assertManaged(dir);
     const missing: string[] = [];
     let cursor = dir;
     while (!existsSync(cursor)) {
@@ -148,6 +201,7 @@ export class FileService implements IFileService {
   }
 
   remove(file: string): void {
+    this.assertManaged(file);
     rmSync(file, { force: true, recursive: true });
   }
 
@@ -162,6 +216,7 @@ export class FileService implements IFileService {
   }
 
   private write(file: string, text: string, mode: number, owner = this.ownerOf(file)): void {
+    this.assertManaged(file);
     this.ensureDir(dirname(file));
     const tmp = `${file}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
     writeFileSync(tmp, text, { encoding: 'utf8', mode });

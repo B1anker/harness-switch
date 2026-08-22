@@ -1,16 +1,20 @@
 import type {
-  CreateProviderRequest,
+  LocalizedMessage,
   ProviderMutationResponse,
   ProvidersResponse,
-  UpdateProviderRequest,
+} from '@seaveyon/harness-switch-shared';
+import {
+  createProviderRequestSchema,
+  updateProviderRequestSchema,
+  WARNING_CODES,
 } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
-import { HttpError } from '../../common/errors';
 import type { InstantiationService } from '../../di';
 import { IActivationService } from '../../services/activation';
 import { ILogService } from '../../services/log';
 import { IProfileService } from '../../services/profiles';
 import { IVaultService } from '../../services/vault';
+import { readJsonBody } from '../validate';
 
 export function createProviderRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -24,7 +28,7 @@ export function createProviderRoutes(services: InstantiationService): Hono {
   app.get('/:id', (c) => c.json(vault.get(decodeURIComponent(c.req.param('id')))));
 
   app.post('/', async (c) => {
-    const body = await readBody<CreateProviderRequest>(c.req.json.bind(c.req));
+    const body = await readJsonBody(c, createProviderRequestSchema);
     return c.json(
       { provider: vault.create(body), warnings: [] } satisfies ProviderMutationResponse,
       201,
@@ -33,7 +37,7 @@ export function createProviderRoutes(services: InstantiationService): Hono {
 
   app.patch('/:id', async (c) => {
     const id = decodeURIComponent(c.req.param('id'));
-    const body = await readBody<UpdateProviderRequest>(c.req.json.bind(c.req));
+    const body = await readJsonBody(c, updateProviderRequestSchema);
     const { provider, affected } = vault.update(id, body);
 
     // Refresh the cached credential/base URL of every referencing profile so the
@@ -43,7 +47,7 @@ export function createProviderRoutes(services: InstantiationService): Hono {
     // Re-apply every ACTIVE profile that references this provider so the live files
     // reflect the rotation/endpoint change immediately. Failures are reported, never
     // raised: the store is already updated and the vault stays the source of truth.
-    const warnings: string[] = [];
+    const warnings: LocalizedMessage[] = [];
     for (const ref of affected) {
       if (activation.getActive(ref.harness as never)?.name !== ref.name) {
         continue;
@@ -53,15 +57,25 @@ export function createProviderRoutes(services: InstantiationService): Hono {
         profile?.providerEndpoint &&
         !provider.endpoints.some((ep) => ep.key === profile.providerEndpoint)
       ) {
-        warnings.push(
-          `${ref.harness}/${ref.name}: endpoint ${profile.providerEndpoint} 已不存在，将回退到 provider 首个 endpoint`,
-        );
+        warnings.push({
+          message: `${ref.harness}/${ref.name}: endpoint ${profile.providerEndpoint} 已不存在，将回退到 provider 首个 endpoint`,
+          code: WARNING_CODES.endpointFallback,
+          params: {
+            harness: ref.harness,
+            profile: ref.name,
+            endpoint: profile.providerEndpoint,
+          },
+        });
       }
       try {
         activation.activate(ref.harness as never, ref.name);
       } catch (error) {
         log.error(`providers update: failed to re-apply ${ref.harness}/${ref.name}`, error);
-        warnings.push(`${ref.harness}/${ref.name} 重新应用失败：${(error as Error).message}`);
+        warnings.push({
+          message: `${ref.harness}/${ref.name} 重新应用失败：${(error as Error).message}`,
+          code: WARNING_CODES.reapplyFailed,
+          params: { harness: ref.harness, profile: ref.name, reason: (error as Error).message },
+        });
       }
     }
     return c.json({ provider, warnings } satisfies ProviderMutationResponse);
@@ -73,10 +87,4 @@ export function createProviderRoutes(services: InstantiationService): Hono {
   });
 
   return app;
-}
-
-async function readBody<T>(read: () => Promise<T>): Promise<T> {
-  return read().catch(() => {
-    throw new HttpError(400, 'invalid json');
-  });
 }

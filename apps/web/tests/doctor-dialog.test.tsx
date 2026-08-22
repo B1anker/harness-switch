@@ -30,7 +30,6 @@ test('renders the summary, harness groups and check details', () => {
   expect(screen.getByText('1 项正常')).toBeInTheDocument();
   expect(screen.getByText('1 项警告')).toBeInTheDocument();
   expect(screen.getByText('Claude Code')).toBeInTheDocument();
-  expect(screen.getByText('claude.install')).toBeInTheDocument();
   expect(screen.getByText('已找到可执行文件 claude')).toBeInTheDocument();
   expect(screen.getByText('2 个文件与激活配置不一致（drifted）')).toBeInTheDocument();
 });

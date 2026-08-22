@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -26,10 +27,17 @@ type HarnessCardProps = {
 };
 
 export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCardProps) {
+  const { t } = useTranslation();
   const activateOfficial = useAppStore((state) => state.activateOfficial);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [activating, setActivating] = useState<ProfilePublic | null>(null);
+
+  // The stored name of the official entry is data on disk, so the display text
+  // comes from the `official` flag rather than from matching the name.
+  const activeName = harness.active?.official
+    ? t('harness.official')
+    : (harness.active?.name ?? null);
 
   return (
     <div className="space-y-6">
@@ -39,23 +47,27 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
             <div className="min-w-0 sm:pr-5">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="size-2 rounded-full bg-primary shadow-[0_0_0_4px_rgb(99_91_255/0.1)]" />
-                当前生效配置
+                {t('harness.activeConfig')}
               </div>
               <CardTitle className="mt-3 truncate text-xl">
-                {harness.active ? `当前激活 · ${harness.active.name}` : '未激活'}
+                {activeName === null
+                  ? t('harness.inactive')
+                  : t('harness.activeNamed', { name: activeName })}
               </CardTitle>
               <CardDescription className="mt-1">
-                当前：{harness.active ? harness.active.name : '未激活'}
+                {activeName === null
+                  ? t('harness.currentInactive')
+                  : t('harness.current', { name: activeName })}
               </CardDescription>
             </div>
             <div className="min-w-0 sm:pl-5">
-              <p className="text-xs text-muted-foreground">写入目标</p>
+              <p className="text-xs text-muted-foreground">{t('harness.writeTargets')}</p>
               <p className="mt-3 truncate font-mono text-sm">
-                {harness.targets[0]?.path ?? '未配置目标文件'}
+                {harness.targets[0]?.path ?? t('harness.noTargetFile')}
               </p>
               {harness.targets.length > 1 ? (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  以及另外 {harness.targets.length - 1} 个文件
+                  {t('harness.moreFiles', { count: harness.targets.length - 1 })}
                 </p>
               ) : null}
             </div>
@@ -64,9 +76,7 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/[0.08] text-primary">
               <ShieldCheck className="size-4" />
             </span>
-            <p className="pt-1 leading-relaxed">
-              配置将直接覆盖目标文件。写入前会自动备份，切换后请验证服务连通性与模型可用性。
-            </p>
+            <p className="pt-1 leading-relaxed">{t('harness.overwriteWarning')}</p>
           </div>
         </CardContent>
       </Card>
@@ -74,9 +84,9 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">配置档案</h3>
+            <h3 className="text-sm font-semibold">{t('harness.profiles')}</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              {harness.profiles.length} 个自定义配置
+              {t('harness.profileCount', { count: harness.profiles.length })}
             </p>
           </div>
           {extraActions}
@@ -91,13 +101,15 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                 </span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium">官方登录</p>
-                    {harness.active?.official ? <Badge variant="secondary">已激活</Badge> : null}
+                    <p className="font-medium">{t('harness.official')}</p>
+                    {harness.active?.official ? (
+                      <Badge variant="secondary">{t('harness.active')}</Badge>
+                    ) : null}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {harness.id === 'claude'
-                      ? '使用 Claude Code 自身的 Anthropic 账号登录'
-                      : '使用 Codex 自身的 ChatGPT / OpenAI 账号登录'}
+                      ? t('harness.officialHintClaude')
+                      : t('harness.officialHintCodex')}
                   </p>
                 </div>
               </div>
@@ -107,21 +119,24 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                 disabled={harness.active?.official}
                 onClick={() => void activateOfficial(harness.id)}
               >
-                {harness.active?.official ? '已使用' : '切回官方'}
+                {harness.active?.official
+                  ? t('harness.officialActive')
+                  : t('harness.officialSwitch')}
               </Button>
             </div>
           ) : null}
           {harness.profiles.length === 0 ? (
             <div className="rounded-xl border border-dashed bg-card/60 px-5 py-8 text-center">
-              <p className="text-sm text-muted-foreground">还没有配置档案</p>
+              <p className="text-sm text-muted-foreground">{t('harness.noProfiles')}</p>
               <Button className="mt-4" size="sm" onClick={onAdd}>
                 <Plus />
-                新增配置
+                {t('harness.newProfile')}
               </Button>
             </div>
           ) : (
             harness.profiles.map((profile) => {
-              const active = harness.active?.name === profile.name;
+              const active =
+                harness.active?.official !== true && harness.active?.name === profile.name;
               return (
                 <div
                   key={profile.name}
@@ -142,9 +157,9 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{profile.name}</p>
-                        {active ? <Badge>已激活</Badge> : null}
+                        {active ? <Badge>{t('harness.active')}</Badge> : null}
                         {profile.overriddenTargets.length > 0 ? (
-                          <Badge variant="outline">手动接管</Badge>
+                          <Badge variant="outline">{t('harness.manualOverride')}</Badge>
                         ) : null}
                       </div>
                       <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
@@ -164,12 +179,12 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                       onClick={() => setActivating(profile)}
                     >
                       {!active ? <Play /> : null}
-                      {active ? '已激活' : '激活'}
+                      {active ? t('harness.active') : t('harness.activate')}
                     </Button>
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`编辑 ${profile.name}`}
+                      aria-label={t('harness.edit', { name: profile.name })}
                       onClick={() => onEdit(profile)}
                     >
                       <Pencil />
@@ -177,9 +192,9 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     <Button
                       size="icon"
                       variant="ghost"
-                      aria-label={`删除 ${profile.name}`}
+                      aria-label={t('harness.delete', { name: profile.name })}
                       disabled={active}
-                      title={active ? '先激活另一个配置，才能删除当前配置' : undefined}
+                      title={active ? t('harness.deleteBlocked') : undefined}
                       onClick={() => setPendingName(profile.name)}
                     >
                       <Trash2 className={active ? undefined : 'text-destructive'} />
@@ -205,15 +220,17 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除配置？</AlertDialogTitle>
+            <AlertDialogTitle>{t('harness.deleteTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              将删除 {harness.label} / {pendingName}。
-              {harness.mode === 'additive' ? '它在配置文件里的 provider 条目也会被一并摘掉。' : ''}
-              此操作不可撤销。
+              {t('harness.deleteBody', {
+                harness: harness.label,
+                profile: pendingName ?? '',
+                extra: harness.mode === 'additive' ? t('harness.deleteAdditiveExtra') : '',
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (pendingName) {
@@ -221,7 +238,7 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                 }
               }}
             >
-              删除
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

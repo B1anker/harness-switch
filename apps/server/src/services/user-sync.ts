@@ -1,11 +1,13 @@
 import { isDeepStrictEqual } from 'node:util';
 import type {
   HarnessId,
+  LocalizedMessage,
   TransferConflict,
   TransferConflictPolicy,
   UserSyncPreview,
   UserSyncResponse,
 } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, WARNING_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IActivationService } from './activation';
@@ -120,7 +122,9 @@ export class UserSyncService implements IUserSyncService {
       ? this.environment.runAsUser(source, () => this.codexLoginCache.readOptional())
       : undefined;
     if (migrateCodexLoginCache && cacheContent === undefined) {
-      throw new HttpError(400, '来源用户没有可迁移的 Codex 登录缓存');
+      throw new HttpError(400, '来源用户没有可迁移的 Codex 登录缓存', {
+        code: ERROR_CODES.syncSourceCacheMissing,
+      });
     }
     const cacheWrite: PlannedWrite[] =
       cacheContent && !this.codexLoginCache.matchesCurrent(cacheContent)
@@ -142,7 +146,7 @@ export class UserSyncService implements IUserSyncService {
       this.environment.files.active,
       {},
     );
-    const warnings: string[] = [];
+    const warnings: LocalizedMessage[] = [];
     const activeProfilesToReapply = new Map<HarnessId, string>();
 
     let imported = 0;
@@ -207,25 +211,44 @@ export class UserSyncService implements IUserSyncService {
       };
     }
 
-    this.liveWrite.transaction('codex', `同步-${source.username}`, cacheWrite, () => {
-      try {
-        this.files.writeJson(vaultPath, targetVault);
-        this.files.writeJson(profilesPath, targetProfiles);
-      } catch (error) {
-        this.restore(vaultPath, vaultSnapshot);
-        this.restore(profilesPath, profileSnapshot);
-        throw error;
-      }
-    });
+    this.liveWrite.transaction(
+      {
+        kind: 'sync',
+        harness: 'codex',
+        profile: `同步-${source.username}`,
+        writes: cacheWrite,
+        metadata: ['vault', 'profiles'],
+      },
+      () => {
+        try {
+          this.files.writeJson(vaultPath, targetVault);
+          this.files.writeJson(profilesPath, targetProfiles);
+        } catch (error) {
+          this.restore(vaultPath, vaultSnapshot);
+          this.restore(profilesPath, profileSnapshot);
+          throw error;
+        }
+      },
+    );
 
     for (const [harness, name] of activeProfilesToReapply) {
       try {
         const result = this.activation.activate(harness, name);
-        warnings.push(...result.warnings.map((warning) => `${harness}/${name}: ${warning}`));
-      } catch (error) {
+        // Nested warnings keep their own code; only the scope prefix is added.
         warnings.push(
-          `${harness}/${name} 已更新配置库，但自动重新激活失败：${error instanceof Error ? error.message : String(error)}`,
+          ...result.warnings.map((warning) => ({
+            ...warning,
+            message: `${harness}/${name}: ${warning.message}`,
+            scope: `${harness}/${name}`,
+          })),
         );
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        warnings.push({
+          message: `${harness}/${name} 已更新配置库，但自动重新激活失败：${reason}`,
+          code: WARNING_CODES.syncReapplyFailed,
+          params: { harness, profile: name, reason },
+        });
       }
     }
 
@@ -245,7 +268,9 @@ export class UserSyncService implements IUserSyncService {
   private requireSource(sourceUsername: string, target: LocalUser): LocalUser {
     const source = this.users.require(sourceUsername);
     if (source.username === target.username) {
-      throw new HttpError(400, '来源用户不能与当前目标用户相同');
+      throw new HttpError(400, '来源用户不能与当前目标用户相同', {
+        code: ERROR_CODES.syncSourceEqualsTarget,
+      });
     }
     return source;
   }

@@ -27,6 +27,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useTranslation } from '@/lib/i18n';
+import { errorLine, lineText, type MessageLine } from '@/lib/messages';
 import { PRESETS, type Preset } from '@/lib/presets';
 import { useAppStore } from '@/stores/app-store';
 
@@ -37,7 +39,10 @@ type ProfileDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type ProfileFieldErrors = Record<string, string | undefined>;
+type ProfileFieldErrors = Record<string, MessageLine | undefined>;
+
+/** Longest profile name the server accepts. */
+const NAME_MAX_LENGTH = 120;
 
 /** `oneMKey` is null for tiers with no 1M variant, such as Haiku. */
 const CLAUDE_MODEL_ROWS = [
@@ -62,6 +67,7 @@ const CLAUDE_MODEL_FIELD_KEYS = new Set<string>([
 ]);
 
 export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogProps) {
+  const { t } = useTranslation();
   const createProfile = useAppStore((state) => state.createProfile);
   const updateProfile = useAppStore((state) => state.updateProfile);
   const previewProfile = useAppStore((state) => state.previewProfile);
@@ -80,7 +86,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
   const [providerEndpoint, setProviderEndpoint] = useState(profile?.providerEndpoint ?? '');
   const [advanced, setAdvanced] = useState(false);
   const [targets, setTargets] = useState<PreviewTarget[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<MessageLine | null>(null);
   const [pending, setPending] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<ProfileFieldErrors>({});
 
@@ -124,7 +130,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
         ),
       );
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorLine(err));
     }
   }
 
@@ -151,24 +157,30 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
     const effectiveBaseUrl =
       selectedProvider && providerEndpoint ? (selectedEndpoint?.baseUrl ?? baseUrl) : baseUrl;
 
-    if (!trimmedName) next.name = '请输入配置名称';
+    if (!trimmedName) next.name = { key: 'profile.error.nameRequired' };
     else if (trimmedName.includes('/') || trimmedName.includes('\\'))
-      next.name = '配置名称不能包含 / 或 \\';
-    else if (trimmedName.length > 120) next.name = '配置名称最多 120 个字符';
-    if (!effectiveBaseUrl.trim()) next.baseUrl = '请输入 API Base URL';
-    if (!isEdit && selectedProvider === null && !apiKey.trim()) next.apiKey = '请输入 API Key';
-    if (harness.modelRequired && !model.trim()) next.model = '请输入模型名称';
-    if (providerMissing) next.providerId = '引用的 Provider 已不存在，请重新选择';
-    if (endpointMissing) next.providerEndpoint = '引用的 Endpoint 已不存在，请重新选择';
+      next.name = { key: 'profile.error.nameSlash' };
+    else if (trimmedName.length > NAME_MAX_LENGTH)
+      next.name = { key: 'profile.error.nameTooLong', params: { max: NAME_MAX_LENGTH } };
+    if (!effectiveBaseUrl.trim()) next.baseUrl = { key: 'profile.error.baseUrlRequired' };
+    if (!isEdit && selectedProvider === null && !apiKey.trim())
+      next.apiKey = { key: 'profile.error.apiKeyRequired' };
+    if (harness.modelRequired && !model.trim()) next.model = { key: 'profile.error.modelRequired' };
+    if (providerMissing) next.providerId = { key: 'profile.error.providerGone' };
+    if (endpointMissing) next.providerEndpoint = { key: 'profile.error.endpointGone' };
     for (const field of harness.fields) {
       if (field.required && !extras[field.key]?.trim()) {
-        next[`extra:${field.key}`] = `请填写${field.label}`;
+        // The label is the server's own prose for this field, so it is interpolated as data.
+        next[`extra:${field.key}`] = {
+          key: 'profile.error.fieldRequired',
+          params: { label: field.label },
+        };
       }
     }
 
     setFieldErrors(next);
     if (Object.keys(next).length > 0) {
-      setError('请检查标红的必填项或输入内容。');
+      setError({ key: 'profile.error.checkFields' });
       return false;
     }
     return true;
@@ -201,7 +213,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
       }
       onOpenChange(false);
     } catch (err) {
-      setError((err as Error).message);
+      setError(errorLine(err));
     } finally {
       setPending(false);
     }
@@ -213,13 +225,17 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
         <form onSubmit={onSubmit} noValidate className="flex max-h-[92vh] min-h-0 flex-col">
           <DialogHeader className="shrink-0 border-b bg-card px-6 py-5 pr-12">
             <DialogTitle>
-              {isEdit ? `编辑 ${harness.label} / ${profile.name}` : `新增 ${harness.label} 配置`}
+              {isEdit
+                ? t('profile.editTitle', { harness: harness.label, profile: profile.name })
+                : t('profile.createTitle', { harness: harness.label })}
             </DialogTitle>
             <DialogDescription>
-              保存后会写入 {harness.targets.map((target) => target.label).join('、')}。
-              {harness.mode === 'additive'
-                ? '该工具的配置文件按 provider 共存，切换只会移动当前指针，不会删除你手写的其他 provider。'
-                : ''}
+              {t('profile.intro', {
+                targets: harness.targets
+                  .map((target) => target.label)
+                  .join(t('common.listSeparator')),
+              })}
+              {harness.mode === 'additive' ? t('profile.additiveNote') : ''}
             </DialogDescription>
           </DialogHeader>
 
@@ -230,9 +246,11 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             <div data-slot="provider-reference-fields" className="space-y-3 rounded-xl border p-3">
               <div className="flex items-center justify-between gap-2">
                 <Label htmlFor="provider-select" className="font-medium">
-                  使用共享 Provider（凭据库）
+                  {t('profile.useSharedProvider')}
                 </Label>
-                {selectedProvider ? <Badge variant="secondary">密钥由凭据库提供</Badge> : null}
+                {selectedProvider ? (
+                  <Badge variant="secondary">{t('profile.keyFromVault')}</Badge>
+                ) : null}
               </div>
               <Select
                 value={providerId}
@@ -245,14 +263,14 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
               >
                 <SelectTrigger
                   id="provider-select"
-                  aria-label="使用共享 Provider"
+                  aria-label={t('profile.useSharedProviderLabel')}
                   aria-invalid={fieldErrors.providerId ? true : undefined}
                   aria-describedby={fieldErrors.providerId ? 'provider-select-error' : undefined}
                 >
-                  <SelectValue placeholder="不使用（本配置自带密钥）" />
+                  <SelectValue placeholder={t('profile.providerNone')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">不使用（本配置自带密钥）</SelectItem>
+                  <SelectItem value="">{t('profile.providerNone')}</SelectItem>
                   {providerEntries.map((entry) => (
                     <SelectItem key={entry.id} value={entry.id}>
                       {entry.name}
@@ -262,17 +280,15 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
               </Select>
               {fieldErrors.providerId ? (
                 <p id="provider-select-error" className="text-xs text-destructive">
-                  {fieldErrors.providerId}
+                  {lineText(t, fieldErrors.providerId)}
                 </p>
               ) : null}
               {providerEntries.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  凭据库为空，可先在顶部「凭据库」中新增 Provider 条目。
-                </p>
+                <p className="text-xs text-muted-foreground">{t('profile.vaultEmpty')}</p>
               ) : null}
               {selectedProvider ? (
                 <div className="space-y-2">
-                  <Label htmlFor="provider-endpoint">命名 Endpoint（可选）</Label>
+                  <Label htmlFor="provider-endpoint">{t('profile.namedEndpoint')}</Label>
                   <Select
                     value={providerEndpoint}
                     onValueChange={(value) => {
@@ -282,32 +298,35 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                   >
                     <SelectTrigger
                       id="provider-endpoint"
-                      aria-label="命名 Endpoint"
+                      aria-label={t('profile.namedEndpointLabel')}
                       aria-invalid={fieldErrors.providerEndpoint ? true : undefined}
                       aria-describedby={
                         fieldErrors.providerEndpoint ? 'provider-endpoint-error' : undefined
                       }
                     >
-                      <SelectValue placeholder="不指定（使用下方 Base URL）" />
+                      <SelectValue placeholder={t('profile.endpointNone')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">不指定（使用下方 Base URL）</SelectItem>
+                      <SelectItem value="">{t('profile.endpointNone')}</SelectItem>
                       {selectedProvider.endpoints.map((endpoint) => (
                         <SelectItem key={endpoint.key} value={endpoint.key}>
-                          {endpoint.label ? `${endpoint.label}（${endpoint.key}）` : endpoint.key}
+                          {endpoint.label
+                            ? t('profile.endpointOption', {
+                                label: endpoint.label,
+                                key: endpoint.key,
+                              })
+                            : endpoint.key}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   {fieldErrors.providerEndpoint ? (
                     <p id="provider-endpoint-error" className="text-xs text-destructive">
-                      {fieldErrors.providerEndpoint}
+                      {lineText(t, fieldErrors.providerEndpoint)}
                     </p>
                   ) : null}
                   {selectedProvider.endpoints.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      该 Provider 没有命名 endpoint，将使用下方 Base URL。
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t('profile.noEndpoints')}</p>
                   ) : null}
                 </div>
               ) : null}
@@ -330,7 +349,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
 
             <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="name">配置名称</Label>
+                <Label htmlFor="name">{t('profile.name')}</Label>
                 <Input
                   id="name"
                   value={name}
@@ -338,24 +357,22 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                     setName(event.target.value);
                     clearFieldErrors('name');
                   }}
-                  placeholder="例如：openrouter-main"
+                  placeholder={t('profile.namePlaceholder')}
                   aria-invalid={fieldErrors.name ? true : undefined}
                   aria-describedby={fieldErrors.name ? 'profile-name-error' : undefined}
                 />
                 {fieldErrors.name ? (
                   <p id="profile-name-error" className="text-xs text-destructive">
-                    {fieldErrors.name}
+                    {lineText(t, fieldErrors.name)}
                   </p>
                 ) : null}
                 {isEdit ? (
-                  <p className="text-xs text-muted-foreground">
-                    修改后会同步更新当前激活状态和原生配置中的 Provider 标识。
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('profile.renameHint')}</p>
                 ) : null}
               </div>
 
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="baseUrl">API Base URL</Label>
+                <Label htmlFor="baseUrl">{t('profile.baseUrl')}</Label>
                 <Input
                   id="baseUrl"
                   value={
@@ -367,25 +384,25 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                     setBaseUrl(event.target.value);
                     clearFieldErrors('baseUrl');
                   }}
-                  placeholder="https://api.example.com/v1"
+                  placeholder={t('profile.baseUrlPlaceholder')}
                   disabled={selectedProvider !== null && providerEndpoint !== ''}
                   aria-invalid={fieldErrors.baseUrl ? true : undefined}
                   aria-describedby={fieldErrors.baseUrl ? 'profile-base-url-error' : undefined}
                 />
                 {fieldErrors.baseUrl ? (
                   <p id="profile-base-url-error" className="text-xs text-destructive">
-                    {fieldErrors.baseUrl}
+                    {lineText(t, fieldErrors.baseUrl)}
                   </p>
                 ) : null}
                 {selectedProvider && providerEndpoint ? (
                   <p className="text-xs text-muted-foreground">
-                    Base URL 来自凭据库 endpoint「{providerEndpoint}」。
+                    {t('profile.baseUrlFromVault', { endpoint: providerEndpoint })}
                   </p>
                 ) : null}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="apiKey">API Key</Label>
+                <Label htmlFor="apiKey">{t('profile.apiKey')}</Label>
                 <Input
                   id="apiKey"
                   type="password"
@@ -395,7 +412,11 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                     clearFieldErrors('apiKey');
                   }}
                   placeholder={
-                    selectedProvider ? '密钥由凭据库提供' : isEdit ? '留空表示保持不变' : '必填'
+                    selectedProvider
+                      ? t('profile.keyFromVault')
+                      : isEdit
+                        ? t('profile.apiKeyKeep')
+                        : t('profile.apiKeyRequiredPlaceholder')
                   }
                   disabled={selectedProvider !== null}
                   aria-invalid={fieldErrors.apiKey ? true : undefined}
@@ -403,19 +424,17 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 />
                 {fieldErrors.apiKey ? (
                   <p id="profile-api-key-error" className="text-xs text-destructive">
-                    {fieldErrors.apiKey}
+                    {lineText(t, fieldErrors.apiKey)}
                   </p>
                 ) : null}
                 {selectedProvider ? (
-                  <p className="text-xs text-muted-foreground">
-                    已引用共享 Provider，密钥在「凭据库」中统一轮换。
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('profile.apiKeySharedHint')}</p>
                 ) : null}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="model">
-                  {harness.id === 'claude' ? '回退模型（ANTHROPIC_MODEL）' : '模型'}
+                  {harness.id === 'claude' ? t('profile.fallbackModel') : t('profile.model')}
                 </Label>
                 <Input
                   id="model"
@@ -426,21 +445,19 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                   }}
                   placeholder={
                     harness.id === 'claude'
-                      ? '可选；各档未匹配时使用，例如 glm-5'
-                      : '例如：claude-sonnet-4-5'
+                      ? t('profile.fallbackModelPlaceholder')
+                      : t('profile.modelPlaceholder')
                   }
                   aria-invalid={fieldErrors.model ? true : undefined}
                   aria-describedby={fieldErrors.model ? 'profile-model-error' : undefined}
                 />
                 {fieldErrors.model ? (
                   <p id="profile-model-error" className="text-xs text-destructive">
-                    {fieldErrors.model}
+                    {lineText(t, fieldErrors.model)}
                   </p>
                 ) : null}
                 {harness.id === 'claude' ? (
-                  <p className="text-xs text-muted-foreground">
-                    留空则沿用 Claude Code 默认模型；可在下面分别映射各模型档位。
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('profile.claudeModelHint')}</p>
                 ) : null}
               </div>
 
@@ -483,7 +500,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
               ))}
 
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="notes">备注（可选）</Label>
+                <Label htmlFor="notes">{t('profile.notes')}</Label>
                 <Textarea
                   id="notes"
                   rows={2}
@@ -504,9 +521,9 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 ) : (
                   <ChevronRight className="size-4" />
                 )}
-                高级：原始配置
+                {t('profile.advanced')}
                 {profile && profile.overriddenTargets.length > 0 ? (
-                  <Badge variant="secondary">已手动接管</Badge>
+                  <Badge variant="secondary">{t('profile.overridden')}</Badge>
                 ) : null}
               </button>
               {advanced ? (
@@ -528,23 +545,21 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                       }}
                     />
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      先保存这份配置，之后回到编辑界面即可接管原始文件内容。
-                    </p>
+                    <p className="text-sm text-muted-foreground">{t('profile.saveFirst')}</p>
                   )}
                 </div>
               ) : null}
             </div>
 
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{lineText(t, error)}</p> : null}
           </div>
 
           <DialogFooter className="shrink-0 border-t bg-card px-6 py-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={pending}>
-              {pending ? '保存中…' : '保存配置'}
+              {pending ? t('profile.saving') : t('profile.save')}
             </Button>
           </DialogFooter>
         </form>
@@ -564,15 +579,13 @@ function RawEditor({
   onEdit: (key: string, content: string) => void;
   onReset: (key: string) => void;
 }) {
+  const { t } = useTranslation();
   if (targets === null) {
-    return <p className="text-sm text-muted-foreground">正在读取将写入的内容…</p>;
+    return <p className="text-sm text-muted-foreground">{t('profile.rawLoading')}</p>;
   }
   return (
     <>
-      <p className="text-xs text-muted-foreground">
-        下面是当前会写入磁盘的内容，基于最近一次保存的字段生成。改动任意一份即视为手动接管，之后
-        表单字段不再影响这份文件。
-      </p>
+      <p className="text-xs text-muted-foreground">{t('profile.rawIntro')}</p>
       {targets.map((target) => {
         const taken = overrides[target.key] !== undefined;
         return (
@@ -584,7 +597,7 @@ function RawEditor({
               {taken ? (
                 <Button type="button" size="sm" variant="ghost" onClick={() => onReset(target.key)}>
                   <RotateCcw />
-                  恢复为自动生成
+                  {t('profile.resetToGenerated')}
                 </Button>
               ) : null}
             </div>
@@ -610,22 +623,23 @@ function PresetRow({
   harnessId: HarnessSummary['id'];
   onPick: (preset: Preset) => void;
 }) {
+  const { t } = useTranslation();
   const presets = PRESETS[harnessId] ?? [];
   if (presets.length === 0) {
     return null;
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs text-muted-foreground">快速填充：</span>
+      <span className="text-xs text-muted-foreground">{t('profile.quickFill')}</span>
       {presets.map((preset) => (
         <Button
-          key={preset.label}
+          key={preset.id}
           type="button"
           size="sm"
           variant="outline"
           onClick={() => onPick(preset)}
         >
-          {preset.label}
+          {t(`preset.${preset.id}`)}
         </Button>
       ))}
     </div>
@@ -640,9 +654,10 @@ function ExtraField({
 }: {
   field: FieldSpec;
   value: string;
-  error?: string;
+  error?: MessageLine;
   onChange: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   const id = `extra-${field.key}`;
   return (
     <div
@@ -659,7 +674,7 @@ function ExtraField({
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
           >
-            <SelectValue placeholder={field.placeholder ?? '请选择'} />
+            <SelectValue placeholder={field.placeholder ?? t('profile.selectPlaceholder')} />
           </SelectTrigger>
           <SelectContent>
             {field.options?.map((option) => (
@@ -693,7 +708,7 @@ function ExtraField({
       )}
       {error ? (
         <p id={`${id}-error`} className="text-xs text-destructive">
-          {error}
+          {lineText(t, error)}
         </p>
       ) : null}
       {field.help ? <p className="text-xs text-muted-foreground">{field.help}</p> : null}
@@ -717,6 +732,7 @@ function ClaudeModelMappingFields({
   errors: ProfileFieldErrors;
   onChange: (key: string, value: string) => void;
 }) {
+  const { t } = useTranslation();
   const fieldByKey = new Map(fields.map((field) => [field.key, field]));
   const subagentField = fieldByKey.get(CLAUDE_SUBAGENT_ROW.modelKey);
 
@@ -726,20 +742,17 @@ function ClaudeModelMappingFields({
       className="space-y-4 rounded-xl border bg-muted/15 p-4 sm:col-span-2 sm:p-5"
     >
       <div className="space-y-1">
-        <h3 className="text-base font-semibold">模型映射</h3>
-        <p className="text-sm text-muted-foreground">
-          显示名称仅影响 Claude Code 的 /model 菜单；留空时显示对应的实际模型 ID。开启「1M
-          上下文」会在模型 ID 末尾追加 [1m]，仅在该模型确实支持 1M 时开启。
-        </p>
+        <h3 className="text-base font-semibold">{t('profile.mapping.title')}</h3>
+        <p className="text-sm text-muted-foreground">{t('profile.mapping.intro')}</p>
       </div>
 
       <div
         className={`hidden gap-3 px-1 text-xs font-medium text-muted-foreground md:grid ${CLAUDE_MAPPING_COLUMNS}`}
       >
-        <span>模型角色</span>
-        <span>显示名称</span>
-        <span>实际请求模型</span>
-        <span>1M 上下文</span>
+        <span>{t('profile.mapping.role')}</span>
+        <span>{t('profile.mapping.displayName')}</span>
+        <span>{t('profile.mapping.actualModel')}</span>
+        <span>{t('profile.mapping.oneM')}</span>
       </div>
 
       <div className="space-y-3">
@@ -764,7 +777,7 @@ function ClaudeModelMappingFields({
                   value={values[nameKey] ?? ''}
                   placeholder={
                     values[modelKey]?.trim()
-                      ? `默认：${values[modelKey].trim()}`
+                      ? t('profile.mapping.defaultTo', { model: values[modelKey].trim() })
                       : nameField.placeholder
                   }
                   aria-invalid={nameError ? true : undefined}
@@ -773,7 +786,7 @@ function ClaudeModelMappingFields({
                 />
                 {nameError ? (
                   <p id={`extra-${nameKey}-error`} className="text-xs text-destructive">
-                    {nameError}
+                    {lineText(t, nameError)}
                   </p>
                 ) : null}
               </div>
@@ -791,7 +804,7 @@ function ClaudeModelMappingFields({
                 />
                 {modelError ? (
                   <p id={`extra-${modelKey}-error`} className="text-xs text-destructive">
-                    {modelError}
+                    {lineText(t, modelError)}
                   </p>
                 ) : null}
               </div>
@@ -812,7 +825,7 @@ function ClaudeModelMappingFields({
               Subagent
             </div>
             <div className="flex h-10 items-center rounded-lg border bg-muted/30 px-3 text-sm text-muted-foreground">
-              不显示在 /model 菜单
+              {t('profile.mapping.notInMenu')}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="extra-subagentModel" className="text-xs md:sr-only">
@@ -830,7 +843,7 @@ function ClaudeModelMappingFields({
               />
               {errors['extra:subagentModel'] ? (
                 <p id="extra-subagentModel-error" className="text-xs text-destructive">
-                  {errors['extra:subagentModel']}
+                  {lineText(t, errors['extra:subagentModel'])}
                 </p>
               ) : null}
             </div>
@@ -867,16 +880,17 @@ function OneMCell({
   /** Absent when the server described no 1M field for this tier. */
   field: FieldSpec | undefined;
   value: string | undefined;
-  error?: string;
+  error?: MessageLine;
   onChange: (key: string, value: string) => void;
 }) {
+  const { t } = useTranslation();
   if (!field) {
     return (
       <div
         data-slot="one-m-unsupported"
         className="flex h-10 items-center rounded-lg border border-dashed bg-muted/20 px-3 text-sm text-muted-foreground"
       >
-        {role} 不支持 1M
+        {t('profile.mapping.oneMUnsupported', { role })}
       </div>
     );
   }
@@ -897,12 +911,12 @@ function OneMCell({
             onCheckedChange={(checked) => onChange(field.key, checked === true ? 'true' : 'false')}
           />
           <span className="md:hidden">{field.label}</span>
-          <span className="hidden md:inline">启用</span>
+          <span className="hidden md:inline">{t('profile.mapping.enable')}</span>
         </label>
       </div>
       {error ? (
         <p id={`${id}-error`} className="text-xs text-destructive">
-          {error}
+          {lineText(t, error)}
         </p>
       ) : null}
     </div>

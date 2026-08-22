@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProviderMutationResponse } from '@seaveyon/harness-switch-shared';
+import { WARNING_CODES } from '@seaveyon/harness-switch-shared';
 import { createApp } from '../src/app';
 import { createServices } from '../src/bootstrap';
 import { IAuthService } from '../src/services/auth';
@@ -224,7 +225,9 @@ describe('providers api', () => {
     });
     expect(patched.status).toBe(200);
     const result = (await patched.json()) as ProviderMutationResponse;
-    expect(result.warnings.some((warning) => warning.includes('重新应用失败'))).toBe(true);
+    expect(result.warnings.some((warning) => warning.code === WARNING_CODES.reapplyFailed)).toBe(
+      true,
+    );
   });
 
   test('deleting a referenced provider is refused with 409', async () => {

@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
+import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
   isPlainObject,
@@ -119,10 +121,16 @@ export class PiAdapter implements HarnessAdapter {
 
   validate(profile: AdapterProfile): void {
     if (!profile.model.trim()) {
-      throw new HttpError(400, 'Pi 需要填写模型名称，否则无法生成 models 条目');
+      throw new HttpError(400, 'Pi 需要填写模型名称，否则无法生成 models 条目', {
+        code: ERROR_CODES.adapterModelRequired,
+        params: { harness: 'Pi' },
+      });
     }
     if (!profile.apiKey.trim()) {
-      throw new HttpError(400, 'Pi 需要填写 API key，否则模型不会出现在 /model 列表里');
+      throw new HttpError(400, 'Pi 需要填写 API key，否则模型不会出现在 /model 列表里', {
+        code: ERROR_CODES.adapterApiKeyRequired,
+        params: { harness: 'Pi' },
+      });
     }
   }
 
@@ -218,6 +226,33 @@ export class PiAdapter implements HarnessAdapter {
     } catch {
       return {};
     }
+  }
+
+  /** One candidate per `providers` entry in models.json; settings.json names the active one. */
+  detect(current: CurrentFiles): DetectedProfile[] {
+    let providers: unknown;
+    let selected = '';
+    try {
+      providers = parseJsonObject(current[MODELS]).providers;
+      selected = readString(parseJsonObject(current[SETTINGS]), 'defaultProvider');
+    } catch {
+      return [];
+    }
+    if (!isPlainObject(providers)) {
+      return [];
+    }
+    return compact(
+      Object.entries(providers).map(([id, provider]) => {
+        if (!isPlainObject(provider)) {
+          return null;
+        }
+        const seed = seedProfile({
+          providerId: id,
+          authHeader: provider.authHeader === false ? 'false' : 'true',
+        });
+        return toCandidate(id, seed, this.backfill(seed, current), id === selected);
+      }),
+    );
   }
 
   private providerId(profile: AdapterProfile): string {

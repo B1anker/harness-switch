@@ -209,12 +209,13 @@ describe('rest api', () => {
     });
     expect(wrong.status).toBe(401);
 
+    // A body that is not JSON at all is a client bug, not a failed credential.
     const garbage = await app.request('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: 'not json',
     });
-    expect(garbage.status).toBe(401);
+    expect(garbage.status).toBe(400);
   });
 
   test('logging out invalidates the session immediately', async () => {

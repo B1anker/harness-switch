@@ -80,9 +80,38 @@ source ~/.harness-switch/env.sh
 
 每次写入前，各目标文件的原有内容都会被快照到 `~/.harness-switch/backups/`，保留最近 10 份。备份面板可以原样恢复某个快照，注释也一并保留。快照绝不会与实际配置文件放在同一目录，因为像 Claude Code 这类工具会扫描自己的配置目录。
 
-一次写入要么完整生效，要么完全不生效：内容会先经过校验，中途失败则恢复到先前状态 —— 原本不存在的文件会被删除，而不是留下一个空文件。
+一次写入要么完整生效，要么完全不生效：内容会先经过校验，中途失败则恢复到先前状态 —— 原本不存在的文件会被删除，而不是留下一个空文件。恢复走同一套保证，并且在覆盖 live 文件之前先给它们单独存一份快照，方便撤销这次恢复。
+
+备份目录位于被管理用户自己的 Home 下，所以在以 root 运行时，该账号本身能改写自己的 manifest。因此 manifest 里的任何内容都不会被当作写入目标：它只记录 Harness 与目标键，实际路径在恢复时由该 Harness 的适配器重新解析，快照文件名必须是备份目录内的普通文件。任何解析后落在该用户可管理目录之外的路径 —— 例如把 `~/.claude` 指向别处的软链 —— 一律拒绝读写。
 
 从某个配置切走时，会先把实际文件的内容读回该配置的记录，因此你直接在 CLI 工具里做过的修改不会在下次切换时丢失。
+
+### 操作记录与撤销
+
+进程内的 `try/catch` 只能处理抛出的异常；断电、SIGKILL、OOM 或升级重启时它根本没机会运行，原生配置、配置档案和「当前激活」记录就可能停在互相矛盾的状态。
+
+因此每次写入原生配置前，都会先在 `~/.harness-switch/journal/` 落一条记录，并随操作推进状态：
+
+```
+PREPARED → APPLYING → METADATA_COMMITTED → COMMITTED
+                              ↘ ROLLED_BACK / DEGRADED
+```
+
+服务启动时会扫描每个可管理用户的记录并收尾。分界点是 `METADATA_COMMITTED`：到这一步为止该操作想改的东西已经全部落盘，所以它会被向前推进为 `COMMITTED`，而不是回滚一次用户看到已经成功的切换；停在 `APPLYING` 的则可能只写了一半，会整体回滚。回滚本身失败时记为 `DEGRADED` 并在界面上标出，等人工处理。
+
+激活时写 `active.json` 已被纳入同一个事务，所以配置文件和「当前激活」的记录不会再各说各话。每条记录就是一张收据，包含变更的文件、备份编号、目标用户和当时的状态；顶栏的 **操作记录** 可以查看并一键撤销 —— 撤销会把原生文件和 `active.json` 一起退回操作前，而不只是恢复几个文件。撤销本身也会先做一次快照。备份被轮换掉之后，对应收据会自动标为不可撤销。
+
+`HSW_JOURNAL_RETAIN` 控制保留的记录条数，默认 50。
+
+### 导入已有配置
+
+如果你在装 harness-switch 之前就手工配好了这些工具，顶栏的 **导入已有配置** 可以把它们接管过来，不必重新录一遍。
+
+扫描会读取五个工具当前的配置文件，列出其中每一个 provider：additive 模式的工具（Codex、Kimi Code、Pi、DeepSeek Harness）配了几个就列几个，并标出当前正在使用的那个；Claude Code 只有一份路由，因此至多一条。凭据不会随扫描结果返回，界面上只显示掩码；导入时由服务端重新从磁盘读取，明文始终不经过浏览器。
+
+每条候选可以单独决定存成独立配置，还是把凭据抽进凭据库再引用；如果库里已经有一模一样的凭据，界面会直接提示复用而不是新建。同名配置默认跳过，需要显式勾选才覆盖。有些 provider 从环境变量读凭据（例如 Codex 的 `env_key` 模式），磁盘上没有可读的 key，这类候选需要你手动补一个。
+
+**扫描和导入都不会改动工具本身的配置文件。** 导入只写 harness-switch 自己的配置档案和凭据库；要真正生效，还需要你手动激活一次。配置文件存在但无法解析时，该工具会被整体跳过并说明原因，而不是猜测其内容。
 
 ### 把所有配置迁移到另一台机器
 
@@ -150,6 +179,11 @@ harness-switch list --user alice             # 查看 alice 的独立配置
 harness-switch activate codex main --user alice --yes
 harness-switch sync --from root --to alice   # 一次性复制；同名项默认跳过
 harness-switch sync --from root --to alice --overwrite
+harness-switch scan                          # 列出五个工具磁盘上已有的 provider
+harness-switch import codex:alpha --name 主力  # 存成配置；不改动工具本身
+harness-switch import claude:claude --vault  # 把凭据抽进凭据库再引用
+harness-switch operations                    # 操作收据，最新在前
+harness-switch undo <operation-id>           # 撤销一次完整操作
 ```
 
 `plan <harness>` 输出激活配置的漂移检查（每个文件预期内容 vs 当前内容）；未激活任何配置时报告 `status: unknown`。`activate` 在 TTY 上会询问确认，在非交互式终端（CI）里必须加 `--yes`。JSON 输出与 HTTP API 的响应形状一致（`HarnessesResponse`、`ProvidersResponse`、`DoctorResponse`、`DriftSummary`、`ActivateResponse`），脚本可直接复用同样的字段名。`HSW_DATA_DIR` 与 `HSW_HOME_DIR` 可覆盖状态读写位置（默认 `~/.harness-switch` 与 `$HOME`）。
@@ -178,6 +212,7 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `HSW_UPDATE_CHECK` | `1` | 设为 `0` 可跳过 npm registry 更新检测；本地开发命令会自动设置。 |
 | `HSW_SESSION_TTL_HOURS` | `24` | Web 登录的有效时长（小时）。会话可以跨服务重启保留。 |
 | `HSW_BACKUP_RETAIN` | `10` | 保留的快照数量。 |
+| `HSW_JOURNAL_RETAIN` | `50` | 保留的操作收据数量。 |
 | `HSW_PUBLIC_DIR` | 自动 | 可选，覆盖前端构建产物目录。 |
 
 定位各工具配置时，会遵循它们自己的覆盖变量：`CODEX_HOME`、`KIMI_CODE_HOME` 和 `PI_CODING_AGENT_DIR`。
@@ -216,6 +251,13 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `POST` | `/api/drift/:harnessId/reapply` | 按激活配置重写 live 文件 |
 | `POST` | `/api/drift/:harnessId/adopt` | 把 live 文件读回配置记录 |
 | `GET` | `/api/doctor` | 只读诊断（`?probe=1` 包含默认关闭、不发网络请求的探测检查） |
+| `GET` | `/api/scan` | 五个工具磁盘上已有的 provider；只读，凭据以掩码返回 |
+| `POST` | `/api/scan/import` | 把选中的候选存成配置或凭据库条目；不改动工具本身的配置 |
+| `GET` | `/api/operations` | 操作收据，最新在前 |
+| `GET` | `/api/operations/:id` | 单条收据 |
+| `POST` | `/api/operations/:id/undo` | 把原生文件与「当前激活」一起退回该操作之前 |
+
+所有 POST/PATCH 的请求体都会先经过一份共享的 Zod Schema（`packages/shared/src/schemas.ts`），前后端共用同一份定义。形状不合法的请求在写入存储之前就返回 `400`，并指明具体字段，而不是先落盘、直到下次激活时才报 `500`。请求体中未知的字段会被丢弃而非拒绝，因此旧版客户端仍可工作，同时不会有无法识别的内容进入存储。
 
 ## 后台守护进程（bunx / npx）
 

@@ -6,6 +6,7 @@ import { runCli } from './cli/commands';
 import { daemonize, printStatus, stopDaemon, usage } from './daemon';
 import { IAuthService } from './services/auth';
 import { IEnvironmentService } from './services/environment';
+import { IJournalService } from './services/journal';
 import { ILogService } from './services/log';
 
 async function runServer(): Promise<void> {
@@ -16,6 +17,10 @@ async function runServer(): Promise<void> {
 
   environment.ensureDataDir();
   auth.ensurePassword();
+
+  // A power cut or SIGKILL mid-operation leaves native files, the store and the active
+  // pointer disagreeing. Settle that before serving the first request.
+  services.get(IJournalService).recoverAll();
 
   const app = createApp(services);
 
@@ -44,7 +49,11 @@ if (command === 'server') {
   command === 'plan' ||
   command === 'activate' ||
   command === 'users' ||
-  command === 'sync'
+  command === 'sync' ||
+  command === 'scan' ||
+  command === 'import' ||
+  command === 'operations' ||
+  command === 'undo'
 ) {
   const { flags, positional } = parseArgs(rest);
   process.exitCode = await runCli(command, positional, flags);

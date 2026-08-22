@@ -1,9 +1,11 @@
+import { ERROR_CODES, loginRequestSchema } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { HttpError } from '../../common/errors';
 import type { InstantiationService } from '../../di';
 import { IAuthService } from '../../services/auth';
 import { IEnvironmentService } from '../../services/environment';
+import { readJsonBody } from '../validate';
 
 export function createAuthRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -11,10 +13,10 @@ export function createAuthRoutes(services: InstantiationService): Hono {
   const environment = services.get(IEnvironmentService);
 
   app.post('/login', async (c) => {
-    const body: { password?: string } = await c.req.json<{ password?: string }>().catch(() => ({}));
-    const token = auth.login(String(body.password ?? ''));
+    const body = await readJsonBody(c, loginRequestSchema);
+    const token = auth.login(body.password);
     if (!token) {
-      throw new HttpError(401, 'invalid password');
+      throw new HttpError(401, 'invalid password', { code: ERROR_CODES.invalidPassword });
     }
     setCookie(c, environment.cookieName, token, {
       httpOnly: true,
@@ -34,7 +36,9 @@ export function createAuthRoutes(services: InstantiationService): Hono {
   app.get('/session', (c) => {
     const token = getCookie(c, environment.cookieName);
     if (!auth.isAuthenticated(token)) {
-      throw new HttpError(401, 'authentication required');
+      throw new HttpError(401, 'authentication required', {
+        code: ERROR_CODES.authenticationRequired,
+      });
     }
     return c.json({ authenticated: true, currentUser: auth.userForToken(token)! });
   });
