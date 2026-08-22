@@ -1,3 +1,10 @@
+# [0.17.0](https://github.com/B1anker/harness-switch/compare/v0.16.1...v0.17.0) (2026-08-22)
+
+
+### Features
+
+* harden backup restore, add schema validation, operation journal, scan import, and i18n ([659fe90](https://github.com/B1anker/harness-switch/commit/659fe9051dcac2493469d0b0634e95b06e799228))
+
 ## [0.16.1](https://github.com/B1anker/harness-switch/compare/v0.16.0...v0.16.1) (2026-08-21)
 
 
