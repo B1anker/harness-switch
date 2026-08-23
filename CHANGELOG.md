@@ -1,3 +1,10 @@
+# [0.18.0](https://github.com/B1anker/harness-switch/compare/v0.17.0...v0.18.0) (2026-08-23)
+
+
+### Features
+
+* **cli:** expand commands and harden daemon lifecycle ([0fb63f1](https://github.com/B1anker/harness-switch/commit/0fb63f1362f6daf0eb0972a9864ac4ea2703d6a8))
+
 # [0.17.0](https://github.com/B1anker/harness-switch/compare/v0.16.1...v0.17.0) (2026-08-22)
 
 
