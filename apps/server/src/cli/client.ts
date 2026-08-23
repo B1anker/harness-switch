@@ -3,7 +3,11 @@ import { join } from 'node:path';
 import { daemonDataDir } from '../daemon';
 import { CliError } from './args';
 
-export type ApiErrorPayload = { error?: unknown };
+export type ApiErrorPayload = {
+  error?: unknown;
+  code?: unknown;
+  params?: unknown;
+};
 
 /**
  * Thin client over the local Web API. The CLI logs in with the password stored in
@@ -27,11 +31,20 @@ export class CliClient {
     const setCookie = response.headers.get('set-cookie') ?? '';
     const match = /hsw_session=([^;]+)/.exec(setCookie);
     if (!response.ok || !match) {
-      throw new CliError(
-        response.ok ? '登录失败：服务端未返回会话' : `登录失败：${await errorMessage(response)}`,
-      );
+      if (response.ok) throw new CliError('登录失败：服务端未返回会话');
+      const error = await responseError(response);
+      throw new CliError(`登录失败：${error.message}`, error);
     }
     this.cookie = match[1]!;
+  }
+
+  async logout(): Promise<void> {
+    if (!this.cookie) return;
+    try {
+      await this.request('POST', '/api/auth/logout');
+    } finally {
+      this.cookie = '';
+    }
   }
 
   async get(path: string): Promise<unknown> {
@@ -40,6 +53,10 @@ export class CliClient {
 
   async post(path: string, body?: unknown): Promise<unknown> {
     return this.request('POST', path, body);
+  }
+
+  async delete(path: string): Promise<unknown> {
+    return this.request('DELETE', path);
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {
@@ -53,11 +70,16 @@ export class CliClient {
     });
     const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
     if (!response.ok) {
-      const message =
+      throw new CliError(
         payload && typeof payload.error === 'string'
           ? payload.error
-          : `请求失败：HTTP ${response.status}`;
-      throw new CliError(message);
+          : `请求失败：HTTP ${response.status}`,
+        {
+          status: response.status,
+          ...(payload && typeof payload.code === 'string' ? { code: payload.code } : {}),
+          ...(payload && isMessageParams(payload.params) ? { params: payload.params } : {}),
+        },
+      );
     }
     return payload;
   }
@@ -88,14 +110,32 @@ export function readWebPassword(): string {
   }
 }
 
-async function errorMessage(response: Response): Promise<string> {
+async function responseError(response: Response): Promise<{
+  message: string;
+  status: number;
+  code?: string;
+  params?: Record<string, string | number | boolean>;
+}> {
   try {
     const payload = (await response.json()) as ApiErrorPayload;
-    if (typeof payload.error === 'string') {
-      return payload.error;
-    }
+    return {
+      message: typeof payload.error === 'string' ? payload.error : `HTTP ${response.status}`,
+      status: response.status,
+      ...(typeof payload.code === 'string' ? { code: payload.code } : {}),
+      ...(isMessageParams(payload.params) ? { params: payload.params } : {}),
+    };
   } catch {
-    // fall through to status text
+    return { message: `HTTP ${response.status}`, status: response.status };
   }
-  return `HTTP ${response.status}`;
+}
+
+function isMessageParams(value: unknown): value is Record<string, string | number | boolean> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every(
+      (item) => typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean',
+    )
+  );
 }

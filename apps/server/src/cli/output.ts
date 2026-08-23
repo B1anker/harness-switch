@@ -5,6 +5,7 @@ import type {
   LocalizedMessage,
   OperationReceipt,
   PreviewTarget,
+  ProfilePublic,
   ProviderPublic,
   ScanHarnessResult,
 } from '@seaveyon/harness-switch-shared';
@@ -35,6 +36,19 @@ export function printProvidersHuman(items: ProviderPublic[]): void {
     const configured = entry.apiKeyConfigured ? 'key=set' : 'key=missing';
     console.log(
       `${entry.id.padEnd(24)} ${entry.name.padEnd(20)} ${configured.padEnd(9)} endpoints=${endpoints}`,
+    );
+  }
+}
+
+export function printProfilesHuman(items: ProfilePublic[]): void {
+  if (items.length === 0) {
+    console.log('(no profiles)');
+    return;
+  }
+  for (const profile of items) {
+    const provider = profile.providerId ? `vault=${profile.providerId}` : 'key=inline';
+    console.log(
+      `${profile.harness.padEnd(8)} ${profile.name.padEnd(20)} ${profile.model || '-'}  ${provider}`,
     );
   }
 }
@@ -147,28 +161,40 @@ export function cliUsage(): string {
     '',
     'commands:',
     '  list                          list harnesses, active profiles and live targets',
+    '  profiles [harness]            list saved profiles without credential material',
+    '  create <harness> <name>       create a profile from command-line options',
+    '  delete <harness> <profile>    delete an inactive profile (confirmation required)',
     '  providers                     list Provider Vault entries',
-    '  doctor [--probe] [--harness H] run diagnostics (add --probe for /models checks)',
+    '  doctor [--probe] [--strict]   run diagnostics; probe reports endpoint metadata only',
     '  plan <harness> <profile>      show the exact content activation would write',
     '  activate <harness> <profile>  activate a profile (add --yes to skip the prompt)',
+    '  official <harness>            return a harness to its built-in login',
     '  users                         list manageable local Unix users',
     '  sync --from USER --to USER    copy profiles and credentials between users',
     '  scan                          find configuration the five tools already have',
     '  import <id>... [--vault]      save scanned configuration as profiles',
     '  operations                    list operation receipts, newest first',
     '  undo <operation-id>           revert one complete operation',
+    '  version                       print the installed version',
+    '  help                          show this help',
     '',
     'options:',
-    '  --json        machine-readable JSON output',
-    '  --yes         skip confirmation for activate',
-    '  --probe       run the /models connectivity probe in doctor',
+    '  --json, -j    machine-readable JSON output',
+    '  --yes, -y     skip confirmation for activate, official and delete',
+    '  --probe       show connectivity endpoint metadata (no network request yet)',
     '  --harness H   limit doctor to one harness',
-    '  --user USER   run list/providers/doctor/plan/activate for this Unix user',
+    '  --strict      make doctor exit 1 when any check has error status',
+    '  --user USER   run an API-backed command for this Unix user',
     '  --overwrite   overwrite same-name profiles during sync and import (default: skip)',
     '  --copy-codex-auth  copy the source user’s Codex auth.json during sync',
     '  --vault       import extracts the credential into a Provider Vault entry',
     '  --name NAME   profile name for a single import (default: the provider id)',
-    '  --api-key KEY credential for a provider whose key lives in the shell',
+    '  --api-key KEY inline credential for create/import (prefer --api-key-env)',
+    '  --api-key-env VAR  read a create/import credential from an environment variable',
+    '  --base-url URL --model MODEL --notes TEXT  profile fields used by create',
+    '  --provider ID [--endpoint KEY]  create a profile backed by Provider Vault',
+    '  --help, -h    show help without connecting to the service',
+    '  --version, -V print the installed version',
     '',
     'environment:',
     '  HSW_URL       base URL of the local service (default http://127.0.0.1:8787)',

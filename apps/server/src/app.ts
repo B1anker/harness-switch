@@ -28,7 +28,12 @@ export function createApp(services: InstantiationService): Hono {
 
   app.use('*', createServiceMiddleware(services));
 
-  app.get('/healthz', (c) => c.json({ ok: true }));
+  app.get('/healthz', (c) =>
+    c.json({
+      ok: true,
+      ...(process.env.HSW_DAEMON_TOKEN ? { instance: process.env.HSW_DAEMON_TOKEN } : {}),
+    }),
+  );
 
   const api = new Hono();
   api.use('*', createOriginGuard());

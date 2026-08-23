@@ -6,24 +6,32 @@ English | [简体中文](https://github.com/B1anker/harness-switch/blob/main/REA
 
 **harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **Codex**, **Kimi Code**, **Pi**, and **DeepSeek Harness (DSH)**.
 
-It is a configuration manager, not an API proxy: it does not route or inspect model traffic.
+It writes each tool's native configuration; it is not an API proxy and never routes model traffic. Profiles are encrypted at rest, writes are transactional, and every activation has a backup and an undo receipt.
 
 ## Install and run
 
-Requires [Bun](https://bun.sh) >= 1.2.
+Requires [Bun](https://bun.sh) >= 1.2 as the runtime. Start it with your preferred package runner:
 
 ```bash
-bunx @seaveyon/harness-switch
+bunx @seaveyon/harness-switch@latest
+npx -y @seaveyon/harness-switch@latest
+pnpm dlx @seaveyon/harness-switch@latest
 ```
 
-Or install it globally:
+`pnpx @seaveyon/harness-switch@latest` is also supported where `pnpx` is available. Or install it globally:
 
 ```bash
 bun add -g @seaveyon/harness-switch
+# npm install -g @seaveyon/harness-switch
+# pnpm add -g @seaveyon/harness-switch
 harness-switch
 ```
 
-The server listens on `127.0.0.1:8787` by default. The first startup prints a randomly generated Web password in the terminal.
+The command starts a background daemon on `127.0.0.1:8787`. Read the generated Web password with:
+
+```bash
+cat ~/.harness-switch/web_password
+```
 
 For a remote SSH server, keep the server bound to loopback and use an SSH tunnel:
 
@@ -31,7 +39,7 @@ For a remote SSH server, keep the server bound to loopback and use an SSH tunnel
 ssh -N -L 8787:127.0.0.1:8787 user@your-server
 ```
 
-Then open <http://127.0.0.1:8787> in your local browser.
+Then open <http://127.0.0.1:8787> locally. Use `harness-switch status`, `stop`, or `server` to inspect, stop, or run the service in the foreground.
 
 ### Interface language
 
@@ -165,15 +173,22 @@ Cross-user writes require access to the destination home. Managing both `root` a
 
 ### CLI automation
 
-The same business logic is available from the terminal without opening the browser or starting any listener: the CLI builds the same service graph in-process and reads/writes the same data directory, so it works even when the daemon is not running. Every command supports `--json` for scripting:
+The CLI talks to the running local daemon and uses the same authenticated HTTP API as the Web UI. Start the daemon once before using API-backed commands. `help` and `version` work offline; data commands support `--json` (or `-j`) for scripting:
 
 ```bash
 harness-switch list                          # harnesses, active profile, profile counts
+harness-switch profiles [claude]             # secret-free profile list, optionally filtered
+harness-switch create claude main \
+  --base-url https://api.example.com/v1 \
+  --model claude-sonnet-4-5 \
+  --api-key-env ANTHROPIC_TOKEN              # safer than putting a key in shell history
 harness-switch providers                     # Provider Vault entries
 harness-switch doctor                        # read-only diagnostics
-harness-switch doctor --probe --harness claude
-harness-switch plan claude                   # drift inspection for a harness
+harness-switch doctor --strict --harness claude  # exit 1 if a check has error status
+harness-switch plan claude main              # exact native files activation would write
 harness-switch activate claude main --yes    # activate a profile
+harness-switch official claude --yes         # return to the tool's built-in login
+harness-switch delete claude old --yes        # inactive profiles only
 harness-switch users                         # manageable local Unix users
 harness-switch list --user alice             # inspect alice's independent store
 harness-switch activate codex main --user alice --yes
@@ -187,7 +202,9 @@ harness-switch operations                    # operation receipts, newest first
 harness-switch undo <operation-id>           # revert one complete operation
 ```
 
-`plan <harness>` prints the drift inspection of the active profile (expected vs. current content per file); without an active profile it reports `status: unknown`. `activate` prompts for confirmation on a TTY and requires `--yes` in non-interactive terminals (CI). JSON output mirrors the HTTP API response shapes (`HarnessesResponse`, `ProvidersResponse`, `DoctorResponse`, `DriftSummary`, `ActivateResponse`), so scripts can reuse the same field names. `HSW_DATA_DIR` and `HSW_HOME_DIR` override where it reads state (defaults: `~/.harness-switch` and `$HOME`).
+`plan <harness> <profile>` includes exact rendered content and therefore may include an API key. Mutating commands prompt on a TTY and require `--yes` in non-interactive terminals (CI). Prefer `--api-key-env VAR` to `--api-key VALUE` so credentials do not enter shell history or the process list. Run `harness-switch help` for the complete command reference. `HSW_URL` selects a non-default local endpoint; `HSW_DATA_DIR` tells the CLI where to find `web_password`.
+
+JSON failures retain the HTTP status and stable server error code when available. Each CLI invocation logs out its temporary API session before exiting, so repeated automation does not grow the persisted Web session table.
 
 ## Security
 
@@ -207,6 +224,7 @@ This protects against accidental plaintext disclosure in profile storage, but do
 |---|---:|---|
 | `HOST` | `127.0.0.1` | Bind address. Keep the default when using SSH tunnelling. |
 | `PORT` | `8787` | Listening port. |
+| `HSW_URL` | `http://127.0.0.1:$PORT` | Base URL used by API-backed CLI commands. |
 | `HSW_DATA_DIR` | `~/.harness-switch` | Control-plane and service-owner data directory; other users use `.harness-switch` in their own home. |
 | `HSW_HOME_DIR` | `$HOME` | Service owner's home override, mainly for tests and containers. |
 | `HSW_USERS` | auto-discovered | Comma-separated allowlist such as `root,alice`. The service owner is always manageable. |
@@ -239,6 +257,7 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `DELETE` | `/api/harnesses/:id/profiles/:name` | Delete; `409` for the active profile |
 | `GET` | `/api/harnesses/:id/profiles/:name/preview` | The exact content that would be written |
 | `POST` | `/api/harnesses/:id/profiles/:name/activate` | Write the native config, then commit the switch |
+| `POST` | `/api/harnesses/:id/official/activate` | Return a supported harness to its built-in account login |
 | `GET` | `/api/backups` | Snapshots, newest first |
 | `POST` | `/api/backups/:id/restore` | Restore a snapshot verbatim |
 | `POST` | `/api/transfer/export` | Create a passphrase-encrypted portable bundle |
@@ -260,7 +279,7 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 
 Every POST/PATCH body is validated against a shared Zod schema (`packages/shared/src/schemas.ts`) that the server and the web client both build on. A malformed shape is rejected with a `400` naming the field *before* it reaches storage, instead of being persisted and only surfacing as a `500` on the next activation. Unknown fields are dropped rather than rejected, so an older client keeps working while nothing unrecognised enters the store.
 
-## Background daemon (bunx / npx)
+## Background daemon (bunx / npx / pnpm)
 
 The published CLI runs as a background daemon by default: the command returns
 immediately, the server keeps running after the terminal is closed, and
@@ -274,14 +293,16 @@ bunx @seaveyon/harness-switch@latest server      # run in the foreground instead
 bunx @seaveyon/harness-switch@latest list        # CLI automation (see above)
 ```
 
-`npx -y @seaveyon/harness-switch@latest` works the same way. Append `@latest`
-so `bunx`/`npx` fetch the newest release before running.
+Replace `bunx` with `npx -y`, `pnpm dlx`, or `pnpx` as preferred. Append `@latest`
+so the package runner fetches the newest release before running. Bun remains the runtime used by the installed executable.
 
-The daemon writes its pid to `~/.harness-switch/daemon.pid` and its log to
+The daemon writes its PID, instance identity, and listening address to `~/.harness-switch/daemon.pid` and its log to
 `~/.harness-switch/daemon.log` (a fresh log per start). The first run creates
 the web password in `~/.harness-switch/web_password` and prints it to the log.
 When a daemon is already running, a new invocation stops it before starting the
 new process, so the port never conflicts and the newest code wins.
+
+Startup reports success only after the new process answers `/healthz`. `status` returns a non-zero exit code when the recorded daemon is not healthy. Before `stop` or an update sends a signal, the recorded instance identity is verified so a stale, reused PID cannot terminate an unrelated process.
 
 The dashboard polls the npm registry and shows a one-click **update button**
 next to the version badge when a newer release exists; it runs the same

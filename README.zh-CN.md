@@ -6,24 +6,32 @@
 
 **harness-switch** 是一个基于 Bun 的 Web 控制面，用于在 SSH 服务器或无图形界面的机器上管理 API 配置。它可以为 **Claude Code**、**Codex**、**Kimi Code**、**Pi** 和 **DeepSeek Harness (DSH)** 切换 API Base URL、API Key 和模型配置。
 
-它是配置管理器，不是 API 代理：不转发、也不检查任何模型流量。
+它直接写入各工具的原生配置，不是 API 代理，也不转发模型流量。配置档案落盘加密，写入具备事务保护，每次激活都有备份和可撤销的操作记录。
 
 ## 安装与运行
 
-需要 [Bun](https://bun.sh) >= 1.2。
+运行时需要 [Bun](https://bun.sh) >= 1.2，可以使用任意常见包执行器启动：
 
 ```bash
-bunx @seaveyon/harness-switch
+bunx @seaveyon/harness-switch@latest
+npx -y @seaveyon/harness-switch@latest
+pnpm dlx @seaveyon/harness-switch@latest
 ```
 
-或全局安装：
+安装了 `pnpx` 的环境也可以使用 `pnpx @seaveyon/harness-switch@latest`。也可以全局安装：
 
 ```bash
 bun add -g @seaveyon/harness-switch
+# npm install -g @seaveyon/harness-switch
+# pnpm add -g @seaveyon/harness-switch
 harness-switch
 ```
 
-服务默认监听 `127.0.0.1:8787`。首次启动会在终端打印一个随机生成的 Web 密码。
+命令默认启动后台守护进程并监听 `127.0.0.1:8787`。可读取自动生成的 Web 密码：
+
+```bash
+cat ~/.harness-switch/web_password
+```
 
 对于远程 SSH 服务器，请让服务保持绑定在回环地址，并通过 SSH 隧道访问：
 
@@ -31,7 +39,7 @@ harness-switch
 ssh -N -L 8787:127.0.0.1:8787 user@your-server
 ```
 
-然后在本地浏览器打开 <http://127.0.0.1:8787>。
+然后在本地浏览器打开 <http://127.0.0.1:8787>。使用 `harness-switch status`、`stop`、`server` 可查看状态、停止服务或改以前台模式运行。
 
 ### 界面语言
 
@@ -165,15 +173,22 @@ Dashboard 顶栏可以在 `root`、`alice` 等本地登录用户之间切换。�
 
 ### CLI 自动化
 
-不打开浏览器、也不启动任何监听进程就能在终端使用同样的业务逻辑：CLI 在进程内构建与 HTTP 服务相同的服务图，直接读写同一数据目录，即使守护进程未运行也能工作。每条命令都支持 `--json` 以便脚本化：
+CLI 通过已运行的本地守护进程调用与 Web 界面相同的认证 HTTP API。使用数据命令前需先启动一次守护进程；`help` 和 `version` 无需连接服务。数据命令支持 `--json`（或 `-j`），便于脚本化：
 
 ```bash
 harness-switch list                          # Harness、激活配置与配置数量
+harness-switch profiles [claude]             # 无密钥的配置列表，可按 Harness 过滤
+harness-switch create claude main \
+  --base-url https://api.example.com/v1 \
+  --model claude-sonnet-4-5 \
+  --api-key-env ANTHROPIC_TOKEN              # 避免密钥进入 shell 历史
 harness-switch providers                     # 凭据库条目
 harness-switch doctor                        # 只读诊断
-harness-switch doctor --probe --harness claude
-harness-switch plan claude                   # 该 Harness 的漂移检查
+harness-switch doctor --strict --harness claude  # 有 error 检查时退出码为 1
+harness-switch plan claude main              # 激活将写入的原生文件精确内容
 harness-switch activate claude main --yes    # 激活一个配置
+harness-switch official claude --yes         # 恢复工具自身的官方登录
+harness-switch delete claude old --yes        # 只能删除未激活配置
 harness-switch users                         # 可管理的本地 Unix 用户
 harness-switch list --user alice             # 查看 alice 的独立配置
 harness-switch activate codex main --user alice --yes
@@ -186,7 +201,9 @@ harness-switch operations                    # 操作收据，最新在前
 harness-switch undo <operation-id>           # 撤销一次完整操作
 ```
 
-`plan <harness>` 输出激活配置的漂移检查（每个文件预期内容 vs 当前内容）；未激活任何配置时报告 `status: unknown`。`activate` 在 TTY 上会询问确认，在非交互式终端（CI）里必须加 `--yes`。JSON 输出与 HTTP API 的响应形状一致（`HarnessesResponse`、`ProvidersResponse`、`DoctorResponse`、`DriftSummary`、`ActivateResponse`），脚本可直接复用同样的字段名。`HSW_DATA_DIR` 与 `HSW_HOME_DIR` 可覆盖状态读写位置（默认 `~/.harness-switch` 与 `$HOME`）。
+`plan <harness> <profile>` 会输出完整渲染内容，其中可能包含 API Key。修改类命令在 TTY 中会询问确认，在非交互式终端（CI）中必须加 `--yes`。建议使用 `--api-key-env VAR`，不要把密钥直接放入 shell 历史或进程参数。完整命令说明见 `harness-switch help`。`HSW_URL` 可选择非默认本地服务地址；`HSW_DATA_DIR` 告诉 CLI 去哪里读取 `web_password`。
+
+JSON 错误会尽可能保留 HTTP 状态码和稳定的服务端错误码。每次 CLI 调用退出前都会注销自己的临时 API Session，因此长期自动化不会让持久化的 Web Session 表不断增长。
 
 ## 安全性
 
@@ -206,6 +223,7 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 |---|---:|---|
 | `HOST` | `127.0.0.1` | 绑定地址。使用 SSH 隧道时请保持默认值。 |
 | `PORT` | `8787` | 监听端口。 |
+| `HSW_URL` | `http://127.0.0.1:$PORT` | 需要调用 API 的 CLI 命令所连接的服务地址。 |
 | `HSW_DATA_DIR` | `~/.harness-switch` | 管理端以及启动服务用户的数据目录；其他用户使用各自 Home 下的 `.harness-switch`。 |
 | `HSW_HOME_DIR` | `$HOME` | 启动服务用户的 Home 覆盖值，主要用于测试和容器部署。 |
 | `HSW_USERS` | 自动发现 | 逗号分隔的本地用户名允许名单，例如 `root,alice`。启动服务的用户始终可管理。 |
@@ -238,6 +256,7 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `DELETE` | `/api/harnesses/:id/profiles/:name` | 删除；对已激活的配置返回 `409` |
 | `GET` | `/api/harnesses/:id/profiles/:name/preview` | 将要写入的确切内容 |
 | `POST` | `/api/harnesses/:id/profiles/:name/activate` | 写入原生配置，然后提交此次切换 |
+| `POST` | `/api/harnesses/:id/official/activate` | 让支持的 Harness 恢复工具自身的官方登录 |
 | `GET` | `/api/backups` | 快照列表，最新的在前 |
 | `POST` | `/api/backups/:id/restore` | 原样恢复某个快照 |
 | `POST` | `/api/transfer/export` | 生成一个用密码加密的可迁移备份包 |
@@ -259,7 +278,7 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 
 所有 POST/PATCH 的请求体都会先经过一份共享的 Zod Schema（`packages/shared/src/schemas.ts`），前后端共用同一份定义。形状不合法的请求在写入存储之前就返回 `400`，并指明具体字段，而不是先落盘、直到下次激活时才报 `500`。请求体中未知的字段会被丢弃而非拒绝，因此旧版客户端仍可工作，同时不会有无法识别的内容进入存储。
 
-## 后台守护进程（bunx / npx）
+## 后台守护进程（bunx / npx / pnpm）
 
 发布的 CLI 默认以后台守护进程方式运行：命令立即返回，关闭终端后服务依然在跑；发布新版本后重新运行，会重启守护进程并切换到最新版本。
 
@@ -271,9 +290,11 @@ bunx @seaveyon/harness-switch@latest server      # 改为前台运行
 bunx @seaveyon/harness-switch@latest list        # CLI 自动化（见上文）
 ```
 
-`npx -y @seaveyon/harness-switch@latest` 效果相同。加上 `@latest` 可以保证 `bunx`/`npx` 每次先拉取最新发布版本。
+也可以把 `bunx` 替换为 `npx -y`、`pnpm dlx` 或 `pnpx`。加上 `@latest` 可以让包执行器先获取最新发布版本；安装后的可执行文件仍以 Bun 作为运行时。
 
-守护进程把 pid 写入 `~/.harness-switch/daemon.pid`，把日志写入 `~/.harness-switch/daemon.log`（每次启动重新生成）。首次运行会创建 Web 登录密码 `~/.harness-switch/web_password` 并打印到日志。如果已有守护进程在运行，再次调用会先停掉旧进程再启动新进程，因此端口不会冲突，最新代码总是生效。
+守护进程把 PID、实例身份和实际监听地址写入 `~/.harness-switch/daemon.pid`，把日志写入 `~/.harness-switch/daemon.log`（每次启动重新生成）。首次运行会创建 Web 登录密码 `~/.harness-switch/web_password` 并打印到日志。如果已有守护进程在运行，再次调用会先停掉旧进程再启动新进程，因此端口不会冲突，最新代码总是生效。
+
+新进程只有通过 `/healthz` 检查后才会报告启动成功。记录的守护进程不健康时，`status` 返回非零退出码；`stop` 或更新在发送信号前会验证实例身份，避免陈旧 PID 被系统复用后误杀无关进程。
 
 Dashboard 会轮询 npm registry：当有新版本发布时，版本徽标旁会出现一键**更新按钮**，点击后内部执行与 `bunx <package>@latest` 相同的重启流程，新版本就绪后页面自动刷新。更新日志在 `~/.harness-switch/update.log`。
 

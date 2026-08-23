@@ -101,6 +101,40 @@ function createClaudeProfile(name = 'main', apiKey = 'sk-test') {
 }
 
 describe('cli', () => {
+  test('argument parser supports documented value flags, aliases and --', () => {
+    expect(
+      parseArgs([
+        '--name',
+        'main',
+        '--api-key=secret',
+        '--base-url',
+        'https://example.com',
+        '-j',
+        '--',
+        '--literal',
+      ]),
+    ).toEqual({
+      flags: {
+        name: 'main',
+        'api-key': 'secret',
+        'base-url': 'https://example.com',
+        json: true,
+      },
+      positional: ['--literal'],
+    });
+    expect(() => parseArgs(['--name'])).toThrow('需要一个值');
+  });
+
+  test('commands reject misspelled options and extra arguments', async () => {
+    const typo = await run('list', ['--jsno', '--json']);
+    expect(typo.code).toBe(1);
+    expect(JSON.parse(typo.logs.join('\n')).error.message).toContain('--jsno');
+
+    const extra = await run('profiles', ['claude', 'extra', '--json']);
+    expect(extra.code).toBe(1);
+    expect(JSON.parse(extra.logs.join('\n')).error.message).toContain('用法');
+  });
+
   test('list --json mirrors the harnesses API response shape', async () => {
     const { code, logs } = await run('list', ['--json']);
     expect(code).toBe(0);
@@ -111,6 +145,26 @@ describe('cli', () => {
     expect(typeof payload.envFile).toBe('string');
     expect(payload.items.map((item) => item.id)).toEqual(['claude', 'codex', 'kimi', 'pi', 'dsh']);
     expect(JSON.stringify(payload)).not.toContain('apiKey');
+  });
+
+  test('each command logs out its temporary API session', async () => {
+    const { code } = await run('list', ['--json']);
+    expect(code).toBe(0);
+    const store = JSON.parse(await Bun.file(join(dataDir, 'sessions.json')).text()) as {
+      sessions: Record<string, unknown>;
+    };
+    expect(Object.keys(store.sessions)).toHaveLength(0);
+  });
+
+  test('json errors preserve the HTTP status and stable server code', async () => {
+    const { code, logs } = await run('official', ['kimi', '--yes', '--json']);
+    expect(code).toBe(1);
+    const payload = JSON.parse(logs.join('\n')) as {
+      error: { code: string; status: number; message: string };
+    };
+    expect(payload.error.status).toBe(400);
+    expect(payload.error.code).toBe('activation.officialLoginUnsupported');
+    expect(payload.error.message.length).toBeGreaterThan(0);
   });
 
   test('providers --json lists vault entries without secrets', async () => {
@@ -127,6 +181,39 @@ describe('cli', () => {
     const acme = payload.items.find((item) => item.id === 'acme');
     expect(acme?.apiKeyConfigured).toBe(true);
     expect(JSON.stringify(payload)).not.toContain('sk-acme');
+  });
+
+  test('create and profiles support safe credentials from the environment', async () => {
+    process.env.HSW_TEST_API_KEY = 'sk-from-env';
+    try {
+      const created = await run('create', [
+        'claude',
+        'automation',
+        '--base-url',
+        'https://api.example.com/v1',
+        '--model',
+        'claude-sonnet-4-5',
+        '--api-key-env',
+        'HSW_TEST_API_KEY',
+        '--json',
+      ]);
+      expect(created.code).toBe(0);
+      expect(JSON.parse(created.logs.join('\n')).name).toBe('automation');
+
+      const listed = await run('profiles', ['claude', '--json']);
+      const payload = JSON.parse(listed.logs.join('\n')) as { items: Array<{ name: string }> };
+      expect(payload.items.map((item) => item.name)).toEqual(['automation']);
+      expect(JSON.stringify(payload)).not.toContain('sk-from-env');
+    } finally {
+      delete process.env.HSW_TEST_API_KEY;
+    }
+  });
+
+  test('delete --yes removes an inactive profile', async () => {
+    createClaudeProfile('temporary');
+    const removed = await run('delete', ['claude', 'temporary', '--yes', '--json']);
+    expect(removed.code).toBe(0);
+    expect(services.get(IProfileService).get('claude', 'temporary')).toBeUndefined();
   });
 
   test('plan <harness> <profile> --json returns the exact content activation would write', async () => {
