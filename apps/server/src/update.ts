@@ -74,7 +74,8 @@ export async function checkForUpdate(force = false): Promise<UpdateCheck> {
 }
 
 /**
- * Starts the update in the background: `bun x <package>@latest` downloads the
+ * Starts the update in the background with the active runtime's package runner
+ * (`npx -y` for Node.js, `bun x` for Bun), downloads the
  * newest release and its daemon CLI stops this process and starts itself, so
  * the running daemon is replaced by the new version. Runs detached with its
  * own log so it survives this process being terminated.
@@ -88,10 +89,15 @@ export async function triggerUpdate(): Promise<void> {
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const logFd = openSync(join(dataDir, 'update.log'), 'w');
 
-  const child = spawn(process.execPath, ['x', `${name}@latest`], {
-    detached: true,
-    stdio: ['ignore', logFd, logFd],
-    env: process.env,
-  });
+  const usingBun = Boolean(process.versions.bun);
+  const child = spawn(
+    usingBun ? 'bun' : 'npx',
+    usingBun ? ['x', `${name}@latest`] : ['-y', `${name}@latest`],
+    {
+      detached: true,
+      stdio: ['ignore', logFd, logFd],
+      env: process.env,
+    },
+  );
   child.unref();
 }

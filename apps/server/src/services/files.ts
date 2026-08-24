@@ -19,12 +19,27 @@ import { isInside, realPath } from '../common/paths';
 import { createDecorator, inject } from '../di';
 import { IEnvironmentService } from './environment';
 
+/**
+ * Outcome of an inspection read. `ok` with `content: undefined` means the file is
+ * absent; `ok: false` carries why it could not be read.
+ */
+export type FileReadResult =
+  | { ok: true; content: string | undefined }
+  | { ok: false; code: string | undefined; reason: string };
+
 export interface IFileService {
   readonly _serviceBrand: undefined;
   exists(file: string): boolean;
   readText(file: string): string;
   /** Returns undefined when the file does not exist, so callers can tell it apart from an empty file. */
   readOptional(file: string): string | undefined;
+  /**
+   * Reads a file the manager only wants to describe, never to write back. Unlike
+   * `readOptional` this never throws: doctor and drift report on files they do not
+   * control, so one unreadable file has to become a finding in the report rather than
+   * a failed request that hides every other finding.
+   */
+  readForReport(file: string): FileReadResult;
   /**
    * Reads a file that has to be a regular file. A symlink is refused instead of
    * followed, so content the manager stores for itself cannot be turned into a window
@@ -86,6 +101,18 @@ export class FileService implements IFileService {
         return undefined;
       }
       throw error;
+    }
+  }
+
+  readForReport(file: string): FileReadResult {
+    try {
+      return { ok: true, content: readFileSync(file, 'utf8') };
+    } catch (error) {
+      const errno = error as NodeJS.ErrnoException;
+      if (errno.code === 'ENOENT') {
+        return { ok: true, content: undefined };
+      }
+      return { ok: false, code: errno.code, reason: errno.message };
     }
   }
 

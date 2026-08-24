@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DriftSummary } from '@seaveyon/harness-switch-shared';
@@ -116,6 +116,24 @@ describe('drift inspect', () => {
   test('an unparsable live file shows as invalid', () => {
     activateClaude();
     writeFileSync(claudeSettings(), '{ not json');
+    const report = drift().inspect('claude');
+    expect(fileOf(report, 'settings').status).toBe('invalid');
+    expect(report.status).toBe('invalid');
+  });
+
+  test('an unreadable live file shows as invalid rather than throwing', () => {
+    activateClaude();
+    chmodSync(claudeSettings(), 0o000);
+    const report = drift().inspect('claude');
+    // Not `missing`: that would invite a reapply overwriting a config we never read.
+    expect(fileOf(report, 'settings').status).toBe('invalid');
+    expect(report.status).toBe('invalid');
+  });
+
+  test('an unreadable live file under official login shows as invalid', () => {
+    activateClaude();
+    activation().activateOfficial('claude');
+    chmodSync(claudeSettings(), 0o000);
     const report = drift().inspect('claude');
     expect(fileOf(report, 'settings').status).toBe('invalid');
     expect(report.status).toBe('invalid');

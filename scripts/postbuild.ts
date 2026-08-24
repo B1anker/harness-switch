@@ -10,8 +10,8 @@ if (!existsSync(bundle)) {
 }
 
 const content = readFileSync(bundle, 'utf8');
-if (!content.startsWith('#!/usr/bin/env bun')) {
-  writeFileSync(bundle, `#!/usr/bin/env bun\n${content}`);
+if (!content.startsWith('#!/usr/bin/env node')) {
+  writeFileSync(bundle, `#!/usr/bin/env node\n${content}`);
 }
 chmodSync(bundle, 0o755);
 copyFileSync(join(root, 'README.md'), join(serverDir, 'README.md'));

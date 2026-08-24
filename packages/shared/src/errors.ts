@@ -104,6 +104,7 @@ export const DOCTOR_CODES = {
   fileOk: 'doctor.check.fileOk',
   parseOk: 'doctor.check.parseOk',
   parseFailed: 'doctor.check.parseFailed',
+  parseUnreadable: 'doctor.check.parseUnreadable',
   driftNoProfile: 'doctor.check.driftNoProfile',
   driftInvalid: 'doctor.check.driftInvalid',
   driftMismatch: 'doctor.check.driftMismatch',

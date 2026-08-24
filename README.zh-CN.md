@@ -4,36 +4,64 @@
 
 [English](./README.md) | 简体中文
 
-**harness-switch** 是一个基于 Bun 的 Web 控制面，用于在 SSH 服务器或无图形界面的机器上管理 API 配置。它可以为 **Claude Code**、**Codex**、**Kimi Code**、**Pi** 和 **DeepSeek Harness (DSH)** 切换 API Base URL、API Key 和模型配置。
+**harness-switch** 是用于切换 **Claude Code**、**Codex**、**Kimi Code**、**Pi** 与 **DeepSeek Harness (DSH)** API 配置的本地控制面。把它运行在这些工具所在的电脑上，在浏览器中选择已保存的配置档案并激活即可。
 
-它直接写入各工具的原生配置，不是 API 代理，也不转发模型流量。配置档案落盘加密，写入具备事务保护，每次激活都有备份和可撤销的操作记录。
+它直接写入工具自己的原生配置文件，不是代理、不接收模型流量，也不需要执行 `source` 来让配置生效。
 
-## 安装与运行
+## 能力概览
 
-运行时需要 [Bun](https://bun.sh) >= 1.2，可以使用任意常见包执行器启动：
+| 能力 | 说明 |
+|---|---|
+| 一套档案覆盖多种 provider 或使用场景 | 在一个界面切换 Base URL、密钥、模型和工具专属选项。 |
+| 安全写入原生文件 | 每次激活都会校验、事务化写入、创建备份，并支持撤销。 |
+| 复用凭据 | 在凭据库保存一次密钥，多个配置档案可共同引用。 |
+| 导入、导出与同步 | 接管已有配置、在机器间迁移加密包，或在 Unix 用户间复制配置。 |
+| 诊断 | 对比当前激活档案与 live 文件，发现漂移后可重新应用或采纳现场修改。 |
+
+## 兼容性
+
+| 项目 | 支持 |
+|---|---|
+| 操作系统 | macOS、Windows、Linux |
+| 运行时 | Node.js >= 18.17 或 Bun >= 1.2 |
+| 浏览器访问 | 默认在同一台机器打开 `http://127.0.0.1:8787` |
+| 远程访问 | 可选 SSH 隧道，或自行配置安全的反向代理 |
+| 本地多用户 | Unix-like 主机；Windows 管理启动服务的账号 |
+
+## 快速开始
+
+使用任意习惯的包执行器启动：
 
 ```bash
-bunx @seaveyon/harness-switch@latest
 npx -y @seaveyon/harness-switch@latest
 pnpm dlx @seaveyon/harness-switch@latest
+bunx @seaveyon/harness-switch@latest
 ```
 
 安装了 `pnpx` 的环境也可以使用 `pnpx @seaveyon/harness-switch@latest`。也可以全局安装：
 
 ```bash
-bun add -g @seaveyon/harness-switch
-# npm install -g @seaveyon/harness-switch
+npm install -g @seaveyon/harness-switch
 # pnpm add -g @seaveyon/harness-switch
+# bun add -g @seaveyon/harness-switch
 harness-switch
 ```
 
-命令默认启动后台守护进程并监听 `127.0.0.1:8787`。可读取自动生成的 Web 密码：
+命令默认启动后台守护进程并监听 `127.0.0.1:8787`，同时输出自动生成的 Web 密码所在路径。接着：
+
+1. 在同一台机器的浏览器打开 [http://127.0.0.1:8787](http://127.0.0.1:8787)。
+2. 使用生成的密码登录。
+3. 为一个 Harness 新建配置档案并点击**激活**。
+
+使用 `harness-switch status` 可查看地址、日志、数据目录和密码文件路径。macOS 与 Linux 的默认密码文件为：
 
 ```bash
 cat ~/.harness-switch/web_password
 ```
 
-对于远程 SSH 服务器，请让服务保持绑定在回环地址，并通过 SSH 隧道访问：
+### 访问远程机器
+
+SSH 只是可选访问方式。当 harness-switch 运行在远程或无图形界面主机时，请保持回环绑定，再转发端口：
 
 ```bash
 ssh -N -L 8787:127.0.0.1:8787 user@your-server
@@ -45,11 +73,11 @@ ssh -N -L 8787:127.0.0.1:8787 user@your-server
 
 Web 界面支持简体中文和英语。可以通过登录页或 Dashboard 顶栏的语言按钮进行切换；默认保持简体中文，选择结果会保存在浏览器中，后续访问会自动沿用。该设置只影响 Web 界面，不会改变配置档案数据或生成的原生配置文件。
 
-## 配置
+## 切换工具配置
 
 在 Web 界面中为每个 Harness 创建一个或多个配置。一个配置包含显示名称、API Base URL、API Key、模型、备注，以及该 Harness 需要的其他字段。点击 **激活** 即可让某个配置生效。
 
-激活时会直接写入各个工具自己的配置文件。整个过程不依赖你 source 过某个 shell 脚本 —— 这正是它能作用于「长期运行、并把 CLI 作为子进程拉起」的场景的原因。
+激活时会直接写入各个工具自己的配置文件。改动只作用于 harness-switch 所在的机器，无法改变另一台机器上已在运行的工具。
 
 | Harness | 写入的文件 | 写入模式 | 生效时机 |
 |---|---|---|---|
@@ -69,22 +97,22 @@ Web 界面支持简体中文和英语。可以通过登录页或 Dashboard 顶�
 - **Pi**（`@earendil-works/pi-coding-agent`）会在 `models.json` 中注册一个自定义 provider，并通过 `defaultProvider` / `defaultModel` 让 `settings.json` 指向它。API Key 必须位于该 provider 条目中（或 `auth.json`），否则 Pi 会显示 "No models available" 并要求 `/login`。运行时的 `--model` 参数仍可覆盖默认模型。
 - **DeepSeek Harness** 会注册一个自定义的 `llm-pi-ai` provider，把 API Key 存入它单独的凭据文档，并更新 `agent-default-model`。已有会话会保持各自选定的路由，新建会话则使用已激活的配置。
 
-`~/.harness-switch/env.sh` 作为兼容层保留，其中只包含对应工具确实会读取的变量。仅当 Codex 配置使用环境变量认证模式时才需要它：
+`~/.harness-switch/env.sh` 只是 Codex 使用环境变量认证模式时的兼容层：
 
 ```bash
 source ~/.harness-switch/env.sh
 ```
 
-两个已知限制：
+请注意：
 
 - 写入 TOML 会经过「解析 — 重新序列化」，因此 `config.toml` 中的注释和排版会丢失。YAML 和 JSON 会保留注释与键顺序。
-- Web 界面修改的是 **服务器上** 的文件。它无法影响一个已在运行的 shell，也不会改动你的本地机器。
+- 它无法改写一个已经运行的 shell 的环境变量。
 
 ### 进阶：接管原始文件
 
 表单未暴露的任何字段，都可以在配置的 **高级：原始配置** 区域直接编辑文件原文来设置。一旦编辑过，该文件就会依据你的文本生成，而不再依据表单字段，直到你选择 **恢复为自动生成**。无法被解析回来的内容会在落盘前被拒绝。
 
-### 备份与回滚
+## 安全地保留与恢复改动
 
 每次写入前，各目标文件的原有内容都会被快照到 `~/.harness-switch/backups/`，保留最近 10 份。备份面板可以原样恢复某个快照，注释也一并保留。快照绝不会与实际配置文件放在同一目录，因为像 Claude Code 这类工具会扫描自己的配置目录。
 
@@ -94,7 +122,7 @@ source ~/.harness-switch/env.sh
 
 从某个配置切走时，会先把实际文件的内容读回该配置的记录，因此你直接在 CLI 工具里做过的修改不会在下次切换时丢失。
 
-### 操作记录与撤销
+### 中断写入后的恢复
 
 进程内的 `try/catch` 只能处理抛出的异常；断电、SIGKILL、OOM 或升级重启时它根本没机会运行，原生配置、配置档案和「当前激活」记录就可能停在互相矛盾的状态。
 
@@ -111,6 +139,8 @@ PREPARED → APPLYING → METADATA_COMMITTED → COMMITTED
 
 `HSW_JOURNAL_RETAIN` 控制保留的记录条数，默认 50。
 
+## 接管与迁移配置
+
 ### 导入已有配置
 
 如果你在装 harness-switch 之前就手工配好了这些工具，顶栏的 **导入已有配置** 可以把它们接管过来，不必重新录一遍。
@@ -121,17 +151,17 @@ PREPARED → APPLYING → METADATA_COMMITTED → COMMITTED
 
 **扫描和导入都不会改动工具本身的配置文件。** 导入只写 harness-switch 自己的配置档案和凭据库；要真正生效，还需要你手动激活一次。配置文件存在但无法解析时，该工具会被整体跳过并说明原因，而不是猜测其内容。
 
-### 把所有配置迁移到另一台机器
+### 迁移配置到另一台机器
 
-使用顶栏的 **导入 / 导出** 可以生成一个 `.hsw-backup` 文件，其中包含全部 Harness 配置、API Key、原始文件覆盖内容以及当前的激活选择。该包用你自己设定的迁移密码加密，因此不依赖源机器的 `aes-256-gcm.key`。
+使用顶栏的 **导入 / 导出** 可以生成一个 `.hsw-backup` 文件，其中包含全部 Harness 配置、Provider Vault 凭据与 endpoint、API Key、原始文件覆盖内容以及当前的激活选择。该包用你自己设定的迁移密码加密，因此不依赖源机器的 `aes-256-gcm.key`。
 
-在目标机器上选择该文件并输入迁移密码。界面会在写入任何内容之前展示配置数量和同名冲突。导入默认保留目标机器上的配置；覆盖需要显式选择。是否恢复导出时的激活状态是可选的。
+在目标机器上选择该文件并输入迁移密码。界面会在写入任何内容之前展示配置、凭据数量和同名配置冲突。导入默认保留目标机器上的配置；覆盖需要显式选择。Provider Vault 条目始终以独立副本恢复，绝不覆盖目标机器已有凭据；若 ID 冲突，系统会生成新的导入 ID，并让被导入的配置引用该副本。是否恢复导出时的激活状态是可选的。
 
 Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包内。即使导出包包含该缓存，也只有在包内与目标机器的 JSON 内容确实不同时，导入界面才会提示迁移并要求二次确认；内容一致时不会重复提示或写入。
 
 请将迁移密码与备份包分开保管。它无法从导出文件中还原。
 
-### 凭据库（Provider Vault）：共享凭据
+### 通过凭据库复用密钥
 
 **凭据库**让一个 API Key 只保存一次，并挂在一个具名条目下，条目下可含多个具名 endpoint（每个一个 Base URL），使用与 `profiles.json` 相同的 AES-256-GCM 密钥加密。某个配置可以引用凭据库条目，而不再自带密钥：
 
@@ -140,7 +170,9 @@ Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包
 - 仍被配置引用的条目无法删除（HTTP `409`）。
 - 在配置表单中清除 Provider 选择即可解除引用；缓存的密钥会作为该配置自己的内联密钥保留。
 
-### 配置漂移
+## 验证与修复配置
+
+### 检查配置漂移
 
 仪表盘 **诊断** 面板会一并展示「激活配置会渲染出的内容」与磁盘上实际文件的对比；JSON/TOML/YAML 按解析后的值比较，因此仅键顺序变化的重新渲染不会误报为漂移。每个文件的状态为：
 
@@ -155,15 +187,17 @@ Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包
 - **重新应用**：按激活配置重写 live 文件，沿用「写前备份 + 全有或全无回滚」。
 - **采纳现场配置**：把 live 文件内容读回配置记录（与切走前回填同一路径）。当配置存在手动 override 时拒绝执行；工具自身无法解析的内容也绝不会被采纳。
 
-### 诊断（Doctor）
+### 运行诊断
 
 **诊断** 在每个 Harness 的右侧栏中按工具单独运行：对以 CLI 交付的工具检查可执行文件是否在 `PATH` 中（`install`；DeepSeek Harness 这类 Web 服务部署会跳过此项）、每个目标文件是否存在且可读可写（`files`，配置文件持有凭据且 group/other 可读时给出 warning）、文件能否解析（`parse`）、live 状态是否与激活配置漂移（`drift`）。另有全局的版本更新检查，报告是否有新版本可用（`updatedAvailable`）。
 
 连通性探测在 MVP 中**默认关闭**：传入 `--probe` 也只会记录一条 `unknown` 状态的检查，报告当前激活的 base URL 并说明未发起任何网络请求。
 
-### 本地 Unix 多用户
+## 管理本地 Unix 用户
 
-Dashboard 顶栏可以在 `root`、`alice` 等本地登录用户之间切换。每个用户使用自己 Home 下独立的配置档案、凭据库、加密密钥、激活状态和备份；切换用户本身不会写入 Harness 文件，只有显式激活配置才会写入。
+这是面向 Unix-like 主机的可选多用户能力。Windows 上，harness-switch 管理启动它的那个账号。
+
+Dashboard 顶栏右侧的账户菜单可以在 `root`、`alice` 等本地登录用户之间切换，也集中提供退出登录操作。每个用户使用自己 Home 下独立的配置档案、凭据库、加密密钥、激活状态和备份；切换用户本身不会写入 Harness 文件，只有显式激活配置才会写入。
 
 “同步用户配置”可以把另一个用户的配置和它引用的 Provider Vault 凭据一次性复制到当前用户。同步时密钥只在服务端解密，并使用目标用户的本地密钥重新加密；激活状态、备份和原生配置文件不会复制。同名配置默认跳过，也可以显式选择覆盖。
 
@@ -171,7 +205,7 @@ Dashboard 顶栏可以在 `root`、`alice` 等本地登录用户之间切换。�
 
 跨用户写入必须具备目标 Home 的权限。要同时管理 `root` 和普通用户，通常需要以 root 运行 harness-switch；新建文件和目录会设置为目标用户的 UID/GID。此时 Web 密码等同于管理所有已开放用户配置的权限，因此务必保持回环监听并使用 SSH 隧道。可用 `HSW_USERS=root,alice` 限制界面中允许管理的账号。
 
-### CLI 自动化
+## 用 CLI 自动化
 
 CLI 通过已运行的本地守护进程调用与 Web 界面相同的认证 HTTP API。使用数据命令前需先启动一次守护进程；`help` 和 `version` 无需连接服务。数据命令支持 `--json`（或 `-j`），便于脚本化：
 
@@ -278,25 +312,25 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 
 所有 POST/PATCH 的请求体都会先经过一份共享的 Zod Schema（`packages/shared/src/schemas.ts`），前后端共用同一份定义。形状不合法的请求在写入存储之前就返回 `400`，并指明具体字段，而不是先落盘、直到下次激活时才报 `500`。请求体中未知的字段会被丢弃而非拒绝，因此旧版客户端仍可工作，同时不会有无法识别的内容进入存储。
 
-## 后台守护进程（bunx / npx / pnpm）
+## 后台守护进程（npx / pnpm / Bun）
 
 发布的 CLI 默认以后台守护进程方式运行：命令立即返回，关闭终端后服务依然在跑；发布新版本后重新运行，会重启守护进程并切换到最新版本。
 
 ```bash
-bunx @seaveyon/harness-switch@latest             # 启动，或更新并重启守护进程
-bunx @seaveyon/harness-switch@latest status      # 查看 pid、地址、日志路径
-bunx @seaveyon/harness-switch@latest stop        # 停止守护进程
-bunx @seaveyon/harness-switch@latest server      # 改为前台运行
-bunx @seaveyon/harness-switch@latest list        # CLI 自动化（见上文）
+npx -y @seaveyon/harness-switch@latest             # 启动，或更新并重启守护进程
+npx -y @seaveyon/harness-switch@latest status      # 查看 pid、地址、日志路径
+npx -y @seaveyon/harness-switch@latest stop        # 停止守护进程
+npx -y @seaveyon/harness-switch@latest server      # 改为前台运行
+npx -y @seaveyon/harness-switch@latest list        # CLI 自动化（见上文）
 ```
 
-也可以把 `bunx` 替换为 `npx -y`、`pnpm dlx` 或 `pnpx`。加上 `@latest` 可以让包执行器先获取最新发布版本；安装后的可执行文件仍以 Bun 作为运行时。
+也可以把 `npx -y` 替换为 `pnpm dlx`、`pnpx` 或 `bunx`。加上 `@latest` 可以让包执行器先获取最新发布版本；同一份可执行文件同时支持 Node.js 和 Bun，直接运行已安装构建产物时可使用 `node dist/harness-switch.js` 或 `bun dist/harness-switch.js`。
 
 守护进程把 PID、实例身份和实际监听地址写入 `~/.harness-switch/daemon.pid`，把日志写入 `~/.harness-switch/daemon.log`（每次启动重新生成）。首次运行会创建 Web 登录密码 `~/.harness-switch/web_password` 并打印到日志。如果已有守护进程在运行，再次调用会先停掉旧进程再启动新进程，因此端口不会冲突，最新代码总是生效。
 
 新进程只有通过 `/healthz` 检查后才会报告启动成功。记录的守护进程不健康时，`status` 返回非零退出码；`stop` 或更新在发送信号前会验证实例身份，避免陈旧 PID 被系统复用后误杀无关进程。
 
-Dashboard 会轮询 npm registry：当有新版本发布时，版本徽标旁会出现一键**更新按钮**，点击后内部执行与 `bunx <package>@latest` 相同的重启流程，新版本就绪后页面自动刷新。更新日志在 `~/.harness-switch/update.log`。
+Dashboard 会轮询 npm registry：当有新版本发布时，版本徽标旁会出现一键**更新按钮**；Node.js 下内部执行 `npx -y`，Bun 下执行 `bun x`，新版本就绪后页面自动刷新。更新日志在 `~/.harness-switch/update.log`。
 
 如果要在 systemd（或其他进程守护工具）下运行，请改用前台模式：
 

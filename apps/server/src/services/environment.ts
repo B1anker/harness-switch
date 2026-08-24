@@ -1,7 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { existsSync, mkdirSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isInside } from '../common/paths';
 import { createDecorator } from '../di';
 
@@ -176,10 +177,11 @@ function resolveSessionTtlMs(): number {
 }
 
 function resolvePublicDir(): string {
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    join(import.meta.dir, '../public'),
-    join(import.meta.dir, '../../public'),
-    join(import.meta.dir, 'public'),
+    join(moduleDir, '../public'),
+    join(moduleDir, '../../public'),
+    join(moduleDir, 'public'),
   ];
   return candidates.find((dir) => existsSync(join(dir, 'index.html'))) ?? candidates[0]!;
 }

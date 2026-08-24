@@ -4,52 +4,80 @@
 
 English | [简体中文](https://github.com/B1anker/harness-switch/blob/main/README.zh-CN.md)
 
-**harness-switch** is a Bun-powered web control plane for managing API profiles on an SSH or headless server. It switches API Base URL, API key, and model profiles for **Claude Code**, **Codex**, **Kimi Code**, **Pi**, and **DeepSeek Harness (DSH)**.
+**harness-switch** is a local control plane for switching the API configuration used by **Claude Code**, **Codex**, **Kimi Code**, **Pi**, and **DeepSeek Harness (DSH)**. Run it on the computer that runs those tools; open its browser UI, choose a saved profile, and activate it.
 
-It writes each tool's native configuration; it is not an API proxy and never routes model traffic. Profiles are encrypted at rest, writes are transactional, and every activation has a backup and an undo receipt.
+It writes the tools’ native configuration files directly. It is not a proxy, never receives model traffic, and does not need you to source a shell script.
 
-## Install and run
+## What you get
 
-Requires [Bun](https://bun.sh) >= 1.2 as the runtime. Start it with your preferred package runner:
+| Capability | What it means |
+|---|---|
+| One profile per provider or use case | Switch base URL, key, model, and harness-specific options from one UI. |
+| Safe native-file writes | Every activation is validated, transactional, backed up, and can be undone. |
+| Credential reuse | Store a key once in Provider Vault and reuse it across profiles. |
+| Import, export, and sync | Adopt existing configs, move encrypted bundles between machines, or copy config between Unix users. |
+| Diagnostics | Compare the active profile with live files, detect drift, and re-apply or adopt changes. |
+
+## Compatibility
+
+| Area | Support |
+|---|---|
+| Operating systems | macOS, Windows, Linux |
+| Runtime | Node.js >= 18.17 or Bun >= 1.2 |
+| Browser access | Open `http://127.0.0.1:8787` on the same machine by default |
+| Remote access | Optional SSH tunnel or a properly secured reverse proxy |
+| Multiple local users | Unix-like hosts; Windows manages the account that starts the service |
+
+## Get started
+
+Start with any package runner:
 
 ```bash
-bunx @seaveyon/harness-switch@latest
 npx -y @seaveyon/harness-switch@latest
 pnpm dlx @seaveyon/harness-switch@latest
+bunx @seaveyon/harness-switch@latest
 ```
 
 `pnpx @seaveyon/harness-switch@latest` is also supported where `pnpx` is available. Or install it globally:
 
 ```bash
-bun add -g @seaveyon/harness-switch
-# npm install -g @seaveyon/harness-switch
+npm install -g @seaveyon/harness-switch
 # pnpm add -g @seaveyon/harness-switch
+# bun add -g @seaveyon/harness-switch
 harness-switch
 ```
 
-The command starts a background daemon on `127.0.0.1:8787`. Read the generated Web password with:
+The command starts a background daemon on `127.0.0.1:8787` and prints the path to the generated Web password. Then:
+
+1. Open [http://127.0.0.1:8787](http://127.0.0.1:8787) in a browser on that machine.
+2. Sign in with the generated password.
+3. Create a profile for one harness and select **Activate**.
+
+Use `harness-switch status` to see the URL, log, data directory, and password-file location. On macOS and Linux, the default password file is:
 
 ```bash
 cat ~/.harness-switch/web_password
 ```
 
-For a remote SSH server, keep the server bound to loopback and use an SSH tunnel:
+### Accessing a remote machine
+
+SSH is optional. When harness-switch runs on a remote or headless host, keep it bound to loopback and forward the port:
 
 ```bash
 ssh -N -L 8787:127.0.0.1:8787 user@your-server
 ```
 
-Then open <http://127.0.0.1:8787> locally. Use `harness-switch status`, `stop`, or `server` to inspect, stop, or run the service in the foreground.
+Then open <http://127.0.0.1:8787> in your local browser. Use `harness-switch status`, `stop`, or `server` to inspect, stop, or run the service in the foreground.
 
 ### Interface language
 
 The web UI supports English and Simplified Chinese. Use the language button in the login page or dashboard header to switch languages. Chinese remains the default for existing behavior; your selection is stored in the browser and is reused on later visits. The setting affects only the web interface—it does not change profile data or generated configuration files.
 
-## Configuration
+## Switch a tool
 
 Create one or more profiles per harness in the web UI. A profile holds a display name, API Base URL, API key, model, notes, and whatever extra fields that harness needs. Select **Activate** to make a profile current.
 
-Activation writes each tool's own configuration file. Nothing depends on you having sourced a shell script, which is what makes it work for long-lived processes that spawn a CLI as a child.
+Activation writes each tool's own configuration file. Changes apply to the machine where harness-switch runs; it cannot change a tool already running elsewhere.
 
 | Harness | File written | Write mode | Takes effect |
 |---|---|---|---|
@@ -69,22 +97,22 @@ Notes on individual harnesses:
 - **Pi** (`@earendil-works/pi-coding-agent`) registers a custom provider in `models.json` and points `settings.json` at it via `defaultProvider` / `defaultModel`. The API key must live in that provider entry (or `auth.json`); otherwise Pi shows "No models available" and asks for `/login`. A `--model` flag still overrides the default at runtime.
 - **DeepSeek Harness** registers a custom `llm-pi-ai` provider, stores the API key in its separate credentials document, and updates `agent-default-model`. Existing sessions keep their selected route; newly created sessions use the activated profile.
 
-`~/.harness-switch/env.sh` remains as a compatibility layer and only contains variables the corresponding tool genuinely honours. It is needed only when a Codex profile uses the environment-variable auth mode:
+`~/.harness-switch/env.sh` is only a compatibility layer for Codex’s environment-variable auth mode:
 
 ```bash
 source ~/.harness-switch/env.sh
 ```
 
-Two known limitations:
+Keep in mind:
 
 - Writing TOML goes through parse and re-serialize, so comments and layout in `config.toml` are lost. YAML and JSON keep their comments and key order.
-- The web UI changes files on the **server**. It cannot touch an already-running shell or your local machine.
+- It cannot rewrite the environment of an already-running shell.
 
 ### Advanced: taking over the raw file
 
 Any field the form does not expose can be set by editing the raw file content in the profile's **Advanced: raw configuration** section. Once edited, that file is generated from your text instead of the form fields until you select **Restore automatic generation**. Content that cannot be parsed back is rejected before it reaches disk.
 
-### Backups and rollback
+## Keep changes safe
 
 Before every write, the previous content of each target file is snapshotted into `~/.harness-switch/backups/`, keeping the most recent 10. The backup panel restores a snapshot verbatim, comments included. Snapshots never land next to the live file, because tools like Claude Code scan their own config directory.
 
@@ -94,7 +122,7 @@ Backup directories live in the managed user's own home, so on a root-run service
 
 Switching away from a profile first reads the live file back into that profile's record, so edits you made directly in the CLI tool are not lost on the next switch.
 
-### Operation receipts and undo
+### Recovery after an interrupted write
 
 An in-process `try/catch` only covers a thrown error. A power cut, SIGKILL, OOM or an upgrade restart never gives it the chance to run, and the native config, the profile store and the recorded active profile can be left describing three different states.
 
@@ -111,7 +139,9 @@ Writing `active.json` now happens inside the same transaction as the native file
 
 `HSW_JOURNAL_RETAIN` controls how many receipts are kept; the default is 50.
 
-### Importing configuration you already have
+## Bring in and move configuration
+
+### Import configuration you already have
 
 If you configured these tools by hand before installing harness-switch, **Import existing config** in the top bar adopts that setup instead of making you retype it.
 
@@ -121,17 +151,17 @@ Each candidate is decided on its own: store it as a standalone profile, or extra
 
 **Neither the scan nor the import touches the tools' own config files.** An import writes only to harness-switch's own profile store and vault; making it take effect still requires an explicit activation. A config file that exists but cannot be parsed causes that tool to be skipped with a reason, rather than guessed at.
 
-### Moving every profile to another machine
+### Move profiles to another machine
 
-Use **Import / Export** in the top bar to create one `.hsw-backup` file containing every Harness profile, API key, raw-file override, and current activation choice. The bundle is encrypted with a migration password you choose, so it does not depend on the source machine's `aes-256-gcm.key`.
+Use **Import / Export** in the top bar to create one `.hsw-backup` file containing every Harness profile, Provider Vault credential and endpoint, API key, raw-file override, and current activation choice. The bundle is encrypted with a migration password you choose, so it does not depend on the source machine's `aes-256-gcm.key`.
 
-On the destination machine, select the bundle and enter the migration password. The UI shows profile counts and same-name conflicts before it writes anything. Import keeps destination profiles by default; overwriting is an explicit choice. Restoring the exported activation state is optional.
+On the destination machine, select the bundle and enter the migration password. The UI shows profile counts, credential counts, and same-name profile conflicts before it writes anything. Import keeps destination profiles by default; overwriting is an explicit choice. Provider Vault entries are always restored as isolated copies and never replace a destination credential; an ID conflict gets a new imported ID, and imported profiles reference that copy. Restoring the exported activation state is optional.
 
 A Codex official-login cache (`$CODEX_HOME/auth.json`) is **excluded by default**. When a valid cache is available, you may explicitly include it in the encrypted bundle. Import offers the separate migration choice only when the bundled and destination JSON values differ. This carries a reusable Codex/ChatGPT login session: share such a bundle only with a trusted recipient, and expect upstream expiry or revocation to still require a fresh `codex login`. An existing destination cache is backed up before replacement; copied caches are written as the destination user with mode `0600`.
 
 Keep the migration password separately from the bundle. It cannot be recovered from the export file.
 
-### Provider Vault: shared credentials
+### Reuse credentials with Provider Vault
 
 The **Provider Vault** stores an API key once under a named entry with one or more named endpoints (each a base URL), encrypted with the same AES-256-GCM key that protects `profiles.json`. A profile can reference a vault entry instead of carrying its own key:
 
@@ -140,7 +170,9 @@ The **Provider Vault** stores an API key once under a named entry with one or mo
 - An entry that is referenced by any profile cannot be deleted (HTTP `409`).
 - Detach a profile by clearing the provider selection in the profile form; the cached key stays as the profile's own inline key.
 
-### Configuration drift
+## Verify and repair configuration
+
+### Detect configuration drift
 
 The dashboard **Diagnostics** panel also compares what the active profile would render against the actual files on disk, using parsed-value comparison for JSON/TOML/YAML so a re-render that only reorders keys does not count as drift. Each file is reported as:
 
@@ -155,15 +187,17 @@ Two repair actions are offered per harness:
 - **Re-apply** rewrites the live files from the active profile, with the usual backup-before-write and all-or-nothing rollback.
 - **Adopt live configuration** reads the live files back into the profile record (same path as the pre-switch backfill). It refuses with `409` when the profile has manual raw overrides, and never adopts content the tool itself could not parse.
 
-### Diagnostics (Doctor)
+### Run diagnostics
 
 **Diagnostics (Doctor)** run per harness from that tool’s right-hand column: for CLI-delivered tools, whether the executable is on `PATH` (`install`; skipped for web-service harnesses such as DeepSeek Harness), whether each target file exists and is readable/writable (`files`, with a warning when a config file holding credentials is group/other-readable), whether the files parse (`parse`), and whether live state drifts from the active profile (`drift`). A global update check reports whether a newer release exists (`updatedAvailable`).
 
 The connectivity probe is **disabled by default in the MVP**: passing `--probe` only records a `unknown`-status check that reports the active base URL and explains that no network request is made.
 
-### Local Unix users
+## Manage local Unix users
 
-The dashboard header can switch between local login users such as `root` and `alice`. Each user has independent profiles, Provider Vault, encryption key, active state and backups under their own home. Selecting a user does not write any harness file; only an explicit activation does.
+This optional multi-user feature is for Unix-like hosts. On Windows, harness-switch manages the account that starts it.
+
+The account menu at the right of the dashboard header switches between local login users such as `root` and `alice`, and keeps sign-out alongside those identity actions. Each user has independent profiles, Provider Vault, encryption key, active state and backups under their own home. Selecting a user does not write any harness file; only an explicit activation does.
 
 “Sync user config” performs a one-time copy of another user's profiles and referenced Provider Vault credentials into the selected user. Secrets are decrypted only on the server and re-encrypted with the destination user's local key. Active state, backups and native config files are not copied. Same-name profiles are skipped by default and can be explicitly overwritten.
 
@@ -171,7 +205,7 @@ A source user's Codex official-login cache (`auth.json`) is the sole optional ex
 
 Cross-user writes require access to the destination home. Managing both `root` and regular users therefore normally requires running harness-switch as root; newly created files and directories are assigned to the destination UID/GID. The Web password then grants control over every exposed user's configs, so keep the loopback bind and SSH tunnel. Use `HSW_USERS=root,alice` to restrict the manageable accounts.
 
-### CLI automation
+## Automate with the CLI
 
 The CLI talks to the running local daemon and uses the same authenticated HTTP API as the Web UI. Start the daemon once before using API-backed commands. `help` and `version` work offline; data commands support `--json` (or `-j`) for scripting:
 
@@ -279,22 +313,22 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 
 Every POST/PATCH body is validated against a shared Zod schema (`packages/shared/src/schemas.ts`) that the server and the web client both build on. A malformed shape is rejected with a `400` naming the field *before* it reaches storage, instead of being persisted and only surfacing as a `500` on the next activation. Unknown fields are dropped rather than rejected, so an older client keeps working while nothing unrecognised enters the store.
 
-## Background daemon (bunx / npx / pnpm)
+## Background daemon (npx / pnpm / Bun)
 
 The published CLI runs as a background daemon by default: the command returns
 immediately, the server keeps running after the terminal is closed, and
 re-running after a release restarts the daemon on the newest version.
 
 ```bash
-bunx @seaveyon/harness-switch@latest             # start, or update + restart the daemon
-bunx @seaveyon/harness-switch@latest status      # pid, url, log path
-bunx @seaveyon/harness-switch@latest stop        # stop the daemon
-bunx @seaveyon/harness-switch@latest server      # run in the foreground instead
-bunx @seaveyon/harness-switch@latest list        # CLI automation (see above)
+npx -y @seaveyon/harness-switch@latest             # start, or update + restart the daemon
+npx -y @seaveyon/harness-switch@latest status      # pid, url, log path
+npx -y @seaveyon/harness-switch@latest stop        # stop the daemon
+npx -y @seaveyon/harness-switch@latest server      # run in the foreground instead
+npx -y @seaveyon/harness-switch@latest list        # CLI automation (see above)
 ```
 
-Replace `bunx` with `npx -y`, `pnpm dlx`, or `pnpx` as preferred. Append `@latest`
-so the package runner fetches the newest release before running. Bun remains the runtime used by the installed executable.
+Replace `npx -y` with `pnpm dlx`, `pnpx`, or `bunx` as preferred. Append `@latest`
+so the package runner fetches the newest release before running. The same executable supports both Node.js and Bun; use `node dist/harness-switch.js` or `bun dist/harness-switch.js` when running an installed build directly.
 
 The daemon writes its PID, instance identity, and listening address to `~/.harness-switch/daemon.pid` and its log to
 `~/.harness-switch/daemon.log` (a fresh log per start). The first run creates
@@ -305,8 +339,7 @@ new process, so the port never conflicts and the newest code wins.
 Startup reports success only after the new process answers `/healthz`. `status` returns a non-zero exit code when the recorded daemon is not healthy. Before `stop` or an update sends a signal, the recorded instance identity is verified so a stale, reused PID cannot terminate an unrelated process.
 
 The dashboard polls the npm registry and shows a one-click **update button**
-next to the version badge when a newer release exists; it runs the same
-`bunx <package>@latest` restart under the hood and reloads the page once the
+next to the version badge when a newer release exists; it uses `npx -y` under Node.js or `bun x` under Bun to restart, then reloads the page once the
 new version is up. Update logs land in `~/.harness-switch/update.log`.
 
 Under systemd (or any supervisor), run the CLI in the foreground instead:

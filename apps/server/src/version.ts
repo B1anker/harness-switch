@@ -1,4 +1,6 @@
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 type PackageInfo = { name: string; version: string };
 
@@ -12,7 +14,9 @@ let cached: PackageInfo | undefined;
 export async function packageInfo(): Promise<PackageInfo> {
   if (cached) return cached;
   try {
-    const pkg = JSON.parse(await Bun.file(join(import.meta.dir, '../package.json')).text()) as {
+    const pkg = JSON.parse(
+      await readFile(join(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf8'),
+    ) as {
       name?: unknown;
       version?: unknown;
     };
