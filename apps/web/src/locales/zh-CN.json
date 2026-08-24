@@ -189,7 +189,9 @@
       "endpointKeyDuplicate": "Endpoint 标识不能重复",
       "endpointUrlRequired": "请输入 Base URL",
       "checkFields": "请检查标红的必填项。"
-    }
+    },
+    "probeEndpointLabel": "选择要测试的 endpoint",
+    "probeFailed": "测试请求失败"
   },
   "activate": {
     "title": "激活配置？",
@@ -313,7 +315,11 @@
       "driftMismatch_one": "{{count}} 个文件与激活配置不一致（{{status}}）",
       "driftMismatch_other": "{{count}} 个文件与激活配置不一致（{{status}}）",
       "driftInSync": "live 文件与激活配置一致",
-      "probeDisabled": "连通性探测在 MVP 中默认关闭，未发起网络请求"
+      "probeNoProfile": "未激活任何配置，跳过连通性探测",
+      "probeOfficialLogin": "{{harness}} 处于官方账号登录状态，无自定义端点可探测",
+      "probeMissingCredential": "配置 {{profile}} 缺少 Base URL 或 API Key，无法探测",
+      "probeOk": "配置 {{profile}} 的端点可达",
+      "probeFailed": "配置 {{profile}} 的连通性探测失败"
     }
   },
   "notice": {
@@ -416,6 +422,16 @@
       "unreadable": "无法读取 {{file}}",
       "quarantineFailed": "无法隔离损坏的 {{file}}",
       "corruptQuarantined": "数据存储已损坏，原文件已隔离为 {{quarantine}}，请从备份恢复后再继续"
+    },
+    "probe": {
+      "badUrl": "Base URL 无法解析，或不是 http/https",
+      "missingBaseUrl": "未提供 Base URL，无法测试",
+      "missingApiKey": "未提供 API Key，无法测试",
+      "timeout": "请求超时（10 秒）",
+      "networkError": "无法连接到端点（DNS、拒绝连接或 TLS 失败）",
+      "unauthorized": "端点可达但拒绝了凭据（HTTP {{status}}），请检查 API Key",
+      "httpError": "端点返回 HTTP {{status}}",
+      "invalidResponse": "响应不是已知的模型目录格式"
     }
   },
   "warning": {
@@ -600,5 +616,13 @@
     "moonshot": "Moonshot",
     "deepseek": "DeepSeek",
     "cliproxyResponses": "CLIProxy（Responses）"
+  },
+  "probe": {
+    "action": "测试连接",
+    "probing": "正在测试…",
+    "ok": "连接正常 · {{latencyMs}}ms · {{count}} 个模型",
+    "okNoCatalog": "连接正常 · {{latencyMs}}ms · 端点未提供模型目录",
+    "catalogHint": "已获取 {{count}} 个模型，点击“模型”输入框可从列表选择。",
+    "missingBaseUrl": "请先填写至少一个 endpoint URL 再测试。"
   }
 }

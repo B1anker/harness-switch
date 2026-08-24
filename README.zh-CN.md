@@ -172,6 +172,12 @@ Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包
 
 ## 验证与修复配置
 
+### 连通性测试与模型目录
+
+每个「凭据 + Base URL」相遇的地方都有**测试连接**按钮：配置表单（未保存的草稿值）、凭据库条目（用已存密钥测试任一 endpoint），以及 Doctor 的 `--probe`。服务端发起一个轻量的 `GET {base}/v1/models` 请求——404 时回退到 `{base}/models`，同时携带 `Authorization: Bearer` 与 Anthropic 风格的请求头，因此 OpenAI 与 Anthropic 两种形态的中转都能识别。
+
+结果包含延迟和一个可翻译的稳定错误码（如 `probe.timeout`、`probe.unauthorized`），而不是原始报错。探测成功时还会返回端点的**模型目录**，自动填入配置表单中模型输入框的下拉列表——不用再等到 CLI 报错才发现模型名拼错。凭据本身绝不出现在任何响应里；草稿密钥由服务端直接测试，无需先保存。
+
 ### 检查配置漂移
 
 仪表盘 **诊断** 面板会一并展示「激活配置会渲染出的内容」与磁盘上实际文件的对比；JSON/TOML/YAML 按解析后的值比较，因此仅键顺序变化的重新渲染不会误报为漂移。每个文件的状态为：
@@ -191,7 +197,7 @@ Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包
 
 **诊断** 在每个 Harness 的右侧栏中按工具单独运行：对以 CLI 交付的工具检查可执行文件是否在 `PATH` 中（`install`；DeepSeek Harness 这类 Web 服务部署会跳过此项）、每个目标文件是否存在且可读可写（`files`，配置文件持有凭据且 group/other 可读时给出 warning）、文件能否解析（`parse`）、live 状态是否与激活配置漂移（`drift`）。另有全局的版本更新检查，报告是否有新版本可用（`updatedAvailable`）。
 
-连通性探测在 MVP 中**默认关闭**：传入 `--probe` 也只会记录一条 `unknown` 状态的检查，报告当前激活的 base URL 并说明未发起任何网络请求。
+传入 `--probe` 会为每个 Harness 追加一项检查：对激活配置的端点发起真实请求。可达时报告 `ok` 并附带延迟与模型数量；超时、凭据被拒等失败报告为 `error`，因为工具自身也会同样失败。没有激活配置的 Harness 以 `unknown` 跳过。所有 Harness 的探测并发执行。
 
 ## 管理本地 Unix 用户
 
@@ -290,6 +296,7 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `DELETE` | `/api/harnesses/:id/profiles/:name` | 删除；对已激活的配置返回 `409` |
 | `GET` | `/api/harnesses/:id/profiles/:name/preview` | 将要写入的确切内容 |
 | `POST` | `/api/harnesses/:id/profiles/:name/activate` | 写入原生配置，然后提交此次切换 |
+| `POST` | `/api/harnesses/:id/profiles/:name/probe` | 用已存凭据测试已存的 Base URL |
 | `POST` | `/api/harnesses/:id/official/activate` | 让支持的 Harness 恢复工具自身的官方登录 |
 | `GET` | `/api/backups` | 快照列表，最新的在前 |
 | `POST` | `/api/backups/:id/restore` | 原样恢复某个快照 |
@@ -299,11 +306,13 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `GET` | `/api/providers` | 凭据库条目（不含密钥材料） |
 | `POST` | `/api/providers` | 创建凭据库条目 |
 | `PATCH` | `/api/providers/:id` | 更新；自动重新应用引用它的已激活配置 |
+| `POST` | `/api/providers/:id/probe` | 测试已存密钥与某个 endpoint（`{ "endpoint": "key" }`，默认第一个） |
 | `DELETE` | `/api/providers/:id` | 删除；仍被配置引用时返回 `409` |
+| `POST` | `/api/probe` | 测试未保存的值：`{ "baseUrl", "apiKey" }` 或 `{ "baseUrl", "providerId" }`，不落盘 |
 | `GET` | `/api/drift` | 每个 Harness 的漂移报告 |
 | `POST` | `/api/drift/:harnessId/reapply` | 按激活配置重写 live 文件 |
 | `POST` | `/api/drift/:harnessId/adopt` | 把 live 文件读回配置记录 |
-| `GET` | `/api/doctor` | 只读诊断（`?probe=1` 包含默认关闭、不发网络请求的探测检查） |
+| `GET` | `/api/doctor` | 只读诊断（`?probe=1` 会额外测试每个激活配置的端点） |
 | `GET` | `/api/scan` | 五个工具磁盘上已有的 provider；只读，凭据以掩码返回 |
 | `POST` | `/api/scan/import` | 把选中的候选存成配置或凭据库条目；不改动工具本身的配置 |
 | `GET` | `/api/operations` | 操作收据，最新在前（`?harness=claude` 可按 Harness 过滤） |

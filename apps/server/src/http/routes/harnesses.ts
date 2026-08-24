@@ -1,6 +1,7 @@
-import type { HarnessId } from '@seaveyon/harness-switch-shared';
+import type { HarnessId, ProbeResponse } from '@seaveyon/harness-switch-shared';
 import {
   createProfileRequestSchema,
+  probeStoredRequestSchema,
   updateProfileRequestSchema,
 } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
@@ -10,9 +11,10 @@ import { IAdapterRegistry } from '../../services/adapters';
 import { IEnvironmentService } from '../../services/environment';
 import { IFileService } from '../../services/files';
 import { ILogService } from '../../services/log';
+import { IProbeService } from '../../services/probe';
 import { IProfileService } from '../../services/profiles';
 import { IHarnessRegistry } from '../../services/registry';
-import { readJsonBody } from '../validate';
+import { parseWith, readJsonBody } from '../validate';
 
 export function createHarnessRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -23,6 +25,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   const environment = services.get(IEnvironmentService);
   const files = services.get(IFileService);
   const log = services.get(ILogService);
+  const probe = services.get(IProbeService);
 
   function summary(id: HarnessId) {
     const adapter = adapters.get(id);
@@ -132,6 +135,15 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const name = decodeURIComponent(c.req.param('name'));
     return c.json({ targets: activation.preview(harnessId, name) });
+  });
+
+  app.post('/:harnessId/profiles/:name/probe', async (c) => {
+    const harnessId = harnesses.require(c.req.param('harnessId'));
+    const name = decodeURIComponent(c.req.param('name'));
+    // An absent body is fine: the request carries no options today.
+    parseWith(probeStoredRequestSchema, await c.req.json().catch(() => ({})));
+    const decrypted = profiles.decrypt(harnessId, name);
+    return c.json({ result: await probe.probe(decrypted) } satisfies ProbeResponse);
   });
 
   app.post('/:harnessId/profiles/:name/activate', (c) => {

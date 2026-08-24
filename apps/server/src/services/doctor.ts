@@ -8,6 +8,7 @@ import {
   HARNESS_LABELS,
   type HarnessId,
   type MessageParams,
+  PROBE_CODES,
 } from '@seaveyon/harness-switch-shared';
 import { createDecorator, inject } from '../di';
 import { checkForUpdate } from '../update';
@@ -17,10 +18,12 @@ import { assertParsable } from './adapters/serialize';
 import { IDriftService } from './drift';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
+import { IProbeService } from './probe';
+import { IProfileService } from './profiles';
 import { IHarnessRegistry } from './registry';
 
 export type DoctorOptions = {
-  /** Run the connectivity probe. The MVP probe never makes a network request. */
+  /** Run the connectivity probe against each harness's active profile. */
   probe?: boolean;
   /** Restrict the report to one harness. */
   harness?: HarnessId;
@@ -52,6 +55,8 @@ const BIN_NAMES: Partial<Record<HarnessId, string>> = {
   IAdapterRegistry,
   IActivationService,
   IDriftService,
+  IProfileService,
+  IProbeService,
 )
 export class DoctorService implements IDoctorService {
   declare readonly _serviceBrand: undefined;
@@ -63,6 +68,8 @@ export class DoctorService implements IDoctorService {
     private readonly adapters: IAdapterRegistry,
     private readonly activation: IActivationService,
     private readonly drift: IDriftService,
+    private readonly profiles: IProfileService,
+    private readonly probe: IProbeService,
   ) {}
 
   async run(options: DoctorOptions = {}): Promise<DoctorResponse> {
@@ -70,17 +77,21 @@ export class DoctorService implements IDoctorService {
       ? [this.harnesses.require(options.harness)]
       : this.harnesses.list().map((item) => item.id);
 
-    const items: DoctorReport[] = [];
-    for (const harness of harnessIds) {
-      items.push({ harness, checks: this.harnessChecks(harness, options.probe === true) });
-    }
+    // Probes run concurrently: five endpoints answered serially would turn a single
+    // slow relay into a visibly stalled report.
+    const items: DoctorReport[] = await Promise.all(
+      harnessIds.map(async (harness) => ({
+        harness,
+        checks: await this.harnessChecks(harness, options.probe === true),
+      })),
+    );
 
     // The registry check is cached and degrades to "no update" when unreachable.
     const update = await checkForUpdate();
     return { items, updatedAvailable: update.updateAvailable };
   }
 
-  private harnessChecks(harness: HarnessId, probe: boolean): DoctorCheck[] {
+  private async harnessChecks(harness: HarnessId, probe: boolean): Promise<DoctorCheck[]> {
     const checks: DoctorCheck[] = [];
 
     // Installation: PATH CLIs must be findable; web-service harnesses skip this.
@@ -248,22 +259,73 @@ export class DoctorService implements IDoctorService {
       checks.push(ok(`${harness}.drift`, 'live 文件与激活配置一致', DOCTOR_CODES.driftInSync));
     }
 
-    // Connectivity probe: the MVP never makes a network request; the check only
-    // reports the active base URL and explains that probing is disabled.
+    // Connectivity probe: a real request against the active profile's base URL with
+    // its stored credential. A failure here means the tool would fail too, so it
+    // reports as an error rather than a warning.
     if (probe) {
-      const active = this.activation.getActive(harness);
-      checks.push(
-        unknown(
-          `${harness}.probe`,
-          '连通性探测在 MVP 中默认关闭，未发起网络请求',
-          DOCTOR_CODES.probeDisabled,
-          undefined,
-          { baseUrl: active?.baseUrl ?? null, enabled: false },
-        ),
-      );
+      checks.push(await this.probeCheck(harness));
     }
 
     return checks;
+  }
+
+  private async probeCheck(harness: HarnessId): Promise<DoctorCheck> {
+    const active = this.activation.getActive(harness);
+    if (!active) {
+      return unknown(
+        `${harness}.probe`,
+        '未激活任何配置，跳过连通性探测',
+        DOCTOR_CODES.probeNoProfile,
+        undefined,
+        { probed: false },
+      );
+    }
+    // Official-login mode points at the tool's own service, not a profile-owned
+    // endpoint; there is nothing of ours to probe, and no stored credential either.
+    if (active.official === true) {
+      return unknown(
+        `${harness}.probe`,
+        `${HARNESS_LABELS[harness]} 处于官方账号登录状态，无自定义端点可探测`,
+        DOCTOR_CODES.probeOfficialLogin,
+        undefined,
+        { probed: false },
+      );
+    }
+    const decrypted = this.profiles.decrypt(harness, active.name);
+    if (!decrypted.baseUrl || !decrypted.apiKey) {
+      return warn(
+        `${harness}.probe`,
+        `配置 ${active.name} 缺少 Base URL 或 API Key，无法探测`,
+        DOCTOR_CODES.probeMissingCredential,
+        { profile: active.name },
+        { probed: false, baseUrl: decrypted.baseUrl || null },
+      );
+    }
+    const result = await this.probe.probe(decrypted);
+    const detail = {
+      probed: true,
+      baseUrl: result.requestUrl ?? decrypted.baseUrl,
+      status: result.status ?? null,
+      latencyMs: result.latencyMs ?? null,
+      modelCount: result.models?.length ?? null,
+      reason: result.code ?? null,
+    };
+    if (result.ok) {
+      return ok(
+        `${harness}.probe`,
+        `端点可达（${result.latencyMs ?? '?'}ms，${result.models?.length ?? 0} 个模型）`,
+        DOCTOR_CODES.probeOk,
+        { profile: active.name },
+        detail,
+      );
+    }
+    return error(
+      `${harness}.probe`,
+      `连通性探测失败：${result.message ?? '未知原因'}`,
+      DOCTOR_CODES.probeFailed,
+      { profile: active.name, reason: result.code ?? PROBE_CODES.networkError },
+      detail,
+    );
   }
 
   private commandExists(bin: string): boolean {

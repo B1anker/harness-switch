@@ -22,6 +22,8 @@ import type {
   OperationUndoResponse,
   PreviewResponse,
   PreviewTarget,
+  ProbeRequest,
+  ProbeResult,
   ProviderMutationResponse,
   ProviderPublic,
   ProvidersResponse,
@@ -45,9 +47,12 @@ import {
   driftReapplyPath,
   operationsPath,
   operationUndoPath,
+  probePath,
   profilePath,
+  profileProbePath,
   profilesCollectionPath,
   providerPath,
+  providerProbePath,
   providersPath,
   scanImportPath,
   scanPath,
@@ -117,6 +122,12 @@ type AppState = {
   deleteProvider: (id: string) => Promise<void>;
   /** Reveals the stored key material; requires a server endpoint that returns it. */
   revealProvider: (id: string) => Promise<{ apiKey: string }>;
+  /** Tests unsaved form values; the credential is inline or resolved from the vault. */
+  probeDraft: (input: ProbeRequest) => Promise<ProbeResult>;
+  /** Tests a saved profile with its stored credential. */
+  probeProfile: (harnessId: HarnessId, name: string) => Promise<ProbeResult>;
+  /** Tests a vault entry's credential against one of its endpoints. */
+  probeVaultEntry: (id: string, endpoint?: string) => Promise<ProbeResult>;
   loadDoctor: (harnessId: HarnessId) => Promise<void>;
   loadDrift: () => Promise<void>;
   reapplyDrift: (harnessId: HarnessId) => Promise<DriftFileState[]>;
@@ -387,6 +398,30 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   revealProvider: async (id) => {
     return api<{ apiKey: string }>(`${providerPath(id)}/reveal`);
+  },
+
+  probeDraft: async (input) => {
+    const result = await api<{ result: ProbeResult }>(probePath(), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+    return result.result;
+  },
+
+  probeProfile: async (harnessId, name) => {
+    const result = await api<{ result: ProbeResult }>(profileProbePath(harnessId, name), {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    return result.result;
+  },
+
+  probeVaultEntry: async (id, endpoint) => {
+    const result = await api<{ result: ProbeResult }>(providerProbePath(id), {
+      method: 'POST',
+      body: JSON.stringify(endpoint ? { endpoint } : {}),
+    });
+    return result.result;
   },
 
   loadDoctor: async (harnessId) => {

@@ -109,7 +109,11 @@ export const DOCTOR_CODES = {
   driftInvalid: 'doctor.check.driftInvalid',
   driftMismatch: 'doctor.check.driftMismatch',
   driftInSync: 'doctor.check.driftInSync',
-  probeDisabled: 'doctor.check.probeDisabled',
+  probeNoProfile: 'doctor.check.probeNoProfile',
+  probeOfficialLogin: 'doctor.check.probeOfficialLogin',
+  probeMissingCredential: 'doctor.check.probeMissingCredential',
+  probeOk: 'doctor.check.probeOk',
+  probeFailed: 'doctor.check.probeFailed',
 } as const;
 
 export type DoctorCode = (typeof DOCTOR_CODES)[keyof typeof DOCTOR_CODES];
@@ -128,3 +132,31 @@ export const SCAN_NOTE_CODES = {
 } as const;
 
 export type ScanNoteCode = (typeof SCAN_NOTE_CODES)[keyof typeof SCAN_NOTE_CODES];
+
+/**
+ * Codes for a connectivity probe result.
+ *
+ * A probe never throws to the HTTP layer for conditions the endpoint itself caused:
+ * the outcome travels as a structured result so the UI can render it next to the
+ * button that triggered it, and the code — not the prose — is what translates.
+ */
+export const PROBE_CODES = {
+  /** The URL does not parse or its scheme is not http/https. */
+  badUrl: 'probe.badUrl',
+  /** Nothing to test against: no base URL was supplied or resolvable. */
+  missingBaseUrl: 'probe.missingBaseUrl',
+  /** No credential was supplied and none could be resolved from the vault or store. */
+  missingApiKey: 'probe.missingApiKey',
+  /** The request did not answer within the timeout window. */
+  timeout: 'probe.timeout',
+  /** The request failed before an HTTP response existed (DNS, refused, TLS). */
+  networkError: 'probe.networkError',
+  /** The endpoint answered 401/403: reachable, but the credential is rejected. */
+  unauthorized: 'probe.unauthorized',
+  /** The endpoint answered with another non-2xx status. */
+  httpError: 'probe.httpError',
+  /** A 2xx response arrived but its body is not JSON in any known catalog shape. */
+  invalidResponse: 'probe.invalidResponse',
+} as const;
+
+export type ProbeCode = (typeof PROBE_CODES)[keyof typeof PROBE_CODES];

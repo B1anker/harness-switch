@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DoctorCheck, DoctorResponse } from '@seaveyon/harness-switch-shared';
+import { DOCTOR_CODES, PROBE_CODES } from '@seaveyon/harness-switch-shared';
 import { createServices } from '../src/bootstrap';
 import { IActivationService } from '../src/services/activation';
 import { IDoctorService } from '../src/services/doctor';
@@ -184,19 +185,40 @@ describe('doctor', () => {
     expect(checksOf(drifted, 'claude', 'claude.drift')[0]?.status).toBe('warn');
   });
 
-  test('the probe is off by default and never makes a network request', async () => {
+  test('the probe is off by default; with it on, an unreachable endpoint is an error', async () => {
     fakeBin('claude');
     activateClaude();
     const withoutProbe = await doctor().run({ harness: 'claude' });
     expect(checksOf(withoutProbe, 'claude', 'claude.probe')).toEqual([]);
 
+    // The suite stubs fetch to throw, so the probe fails without touching network.
     const withProbe = await doctor().run({ harness: 'claude', probe: true });
     const check = checksOf(withProbe, 'claude', 'claude.probe')[0];
+    expect(check?.status).toBe('error');
+    expect(check?.code).toBe(DOCTOR_CODES.probeFailed);
+    const detail = check?.detail as { probed?: boolean; reason?: string } | undefined;
+    expect(detail?.probed).toBe(true);
+    expect(detail?.reason).toBe(PROBE_CODES.networkError);
+  });
+
+  test('the probe skips harnesses with no active profile', async () => {
+    fakeBin('claude');
+    const report = await doctor().run({ harness: 'claude', probe: true });
+    const check = checksOf(report, 'claude', 'claude.probe')[0];
     expect(check?.status).toBe('unknown');
-    const detail = check?.detail as { enabled?: boolean; baseUrl?: string } | undefined;
-    expect(detail?.enabled).toBe(false);
-    expect(detail?.baseUrl).toBe('https://api.example.com/v1');
-    expect(messageOf(check)).toContain('默认关闭');
+    expect(check?.code).toBe(DOCTOR_CODES.probeNoProfile);
+  });
+
+  test('the probe skips harnesses in official-login mode instead of crashing', async () => {
+    fakeBin('claude');
+    activateClaude();
+    // Official mode stores a sentinel active pointer that has no profile record;
+    // probing it must degrade to a skip, not surface the store lookup as an error.
+    services.get(IActivationService).activateOfficial('claude');
+    const report = await doctor().run({ harness: 'claude', probe: true });
+    const check = checksOf(report, 'claude', 'claude.probe')[0];
+    expect(check?.status).toBe('unknown');
+    expect(check?.code).toBe(DOCTOR_CODES.probeOfficialLogin);
   });
 
   test('the update check degrades to updatedAvailable=false offline', async () => {

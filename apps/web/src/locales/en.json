@@ -189,7 +189,9 @@
       "endpointKeyDuplicate": "Endpoint ids must be unique",
       "endpointUrlRequired": "Enter a base URL",
       "checkFields": "Check the fields marked in red."
-    }
+    },
+    "probeEndpointLabel": "Endpoint to test",
+    "probeFailed": "Probe request failed"
   },
   "activate": {
     "title": "Activate profile?",
@@ -313,7 +315,11 @@
       "driftMismatch_one": "{{count}} file does not match the active profile ({{status}})",
       "driftMismatch_other": "{{count}} files do not match the active profile ({{status}})",
       "driftInSync": "The live files match the active profile",
-      "probeDisabled": "The connectivity probe is off by default in the MVP; no network request was made"
+      "probeNoProfile": "No active profile; connectivity probe skipped",
+      "probeOfficialLogin": "{{harness}} is on its built-in account login; no custom endpoint to probe",
+      "probeMissingCredential": "Profile {{profile}} has no base URL or API key; cannot probe",
+      "probeOk": "Endpoint of profile {{profile}} is reachable",
+      "probeFailed": "Connectivity probe failed for profile {{profile}}"
     }
   },
   "notice": {
@@ -416,6 +422,16 @@
       "unreadable": "Could not read {{file}}",
       "quarantineFailed": "Could not quarantine the corrupt {{file}}",
       "corruptQuarantined": "The data store is corrupt. The original was quarantined as {{quarantine}}; restore from a backup before continuing"
+    },
+    "probe": {
+      "badUrl": "Base URL does not parse, or is not http/https",
+      "missingBaseUrl": "No base URL supplied; nothing to test",
+      "missingApiKey": "No API key supplied; nothing to test",
+      "timeout": "Request timed out (10 seconds)",
+      "networkError": "Could not reach the endpoint (DNS, refused connection or TLS failure)",
+      "unauthorized": "Endpoint reachable but rejected the credential (HTTP {{status}}); check the API key",
+      "httpError": "Endpoint returned HTTP {{status}}",
+      "invalidResponse": "The response is not a recognized model-catalog format"
     }
   },
   "warning": {
@@ -600,5 +616,13 @@
     "moonshot": "Moonshot",
     "deepseek": "DeepSeek",
     "cliproxyResponses": "CLIProxy (Responses)"
+  },
+  "probe": {
+    "action": "Test connection",
+    "probing": "Testing…",
+    "ok": "Reachable · {{latencyMs}}ms · {{count}} models",
+    "okNoCatalog": "Reachable · {{latencyMs}}ms · no model catalog returned",
+    "catalogHint": "Fetched {{count}} models; click the model field to pick one from the list.",
+    "missingBaseUrl": "Add an endpoint URL before testing."
   }
 }

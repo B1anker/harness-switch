@@ -41,6 +41,21 @@ export function providerPath(id: string): string {
   return `${providersPath()}/${encodeURIComponent(id)}`;
 }
 
+/** Connectivity probe for unsaved form values, against an explicit base URL. */
+export function probePath(): string {
+  return '/api/probe';
+}
+
+/** Connectivity probe with the credential already stored on a saved profile. */
+export function profileProbePath(harnessId: HarnessId | string, name: string): string {
+  return `${profilePath(harnessId, name)}/probe`;
+}
+
+/** Connectivity probe with the credential stored in a vault entry. */
+export function providerProbePath(id: string): string {
+  return `${providerPath(id)}/probe`;
+}
+
 export function doctorPath(harnessId?: HarnessId | string): string {
   return harnessId ? `/api/doctor?harness=${encodeURIComponent(harnessId)}` : '/api/doctor';
 }

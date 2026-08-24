@@ -1,6 +1,7 @@
-import type { ProviderPublic } from '@seaveyon/harness-switch-shared';
-import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react';
+import type { ProbeResult, ProviderPublic } from '@seaveyon/harness-switch-shared';
+import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { ProbeResultLine } from '@/components/probe-result-line';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +24,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useI18n, useTranslation } from '@/lib/i18n';
 import { errorLineWith, lineText, type MessageLine, messageLine } from '@/lib/messages';
@@ -317,6 +325,7 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
   const { t } = useTranslation();
   const createProvider = useAppStore((state) => state.createProvider);
   const updateProvider = useAppStore((state) => state.updateProvider);
+  const probeDraft = useAppStore((state) => state.probeDraft);
   const isEdit = entry !== null;
   const [name, setName] = useState(entry?.name ?? '');
   const [apiKey, setApiKey] = useState('');
@@ -332,6 +341,18 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
   const [error, setError] = useState<MessageLine | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ name?: MessageLine; apiKey?: MessageLine }>({});
   const [endpointErrors, setEndpointErrors] = useState<Record<number, EndpointFieldErrors>>({});
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
+  const [probeError, setProbeError] = useState<MessageLine | null>(null);
+  /** Which drafted endpoint the probe section targets; defaults to the first. */
+  const [probeTarget, setProbeTarget] = useState(0);
+
+  // A probe result describes one exact input combination; edits invalidate it.
+  const endpointsSignature = JSON.stringify(endpoints);
+  useEffect(() => {
+    setProbeResult(null);
+    setProbeError(null);
+  }, [apiKey, endpointsSignature]);
 
   function updateEndpoint(index: number, patch: Partial<EndpointDraft>) {
     setEndpoints((current) =>
@@ -347,6 +368,45 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
       else next[index] = errors;
       return next;
     });
+  }
+
+  /**
+   * Tests the credential against one of the drafted endpoint URLs without saving.
+   * A typed key is tested as a draft; editing without retyping tests the stored
+   * credential by referencing this entry's vault id.
+   */
+  async function runProbe() {
+    // Mirror VaultProbeRow's selection: candidates keep their original endpoint
+    // index, so the selector's reported index resolves to the same URL here.
+    const candidates = endpoints
+      .map((endpoint, index) => ({ endpoint, index }))
+      .filter(({ endpoint }) => endpoint.baseUrl.trim() !== '');
+    const selected = candidates.find((item) => item.index === probeTarget) ?? candidates[0];
+    if (!selected) {
+      setProbeResult(null);
+      setProbeError({ key: 'probe.missingBaseUrl' });
+      return;
+    }
+    if (!isEdit && !apiKey.trim()) {
+      setProbeResult(null);
+      setProbeError(null);
+      setFieldErrors((current) => ({ ...current, apiKey: { key: 'vault.error.apiKeyRequired' } }));
+      return;
+    }
+    setProbing(true);
+    setProbeError(null);
+    setProbeResult(null);
+    try {
+      const result = await probeDraft({
+        baseUrl: selected.endpoint.baseUrl,
+        ...(apiKey.trim() ? { apiKey } : { providerId: entry?.id ?? '' }),
+      });
+      setProbeResult(result);
+    } catch (err) {
+      setProbeError(errorLineWith(err, 'vault.probeFailed'));
+    } finally {
+      setProbing(false);
+    }
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -548,6 +608,26 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
           <Plus />
           {t('vault.addEndpoint')}
         </Button>
+
+        <VaultProbeRow
+          options={endpoints
+            .map((endpoint, index) => ({ index, key: endpoint.key, baseUrl: endpoint.baseUrl }))
+            .filter((option) => option.baseUrl.trim())}
+          targetIndex={probeTarget}
+          onTargetChange={setProbeTarget}
+          hasStoredKey={isEdit}
+          hasTypedKey={apiKey.trim().length > 0}
+          onMissingKey={() =>
+            setFieldErrors((current) => ({
+              ...current,
+              apiKey: { key: 'vault.error.apiKeyRequired' },
+            }))
+          }
+          probing={probing}
+          result={probeResult}
+          probeError={probeError}
+          onProbe={runProbe}
+        />
       </div>
 
       {error ? <p className="text-sm text-destructive">{lineText(t, error)}</p> : null}
@@ -567,4 +647,91 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
 function formatTime(value: string, locale: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale);
+}
+
+/** Options for the vault probe row, one per drafted endpoint with a URL. */
+type VaultProbeOption = {
+  index: number;
+  key: string;
+  baseUrl: string;
+};
+
+/**
+ * The vault editor's connectivity row: tests the credential (typed or stored)
+ * against one of the drafted endpoint URLs. Presentational — all state and the
+ * actual request live in {@link EntryForm}.
+ */
+function VaultProbeRow({
+  options,
+  targetIndex,
+  onTargetChange,
+  hasStoredKey,
+  hasTypedKey,
+  onMissingKey,
+  probing,
+  result,
+  probeError,
+  onProbe,
+}: {
+  options: VaultProbeOption[];
+  targetIndex: number;
+  onTargetChange: (index: number) => void;
+  hasStoredKey: boolean;
+  hasTypedKey: boolean;
+  onMissingKey: () => void;
+  probing: boolean;
+  result: ProbeResult | null;
+  probeError?: MessageLine | null;
+  onProbe: () => void | Promise<void>;
+}) {
+  const { t } = useTranslation();
+  if (options.length === 0 && !hasStoredKey) {
+    return null;
+  }
+  const selected = options.find((option) => option.index === targetIndex) ?? options[0];
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={probing || (options.length === 0 && !hasTypedKey)}
+        onClick={() => {
+          if (!hasTypedKey && !hasStoredKey) {
+            onMissingKey();
+            return;
+          }
+          void onProbe();
+        }}
+      >
+        {probing ? <Loader2 className="animate-spin" /> : null}
+        {probing ? t('probe.probing') : t('probe.action')}
+      </Button>
+      {options.length > 1 ? (
+        <Select
+          value={String(selected?.index ?? '')}
+          onValueChange={(value) => onTargetChange(Number(value))}
+        >
+          <SelectTrigger className="h-9 w-56" aria-label={t('vault.probeEndpointLabel')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((option) => (
+              <SelectItem key={option.index} value={String(option.index)}>
+                {option.key || option.baseUrl}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+      {probeError ? (
+        <span className="flex items-center gap-1.5 text-sm text-destructive">
+          <XCircle className="size-4 shrink-0" aria-hidden />
+          {lineText(t, probeError)}
+        </span>
+      ) : result ? (
+        <ProbeResultLine result={result} />
+      ) : null}
+    </div>
+  );
 }

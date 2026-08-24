@@ -11,6 +11,7 @@ import { createDoctorRoutes } from './http/routes/doctor';
 import { createDriftRoutes } from './http/routes/drift';
 import { createHarnessRoutes } from './http/routes/harnesses';
 import { createOperationRoutes } from './http/routes/operations';
+import { createProbeRoutes } from './http/routes/probe';
 import { createProviderRoutes } from './http/routes/providers';
 import { createScanRoutes } from './http/routes/scan';
 import { createTransferRoutes } from './http/routes/transfer';
@@ -63,6 +64,9 @@ export function createApp(services: InstantiationService): Hono {
   api.use('/providers/*', createAuthGuard(services));
   api.use('/providers', createAuthGuard(services));
   api.route('/providers', createProviderRoutes(services));
+  api.use('/probe/*', createAuthGuard(services));
+  api.use('/probe', createAuthGuard(services));
+  api.route('/probe', createProbeRoutes(services));
   api.use('/doctor/*', createAuthGuard(services));
   api.use('/doctor', createAuthGuard(services));
   api.route('/doctor', createDoctorRoutes(services));

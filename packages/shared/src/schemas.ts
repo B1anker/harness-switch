@@ -161,6 +161,23 @@ export const scanImportRequestSchema = z.object({
   selections: z.array(scanImportSelectionSchema).min(1, '请至少选择一条配置').max(200),
 });
 
+/**
+ * Connectivity probe against an explicit base URL. The credential is either inline
+ * (an unsaved form) or resolved server-side from the vault, so a draft key never has
+ * to be saved before it can be tested.
+ */
+export const probeRequestSchema = z.object({
+  baseUrl: z.string().trim().min(1, 'baseUrl 不能为空').max(MAX_URL),
+  apiKey: optionalText(MAX_KEY).optional(),
+  providerId: optionalText(MAX_NAME).optional(),
+});
+
+/** Probe with the credential and base URL already stored for an entity. */
+export const probeStoredRequestSchema = z.object({
+  /** Named vault endpoint to test; defaults to the entry's first endpoint. */
+  endpoint: optionalText(MAX_NAME).optional(),
+});
+
 /** Neither drift action takes options yet, but both still reject a non-object body. */
 export const emptyRequestSchema = z.object({});
 
@@ -175,6 +192,8 @@ export type TransferExportRequest = z.infer<typeof transferExportRequestSchema>;
 export type TransferImportRequest = z.infer<typeof transferImportRequestSchema>;
 export type ScanImportSelection = z.infer<typeof scanImportSelectionSchema>;
 export type ScanImportRequest = z.infer<typeof scanImportRequestSchema>;
+export type ProbeRequest = z.infer<typeof probeRequestSchema>;
+export type ProbeStoredRequest = z.infer<typeof probeStoredRequestSchema>;
 
 /**
  * Flattens a failure into one line naming the offending fields, which is what both the

@@ -172,6 +172,12 @@ The **Provider Vault** stores an API key once under a named entry with one or mo
 
 ## Verify and repair configuration
 
+### Test endpoint connectivity
+
+Every place a credential meets a base URL offers a **Test connection** button: the profile form (draft values, before saving), each Provider Vault entry (stored credential, against any of its endpoints), and Doctor's `--probe`. The server sends one lightweight `GET {base}/v1/models` request — falling back to `{base}/models`, and carrying both `Authorization: Bearer` and Anthropic-style headers, so OpenAI- and Anthropic-shaped relays both work.
+
+The result reports latency and translates one stable code (`probe.timeout`, `probe.unauthorized`, …) instead of a raw stack trace. A successful probe also returns the endpoint's **model catalog**, which fills the model field's dropdown in the profile form — no more mistyped model names discovered only when the CLI fails. The credential itself never appears in any response; draft keys are tested server-side without saving them first.
+
 ### Detect configuration drift
 
 The dashboard **Diagnostics** panel also compares what the active profile would render against the actual files on disk, using parsed-value comparison for JSON/TOML/YAML so a re-render that only reorders keys does not count as drift. Each file is reported as:
@@ -191,7 +197,7 @@ Two repair actions are offered per harness:
 
 **Diagnostics (Doctor)** run per harness from that tool’s right-hand column: for CLI-delivered tools, whether the executable is on `PATH` (`install`; skipped for web-service harnesses such as DeepSeek Harness), whether each target file exists and is readable/writable (`files`, with a warning when a config file holding credentials is group/other-readable), whether the files parse (`parse`), and whether live state drifts from the active profile (`drift`). A global update check reports whether a newer release exists (`updatedAvailable`).
 
-The connectivity probe is **disabled by default in the MVP**: passing `--probe` only records a `unknown`-status check that reports the active base URL and explains that no network request is made.
+Passing `--probe` adds one more check per harness: a real request against the active profile's endpoint. Reachable endpoints report `ok` with latency and model count; timeouts, refused credentials and other failures report `error`, since the tool itself would fail too. Harnesses without an active profile skip the check as `unknown`. Probes for all harnesses run concurrently.
 
 ## Manage local Unix users
 
@@ -291,6 +297,7 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `DELETE` | `/api/harnesses/:id/profiles/:name` | Delete; `409` for the active profile |
 | `GET` | `/api/harnesses/:id/profiles/:name/preview` | The exact content that would be written |
 | `POST` | `/api/harnesses/:id/profiles/:name/activate` | Write the native config, then commit the switch |
+| `POST` | `/api/harnesses/:id/profiles/:name/probe` | Test the stored credential against the stored base URL |
 | `POST` | `/api/harnesses/:id/official/activate` | Return a supported harness to its built-in account login |
 | `GET` | `/api/backups` | Snapshots, newest first |
 | `POST` | `/api/backups/:id/restore` | Restore a snapshot verbatim |
@@ -300,11 +307,13 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `GET` | `/api/providers` | Provider Vault entries (no key material) |
 | `POST` | `/api/providers` | Create a vault entry |
 | `PATCH` | `/api/providers/:id` | Update; re-applies referencing active profiles |
+| `POST` | `/api/providers/:id/probe` | Test the stored key against an endpoint (`{ "endpoint": "key" }`, default first) |
 | `DELETE` | `/api/providers/:id` | Delete; `409` while referenced by a profile |
+| `POST` | `/api/probe` | Test unsaved values: `{ "baseUrl", "apiKey" }` or `{ "baseUrl", "providerId" }`, stored nowhere |
 | `GET` | `/api/drift` | Drift report for every harness |
 | `POST` | `/api/drift/:harnessId/reapply` | Rewrite live files from the active profile |
 | `POST` | `/api/drift/:harnessId/adopt` | Read live files back into the profile record |
-| `GET` | `/api/doctor` | Read-only diagnostics (`?probe=1` includes the MVP-disabled, non-network probe check) |
+| `GET` | `/api/doctor` | Read-only diagnostics (`?probe=1` also tests each active profile's endpoint) |
 | `GET` | `/api/scan` | Providers the five tools already have on disk; read-only, credentials masked |
 | `POST` | `/api/scan/import` | Save selected candidates as profiles or vault entries; the tools' own config is untouched |
 | `GET` | `/api/operations` | Operation receipts, newest first (`?harness=claude` to filter) |

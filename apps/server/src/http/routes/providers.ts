@@ -1,10 +1,13 @@
 import type {
   LocalizedMessage,
+  ProbeResponse,
   ProviderMutationResponse,
   ProvidersResponse,
 } from '@seaveyon/harness-switch-shared';
 import {
   createProviderRequestSchema,
+  PROBE_CODES,
+  probeStoredRequestSchema,
   updateProviderRequestSchema,
   WARNING_CODES,
 } from '@seaveyon/harness-switch-shared';
@@ -12,9 +15,10 @@ import { Hono } from 'hono';
 import type { InstantiationService } from '../../di';
 import { IActivationService } from '../../services/activation';
 import { ILogService } from '../../services/log';
+import { IProbeService } from '../../services/probe';
 import { IProfileService } from '../../services/profiles';
 import { IVaultService } from '../../services/vault';
-import { readJsonBody } from '../validate';
+import { parseWith, readJsonBody } from '../validate';
 
 export function createProviderRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -22,6 +26,7 @@ export function createProviderRoutes(services: InstantiationService): Hono {
   const profiles = services.get(IProfileService);
   const activation = services.get(IActivationService);
   const log = services.get(ILogService);
+  const probe = services.get(IProbeService);
 
   app.get('/', (c) => c.json({ items: vault.list() } satisfies ProvidersResponse));
 
@@ -81,10 +86,42 @@ export function createProviderRoutes(services: InstantiationService): Hono {
     return c.json({ provider, warnings } satisfies ProviderMutationResponse);
   });
 
+  app.post('/:id/probe', async (c) => {
+    const id = decodeURIComponent(c.req.param('id'));
+    // An absent body is fine: the endpoint parameter is optional.
+    const body = parseWith(probeStoredRequestSchema, await c.req.json().catch(() => ({})));
+    const apiKey = vault.decrypt(id);
+    const baseUrl = resolveEndpointBaseUrl(vault.get(id), body.endpoint);
+    if (!baseUrl) {
+      return c.json({
+        result: {
+          ok: false,
+          code: PROBE_CODES.missingBaseUrl,
+          message: `provider ${id} 未配置任何 endpoint，无法测试`,
+        },
+      } satisfies ProbeResponse);
+    }
+    return c.json({ result: await probe.probe({ baseUrl, apiKey }) } satisfies ProbeResponse);
+  });
+
   app.delete('/:id', (c) => {
     vault.remove(decodeURIComponent(c.req.param('id')));
     return c.json({ ok: true });
   });
 
   return app;
+}
+
+/** A named endpoint wins; absent or unknown names fall back to the first endpoint. */
+function resolveEndpointBaseUrl(
+  entry: { endpoints: Array<{ key: string; baseUrl: string }> },
+  endpointKey: string | undefined,
+): string | null {
+  if (endpointKey?.trim()) {
+    const named = entry.endpoints.find((candidate) => candidate.key === endpointKey.trim());
+    if (named) {
+      return named.baseUrl;
+    }
+  }
+  return entry.endpoints[0]?.baseUrl ?? null;
 }

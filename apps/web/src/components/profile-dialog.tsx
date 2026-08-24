@@ -2,10 +2,12 @@ import type {
   FieldSpec,
   HarnessSummary,
   PreviewTarget,
+  ProbeResult,
   ProfilePublic,
 } from '@seaveyon/harness-switch-shared';
-import { ChevronDown, ChevronRight, RotateCcw } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { ProbeResultLine } from '@/components/probe-result-line';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -73,6 +75,8 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
   const previewProfile = useAppStore((state) => state.previewProfile);
   const providers = useAppStore((state) => state.providers);
   const loadProviders = useAppStore((state) => state.loadProviders);
+  const probeDraft = useAppStore((state) => state.probeDraft);
+  const probeProfile = useAppStore((state) => state.probeProfile);
 
   const isEdit = profile !== null;
   const [name, setName] = useState(profile?.name ?? '');
@@ -89,12 +93,21 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
   const [error, setError] = useState<MessageLine | null>(null);
   const [pending, setPending] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<ProfileFieldErrors>({});
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
 
   const providerEntries = providers ?? [];
   const selectedProvider = providerEntries.find((entry) => entry.id === providerId) ?? null;
   const selectedEndpoint = selectedProvider?.endpoints.find(
     (endpoint) => endpoint.key === providerEndpoint,
   );
+  /** Model ids from the last successful probe; feeds the input's datalist. */
+  const catalogModels = probeResult?.ok ? (probeResult.models ?? []) : [];
+
+  // A result describes one exact input combination; editing any of them invalidates it.
+  useEffect(() => {
+    setProbeResult(null);
+  }, [baseUrl, apiKey, providerId, providerEndpoint]);
   const providerMissing = providers !== null && providerId !== '' && selectedProvider === null;
   const endpointMissing =
     selectedProvider !== null && providerEndpoint !== '' && selectedEndpoint === undefined;
@@ -151,18 +164,62 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
     });
   }
 
+  /** The base URL the profile would actually use, vault endpoint included. */
+  function effectiveBaseUrl(): string {
+    return selectedProvider && providerEndpoint ? (selectedEndpoint?.baseUrl ?? baseUrl) : baseUrl;
+  }
+
+  /**
+   * Tests the form's current values without saving. A typed inline key is tested as
+   * a draft; with a vault entry selected the key resolves server-side; an edit with
+   * no new key tests the stored credential.
+   */
+  async function onProbe() {
+    const url = effectiveBaseUrl().trim();
+    if (!url) {
+      setFieldErrors((current) => ({
+        ...current,
+        baseUrl: { key: 'profile.error.baseUrlRequired' },
+      }));
+      return;
+    }
+    setProbing(true);
+    setError(null);
+    setProbeResult(null);
+    try {
+      let result: ProbeResult;
+      if (selectedProvider || apiKey.trim()) {
+        result = await probeDraft({
+          baseUrl: url,
+          ...(selectedProvider ? { providerId } : { apiKey }),
+        });
+      } else if (isEdit && profile) {
+        result = await probeProfile(harness.id, profile.name);
+      } else {
+        setFieldErrors((current) => ({
+          ...current,
+          apiKey: { key: 'profile.error.apiKeyRequired' },
+        }));
+        return;
+      }
+      setProbeResult(result);
+    } catch (err) {
+      setError(errorLine(err));
+    } finally {
+      setProbing(false);
+    }
+  }
+
   function validateForm(): boolean {
     const next: ProfileFieldErrors = {};
     const trimmedName = name.trim();
-    const effectiveBaseUrl =
-      selectedProvider && providerEndpoint ? (selectedEndpoint?.baseUrl ?? baseUrl) : baseUrl;
 
     if (!trimmedName) next.name = { key: 'profile.error.nameRequired' };
     else if (trimmedName.includes('/') || trimmedName.includes('\\'))
       next.name = { key: 'profile.error.nameSlash' };
     else if (trimmedName.length > NAME_MAX_LENGTH)
       next.name = { key: 'profile.error.nameTooLong', params: { max: NAME_MAX_LENGTH } };
-    if (!effectiveBaseUrl.trim()) next.baseUrl = { key: 'profile.error.baseUrlRequired' };
+    if (!effectiveBaseUrl().trim()) next.baseUrl = { key: 'profile.error.baseUrlRequired' };
     if (!isEdit && selectedProvider === null && !apiKey.trim())
       next.apiKey = { key: 'profile.error.apiKeyRequired' };
     if (harness.modelRequired && !model.trim()) next.model = { key: 'profile.error.modelRequired' };
@@ -439,6 +496,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 <Input
                   id="model"
                   value={model}
+                  list={catalogModels.length > 0 ? 'profile-model-options' : undefined}
                   onChange={(event) => {
                     setModel(event.target.value);
                     clearFieldErrors('model');
@@ -451,6 +509,13 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                   aria-invalid={fieldErrors.model ? true : undefined}
                   aria-describedby={fieldErrors.model ? 'profile-model-error' : undefined}
                 />
+                {catalogModels.length > 0 ? (
+                  <datalist id="profile-model-options">
+                    {catalogModels.map((id) => (
+                      <option key={id} value={id} />
+                    ))}
+                  </datalist>
+                ) : null}
                 {fieldErrors.model ? (
                   <p id="profile-model-error" className="text-xs text-destructive">
                     {lineText(t, fieldErrors.model)}
@@ -458,6 +523,25 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 ) : null}
                 {harness.id === 'claude' ? (
                   <p className="text-xs text-muted-foreground">{t('profile.claudeModelHint')}</p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onProbe}
+                    disabled={probing}
+                  >
+                    {probing ? <Loader2 className="animate-spin" /> : null}
+                    {probing ? t('probe.probing') : t('probe.action')}
+                  </Button>
+                  {probeResult ? <ProbeResultLine result={probeResult} /> : null}
+                </div>
+                {probeResult?.ok && catalogModels.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">{t('probe.catalogHint')}</p>
                 ) : null}
               </div>
 

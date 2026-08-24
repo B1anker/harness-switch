@@ -315,6 +315,40 @@ export type ProviderMutationResponse = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Connectivity probe                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Outcome of one connectivity probe against a base URL.
+ *
+ * Endpoint-side conditions (unreachable, rejected credential, non-JSON body) are
+ * reported here rather than thrown, so the UI can render the result next to the
+ * button that triggered it. Only request-shape problems are rejected upstream by
+ * the schema. The credential itself never appears anywhere in this shape.
+ */
+export type ProbeResult = {
+  ok: boolean;
+  /** HTTP status of the response that decided the outcome; absent for network failures. */
+  status?: number;
+  /** Round-trip time of that request in milliseconds. */
+  latencyMs?: number;
+  /** The URL that produced the outcome, after `/v1` normalization and fallback. */
+  requestUrl?: string;
+  /** Model ids from the catalog, in the order the endpoint returned them, deduped. */
+  models?: string[];
+  /** Stable machine-readable failure reason; see `PROBE_CODES`. */
+  code?: string;
+  /** Values the UI interpolates into the translated message for `code`. */
+  params?: MessageParams;
+  /** Server prose for the same failure; kept for the CLI and as UI fallback. */
+  message?: string;
+};
+
+export type ProbeResponse = {
+  result: ProbeResult;
+};
+
+/* ------------------------------------------------------------------ */
 /* Drift                                                               */
 /* ------------------------------------------------------------------ */
 
