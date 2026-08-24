@@ -1,3 +1,10 @@
+## [0.20.1](https://github.com/B1anker/harness-switch/compare/v0.20.0...v0.20.1) (2026-08-24)
+
+
+### Bug Fixes
+
+* **web:** improve transfer dialog Codex cache UX ([53663e9](https://github.com/B1anker/harness-switch/commit/53663e9ee6103ee762b41517aaf1cdc5eee6dfd3))
+
 # [0.20.0](https://github.com/B1anker/harness-switch/compare/v0.19.0...v0.20.0) (2026-08-24)
 
 
