@@ -416,7 +416,15 @@
       "sourceEqualsTarget": "The source and target users are the same"
     },
     "user": {
-      "notManageable": "User {{username}} is not manageable"
+      "notManageable": "User {{username}} is not manageable",
+      "notSwitchable": "Cannot switch to user {{username}}",
+      "block": {
+        "homeUnsearchable": "No permission to access",
+        "homeUnwritable": "No permission to write",
+        "storeInaccessible": "Config dir not writable",
+        "ownershipRequiresRoot": "Requires running as root",
+        "homeMissing": "Home directory missing"
+      }
     },
     "storage": {
       "unreadable": "Could not read {{file}}",

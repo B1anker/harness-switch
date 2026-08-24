@@ -93,8 +93,15 @@ test('loading harnesses stores the collection and the env file path', async () =
 test('switching Unix users refreshes every user-scoped collection', async () => {
   useAppStore.setState({
     users: [
-      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true },
-      { username: 'alice', uid: 1000, gid: 1000, homeDir: '/home/alice', current: false },
+      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
+      {
+        username: 'alice',
+        uid: 1000,
+        gid: 1000,
+        homeDir: '/home/alice',
+        current: false,
+        manageable: true,
+      },
     ],
   });
   responder = (path, method) => {
