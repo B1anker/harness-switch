@@ -11,7 +11,7 @@ import {
   SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
 import { DoctorPanel } from '@/components/doctor-panel';
 import { HarnessCard } from '@/components/harness-card';
@@ -25,13 +25,6 @@ import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { TransferDialog } from '@/components/transfer-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { UpdateButton } from '@/components/update-button';
 import { UserSyncDialog } from '@/components/user-sync-dialog';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
@@ -49,11 +42,6 @@ export function DashboardPage() {
   const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
   const envFile = useAppStore((state) => state.envFile);
-  const logout = useAppStore((state) => state.logout);
-  const users = useAppStore((state) => state.users);
-  const currentUser = useAppStore((state) => state.currentUser);
-  const usersLoading = useAppStore((state) => state.usersLoading);
-  const switchUser = useAppStore((state) => state.switchUser);
   const backups = useAppStore((state) => state.backups);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
@@ -85,23 +73,6 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <Select
-              value={currentUser || undefined}
-              onValueChange={(username) => void switchUser(username)}
-              disabled={usersLoading || users.length === 0}
-            >
-              <SelectTrigger className="w-[8.5rem]" aria-label={t('nav.currentLocalUser')}>
-                <UserRound className="size-4 shrink-0" />
-                <SelectValue placeholder={t('nav.localUser')} />
-              </SelectTrigger>
-              <SelectContent>
-                {users.map((user) => (
-                  <SelectItem key={user.username} value={user.username}>
-                    {user.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Button variant="outline" size="sm" onClick={() => setUserSyncOpen(true)}>
               <RefreshCw />
               <span className="hidden lg:inline">{t('nav.syncUserConfig')}</span>
@@ -120,10 +91,7 @@ export function DashboardPage() {
             </Button>
             <LanguageToggle />
             <ThemeToggle />
-            <Button variant="ghost" size="sm" onClick={() => void logout()}>
-              <LogOut />
-              {t('nav.signOut')}
-            </Button>
+            <UserMenu />
           </div>
         </div>
       </header>
@@ -192,6 +160,100 @@ export function DashboardPage() {
       <UserSyncDialog open={userSyncOpen} onOpenChange={setUserSyncOpen} />
       <ImportWizardDialog open={importOpen} onOpenChange={setImportOpen} />
       <NoticeToast />
+    </div>
+  );
+}
+
+/** Keeps identity-changing actions together instead of splitting them across the header. */
+function UserMenu() {
+  const { t } = useTranslation();
+  const logout = useAppStore((state) => state.logout);
+  const users = useAppStore((state) => state.users);
+  const currentUser = useAppStore((state) => state.currentUser);
+  const usersLoading = useAppStore((state) => state.usersLoading);
+  const switchUser = useAppStore((state) => state.switchUser);
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener('pointerdown', closeOnOutsidePointer);
+    return () => window.removeEventListener('pointerdown', closeOnOutsidePointer);
+  }, [open]);
+
+  async function selectUser(username: string) {
+    try {
+      await switchUser(username);
+      setOpen(false);
+    } catch {
+      // The store owns the translated error state; leave the menu open for a retry.
+    }
+  }
+
+  async function signOut() {
+    try {
+      await logout();
+      setOpen(false);
+    } catch {
+      // Keep the session menu available if the server could not end the session.
+    }
+  }
+
+  return (
+    <div ref={menuRef} className="relative">
+      <Button
+        variant="outline"
+        size="sm"
+        aria-label={t('nav.currentLocalUser')}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        disabled={usersLoading}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <UserRound />
+        <span className="max-w-28 truncate">{currentUser || t('nav.localUser')}</span>
+        <ChevronDown className={cn('transition-transform', open && 'rotate-180')} />
+      </Button>
+      {open ? (
+        <div
+          role="menu"
+          aria-label={t('nav.currentLocalUser')}
+          className="absolute right-0 top-full z-30 mt-2 w-52 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg"
+        >
+          <div className="px-3 py-2 text-xs text-muted-foreground">{t('nav.currentLocalUser')}</div>
+          {users.map((user) => (
+            <button
+              key={user.username}
+              type="button"
+              role="menuitemradio"
+              aria-checked={user.username === currentUser}
+              disabled={usersLoading || user.username === currentUser}
+              onClick={() => void selectUser(user.username)}
+              className="flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-default disabled:opacity-60"
+            >
+              {user.username}
+            </button>
+          ))}
+          <div className="my-1 border-t" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={usersLoading}
+            onClick={() => void signOut()}
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 disabled:cursor-default disabled:opacity-60"
+          >
+            <LogOut className="size-4" />
+            {t('nav.signOut')}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

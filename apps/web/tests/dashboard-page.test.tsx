@@ -73,7 +73,13 @@ test('the header opens the vault dialog', () => {
   expect(screen.getByRole('heading', { name: '凭据库' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
-  expect(screen.getByRole('combobox', { name: '当前本地用户' })).toHaveTextContent('root');
+  const userMenuButton = screen.getByRole('button', { name: '当前本地用户' });
+  expect(userMenuButton).toHaveTextContent('root');
+  fireEvent.click(userMenuButton);
+  expect(screen.getByRole('menuitemradio', { name: 'alice' })).toBeInTheDocument();
+  expect(screen.getByRole('menuitem', { name: '退出' })).toBeInTheDocument();
+  fireEvent.pointerDown(document.body);
+  expect(screen.queryByRole('menu')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '同步用户配置' }));
   expect(screen.getByRole('heading', { name: '从其他用户同步' })).toBeInTheDocument();
   expect(screen.getByText(/复制到 root/)).toBeInTheDocument();
