@@ -169,7 +169,10 @@ async function cmdUsers(client: CliClient, json: OutputMode): Promise<number> {
     printJson(payload);
   } else {
     for (const user of payload.items) {
-      console.log(`${user.current ? '*' : ' '} ${user.username.padEnd(20)} ${user.homeDir}`);
+      // An unmanageable account is listed but annotated: `--user` on it would be
+      // refused, so the reason is more useful than a bare name.
+      const note = user.manageable === false ? `  (${user.blockReason ?? '不可切换'})` : '';
+      console.log(`${user.current ? '*' : ' '} ${user.username.padEnd(20)} ${user.homeDir}${note}`);
     }
   }
   return 0;

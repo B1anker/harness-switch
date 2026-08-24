@@ -42,6 +42,7 @@ export const ERROR_CODES = {
 
   /* Local users and persistent storage */
   userNotManageable: 'user.notManageable',
+  userNotSwitchable: 'user.notSwitchable',
   storageUnreadable: 'storage.unreadable',
   storageQuarantineFailed: 'storage.quarantineFailed',
   storageCorruptQuarantined: 'storage.corruptQuarantined',
@@ -128,3 +129,26 @@ export const SCAN_NOTE_CODES = {
 } as const;
 
 export type ScanNoteCode = (typeof SCAN_NOTE_CODES)[keyof typeof SCAN_NOTE_CODES];
+
+/**
+ * Codes for why the manager cannot take over another local user's configuration.
+ *
+ * Same split as everywhere else: the server keeps prose in `reason` for the CLI, and
+ * the code plus `params` let the web UI explain the block in the viewer's language.
+ * These describe the *manager's* authority over an account, not the account itself —
+ * running the service as root makes every one of them disappear.
+ */
+export const USER_BLOCK_CODES = {
+  /** The home directory cannot be traversed, so no path inside it can be resolved. */
+  homeUnsearchable: 'user.block.homeUnsearchable',
+  /** The home directory can be entered but not written, so no store can be created. */
+  homeUnwritable: 'user.block.homeUnwritable',
+  /** The existing store directory cannot be read or written. */
+  storeInaccessible: 'user.block.storeInaccessible',
+  /** Files would have to be chowned to another uid, which needs root. */
+  ownershipRequiresRoot: 'user.block.ownershipRequiresRoot',
+  /** The home directory recorded for the account is gone. */
+  homeMissing: 'user.block.homeMissing',
+} as const;
+
+export type UserBlockCode = (typeof USER_BLOCK_CODES)[keyof typeof USER_BLOCK_CODES];

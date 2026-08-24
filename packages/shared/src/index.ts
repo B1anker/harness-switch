@@ -7,6 +7,8 @@ export {
   type MessageParams,
   SCAN_NOTE_CODES,
   type ScanNoteCode,
+  USER_BLOCK_CODES,
+  type UserBlockCode,
   WARNING_CODES,
   type WarningCode,
 } from './errors';

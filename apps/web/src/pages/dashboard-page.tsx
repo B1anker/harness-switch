@@ -4,6 +4,7 @@ import {
   ChevronDown,
   FileSearch,
   KeyRound,
+  Lock,
   LogOut,
   Plus,
   RefreshCw,
@@ -29,6 +30,7 @@ import { UpdateButton } from '@/components/update-button';
 import { UserSyncDialog } from '@/components/user-sync-dialog';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
 import { useI18n, useTranslation } from '@/lib/i18n';
+import { catalogKey, lineText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -228,26 +230,62 @@ function UserMenu() {
           className="absolute right-0 top-full z-30 mt-2 w-52 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg"
         >
           <div className="px-3 py-2 text-xs text-muted-foreground">{t('nav.currentLocalUser')}</div>
-          {users.map((user) => (
-            <button
-              key={user.username}
-              type="button"
-              role="menuitemradio"
-              aria-checked={user.username === currentUser}
-              disabled={usersLoading || user.username === currentUser}
-              onClick={() => void selectUser(user.username)}
-              className="flex w-full cursor-pointer items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-default disabled:opacity-60"
-            >
-              {user.username}
-            </button>
-          ))}
+          {users.map((user) => {
+            // An account this process cannot write to is shown but not offered: the
+            // server refuses the switch anyway, so the reason belongs next to the name
+            // rather than in an error after a click that was never going to work.
+            const blocked = user.manageable === false;
+            // Kept short and path-free: the menu is only as wide as a username, so an
+            // interpolated path would wrap to three lines. The server's own prose still
+            // carries the directory and rides along in the tooltip.
+            const reason = blocked
+              ? lineText(t, {
+                  key: user.blockCode ? catalogKey(user.blockCode) : 'error.user.notSwitchable',
+                  params: user.blockParams,
+                  fallback: user.blockReason,
+                })
+              : '';
+            const unselectable = usersLoading || user.username === currentUser || blocked;
+            return (
+              <button
+                key={user.username}
+                type="button"
+                role="menuitemradio"
+                aria-checked={user.username === currentUser}
+                disabled={unselectable}
+                title={blocked ? (user.blockReason ?? reason) : undefined}
+                onClick={() => void selectUser(user.username)}
+                className={cn(
+                  'flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
+                  // A row that cannot be picked must not light up under the cursor, or it
+                  // reads as clickable right up until the click does nothing.
+                  unselectable
+                    ? 'cursor-default opacity-60'
+                    : 'cursor-pointer hover:bg-accent hover:text-accent-foreground',
+                )}
+              >
+                <span className="flex w-full items-center gap-1.5">
+                  {blocked ? <Lock className="size-3 shrink-0" aria-hidden /> : null}
+                  <span className="truncate">{user.username}</span>
+                </span>
+                {blocked ? (
+                  <span className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                    {reason}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
           <div className="my-1 border-t" />
           <button
             type="button"
             role="menuitem"
             disabled={usersLoading}
             onClick={() => void signOut()}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 disabled:cursor-default disabled:opacity-60"
+            className={cn(
+              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
+              usersLoading ? 'cursor-default opacity-60' : 'cursor-pointer hover:bg-destructive/10',
+            )}
           >
             <LogOut className="size-4" />
             {t('nav.signOut')}

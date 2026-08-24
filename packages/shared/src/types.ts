@@ -109,6 +109,20 @@ export type LocalUserPublic = {
   gid: number;
   homeDir: string;
   current: boolean;
+  /**
+   * Whether this process can actually manage the account's configuration. False means
+   * selecting it would only fail later at write time, so the switch is refused up front.
+   *
+   * This describes the manager's authority, not the account: the same account is
+   * manageable when the service runs as root and unmanageable when it does not.
+   */
+  manageable: boolean;
+  /** Why `manageable` is false. See `USER_BLOCK_CODES`. */
+  blockCode?: string;
+  /** Values `blockCode` interpolates. Data, never keys. */
+  blockParams?: MessageParams;
+  /** The server's own prose for the block, printed by the CLI and used as the UI's fallback. */
+  blockReason?: string;
 };
 
 export type UsersResponse = {
