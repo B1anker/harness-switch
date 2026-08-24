@@ -267,12 +267,17 @@ describe('providers api', () => {
     ).toBe(200);
   });
 
-  test('export flattens a vault reference into the inline key', async () => {
+  test('export and import restore vault entries and profile references', async () => {
     const { app, cookie } = await createTestApp();
     await app.request('/api/providers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: cookie },
       body: JSON.stringify({ name: 'acme', apiKey: 'sk-acme-secret' }),
+    });
+    await app.request('/api/providers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ name: 'unused', apiKey: 'sk-unused-secret' }),
     });
     await app.request('/api/harnesses/claude/profiles', {
       method: 'POST',
@@ -304,6 +309,25 @@ describe('providers api', () => {
       }),
     });
     expect(imported.status).toBe(200);
+    expect((await imported.json()) as { providersCopied: number }).toMatchObject({
+      providersCopied: 2,
+    });
+
+    const profiles = (await (
+      await app.request('/api/harnesses', { headers: { Cookie: cookie } })
+    ).json()) as { items: Array<{ id: string; profiles: Array<{ providerId?: string }> }> };
+    const restored = profiles.items
+      .find((item) => item.id === 'claude')
+      ?.profiles.find((profile) => profile.providerId === 'acme-imported');
+    expect(restored).toBeDefined();
+
+    const providers = (await (
+      await app.request('/api/providers', { headers: { Cookie: cookie } })
+    ).json()) as { items: Array<{ id: string; endpoints: unknown[] }> };
+    expect(providers.items).toContainEqual(
+      expect.objectContaining({ id: 'acme-imported', endpoints: [] }),
+    );
+    expect(providers.items).toContainEqual(expect.objectContaining({ id: 'unused-imported' }));
 
     const activated = await app.request('/api/harnesses/claude/profiles/main/activate', {
       method: 'POST',

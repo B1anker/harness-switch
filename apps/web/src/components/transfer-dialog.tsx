@@ -356,6 +356,9 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
             <div className="space-y-4 rounded-xl border bg-card p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge>{t('transfer.profileCount', { count: preview.profileCount })}</Badge>
+                <Badge variant="secondary">
+                  {t('transfer.providerCount', { count: preview.providerCount })}
+                </Badge>
                 <Badge variant={preview.conflicts.length > 0 ? 'outline' : 'secondary'}>
                   {t('transfer.conflictCount', { count: preview.conflicts.length })}
                 </Badge>
@@ -500,6 +503,9 @@ function buildImportNotice(t: TFunction, result: TransferImportResponse): Messag
   const parts = [t('transfer.importedCount', { count: result.imported })];
   if (result.overwritten > 0) {
     parts.push(t('transfer.overwrittenCount', { count: result.overwritten }));
+  }
+  if (result.providersCopied > 0) {
+    parts.push(t('transfer.providersCopiedCount', { count: result.providersCopied }));
   }
   if (result.skipped > 0) {
     parts.push(t('transfer.skippedCount', { count: result.skipped }));

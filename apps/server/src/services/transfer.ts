@@ -22,6 +22,7 @@ import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { ILiveWriteService, type PlannedWrite } from './live-write';
 import type { ProfileStore, StoredProfile } from './profiles';
+import type { VaultEntry, VaultStore } from './vault';
 import { IVaultService } from './vault';
 
 const FORMAT = 'harness-switch-encrypted-export' as const;
@@ -37,6 +38,17 @@ type PortableProfile = {
   notes: string;
   extras: Record<string, string>;
   overrides: Record<string, string>;
+  /** Preserve the shared-credential relationship when its vault entry is bundled. */
+  providerId?: string;
+  providerEndpoint?: string;
+};
+
+/** Plaintext only inside the passphrase-encrypted transfer payload. */
+type PortableProvider = Omit<
+  VaultEntry,
+  'api_key' | 'created_at' | 'updated_at' | 'synced_from'
+> & {
+  apiKey: string;
 };
 
 type PortableActive = {
@@ -50,6 +62,8 @@ type PortablePayload = {
   version: 1;
   exportedAt: string;
   profiles: PortableProfile[];
+  /** Optional so exports made before vault support remain importable. */
+  providers?: PortableProvider[];
   active: PortableActive[];
   /** Present only when the user explicitly included the native Codex login session. */
   codexLoginCache?: string;
@@ -57,9 +71,11 @@ type PortablePayload = {
 
 type ImportPlan = {
   store: ProfileStore;
+  vault: VaultStore;
   imported: number;
   overwritten: number;
   skipped: number;
+  providersCopied: number;
   codexActivationAuthEffect: CodexAuthJsonEffect;
 };
 
@@ -121,6 +137,14 @@ export class TransferService implements ITransferService {
       throw new HttpError(400, '当前用户没有可导出的 Codex 登录缓存');
     }
     const store = this.readStore();
+    const vault = this.readVault();
+    const providers = Object.values(vault.entries).map((entry) => ({
+      id: entry.id,
+      name: entry.name,
+      apiKey: this.crypto.decrypt(entry.api_key),
+      notes: entry.notes,
+      endpoints: entry.endpoints,
+    }));
     const profiles: PortableProfile[] = [];
     for (const harness of HARNESS_IDS) {
       for (const [name, stored] of Object.entries(store[harness] ?? {})) {
@@ -133,6 +157,12 @@ export class TransferService implements ITransferService {
           notes: stored.notes || '',
           extras: stored.extras ?? {},
           overrides: stored.overrides ?? {},
+          ...(stored.provider_id && vault.entries[stored.provider_id]
+            ? {
+                providerId: stored.provider_id,
+                ...(stored.provider_endpoint ? { providerEndpoint: stored.provider_endpoint } : {}),
+              }
+            : {}),
         });
       }
     }
@@ -154,6 +184,7 @@ export class TransferService implements ITransferService {
         version: VERSION,
         exportedAt: new Date().toISOString(),
         profiles,
+        providers,
         active,
         codexLoginCache,
       },
@@ -170,11 +201,18 @@ export class TransferService implements ITransferService {
     this.assertConflictPolicy(conflictPolicy);
     const payload = this.decrypt(envelope, passphrase);
     const existing = this.readStore();
-    const plan = this.planImport(payload, existing, conflictPolicy, restoreActive);
+    const plan = this.planImport(
+      payload,
+      existing,
+      this.readVault(),
+      conflictPolicy,
+      restoreActive,
+    );
     const targetCodexLoginCacheExists = this.codexLoginCache.exists();
     return {
       exportedAt: payload.exportedAt,
       profileCount: payload.profiles.length,
+      providerCount: payload.providers?.length ?? 0,
       harnesses: HARNESS_IDS.map((harness) => ({
         harness,
         profiles: payload.profiles.filter((profile) => profile.harness === harness).length,
@@ -218,22 +256,32 @@ export class TransferService implements ITransferService {
             },
           ]
         : [];
-    const plan = this.planImport(payload, this.readStore(), conflictPolicy, restoreActive);
+    const plan = this.planImport(
+      payload,
+      this.readStore(),
+      this.readVault(),
+      conflictPolicy,
+      restoreActive,
+    );
 
     const profilesPath = this.environment.files.profiles;
+    const vaultPath = this.environment.files.vault;
     const profileSnapshot = this.files.readOptional(profilesPath);
+    const vaultSnapshot = this.files.readOptional(vaultPath);
     this.liveWrite.transaction(
       {
         kind: 'import',
         harness: 'codex',
         profile: '导入登录缓存',
         writes: cacheWrite,
-        metadata: ['profiles'],
+        metadata: ['profiles', 'vault'],
       },
       () => {
         try {
+          this.files.writeJson(vaultPath, plan.vault);
           this.files.writeJson(profilesPath, plan.store);
         } catch (error) {
+          this.restore(vaultPath, vaultSnapshot);
           this.restore(profilesPath, profileSnapshot);
           throw error;
         }
@@ -269,6 +317,7 @@ export class TransferService implements ITransferService {
       imported: plan.imported,
       overwritten: plan.overwritten,
       skipped: plan.skipped,
+      providersCopied: plan.providersCopied,
       activeRestored,
       codexLoginCacheMigrated: cacheWrite.length > 0,
       warnings,
@@ -300,6 +349,16 @@ export class TransferService implements ITransferService {
         throw new HttpError(400, '导出文件中的激活状态无效');
       }
     }
+    if (payload.providers !== undefined) {
+      if (!Array.isArray(payload.providers) || payload.providers.length > 10_000) {
+        throw new HttpError(400, '导出文件中的凭据库数据无效');
+      }
+      for (const provider of payload.providers) {
+        if (!isPortableProvider(provider)) {
+          throw new HttpError(400, '导出文件中的凭据库数据无效');
+        }
+      }
+    }
     if (payload.codexLoginCache !== undefined) {
       if (typeof payload.codexLoginCache !== 'string') {
         throw new HttpError(400, '导出文件中的 Codex 登录缓存无效');
@@ -318,6 +377,13 @@ export class TransferService implements ITransferService {
 
   private validatePayload(payload: PortablePayload): void {
     const profileIds = new Set<string>();
+    const providerIds = new Set<string>();
+    for (const provider of payload.providers ?? []) {
+      if (providerIds.has(provider.id)) {
+        throw new HttpError(400, '导出文件包含重复的凭据库条目');
+      }
+      providerIds.add(provider.id);
+    }
     for (const profile of payload.profiles) {
       this.validateProfile(profile);
       const id = profileId(profile.harness, profile.name);
@@ -325,6 +391,9 @@ export class TransferService implements ITransferService {
         throw new HttpError(400, '导出文件包含重复的配置');
       }
       profileIds.add(id);
+      if (profile.providerId && !providerIds.has(profile.providerId)) {
+        throw new HttpError(400, '导出文件中的配置引用了不存在的凭据库条目');
+      }
     }
 
     const activeHarnesses = new Set<HarnessId>();
@@ -347,13 +416,16 @@ export class TransferService implements ITransferService {
   private planImport(
     payload: PortablePayload,
     existing: ProfileStore,
+    existingVault: VaultStore,
     conflictPolicy: TransferConflictPolicy,
     restoreActive: boolean,
   ): ImportPlan {
     const store = structuredClone(existing);
+    const vault = structuredClone(existingVault);
     let imported = 0;
     let overwritten = 0;
     let skipped = 0;
+    const selected: PortableProfile[] = [];
 
     for (const profile of payload.profiles) {
       store[profile.harness] ||= {};
@@ -362,7 +434,35 @@ export class TransferService implements ITransferService {
         skipped++;
         continue;
       }
+      selected.push(profile);
+    }
+
+    const providerMap = new Map<string, string>();
+    // The vault is a first-class part of a machine migration: include standalone
+    // credentials too, not only the entries a profile happens to reference today.
+    for (const provider of payload.providers ?? []) {
+      const targetId = this.availableProviderId(provider.id, vault);
+      vault.entries[targetId] = {
+        id: targetId,
+        name: provider.name,
+        api_key: this.crypto.encrypt(provider.apiKey),
+        notes: provider.notes,
+        endpoints: provider.endpoints,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      providerMap.set(provider.id, targetId);
+    }
+
+    for (const profile of selected) {
+      store[profile.harness] ||= {};
+      const exists = store[profile.harness]![profile.name] !== undefined;
       store[profile.harness]![profile.name] = this.toStored(profile);
+      const mappedProvider = profile.providerId ? providerMap.get(profile.providerId) : undefined;
+      if (mappedProvider) {
+        store[profile.harness]![profile.name]!.provider_id = mappedProvider;
+        store[profile.harness]![profile.name]!.provider_endpoint = profile.providerEndpoint;
+      }
       if (exists) {
         overwritten++;
       } else {
@@ -372,9 +472,11 @@ export class TransferService implements ITransferService {
 
     return {
       store,
+      vault,
       imported,
       overwritten,
       skipped,
+      providersCopied: providerMap.size,
       codexActivationAuthEffect: this.codexActivationAuthEffect(payload, store, restoreActive),
     };
   }
@@ -434,6 +536,26 @@ export class TransferService implements ITransferService {
     return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
   }
 
+  private readVault(): VaultStore {
+    return this.files.readJsonStrict<VaultStore>(this.environment.files.vault, {
+      version: 1,
+      entries: {},
+    });
+  }
+
+  /** Never overwrite a local vault entry: imported entries get isolated copies. */
+  private availableProviderId(sourceId: string, vault: VaultStore): string {
+    if (!vault.entries[sourceId]) return sourceId;
+    const base = `${sourceId}-imported`.slice(0, 60);
+    let candidate = base;
+    let index = 2;
+    while (vault.entries[candidate]) {
+      candidate = `${base}-${index}`.slice(0, 64);
+      index++;
+    }
+    return candidate;
+  }
+
   private restore(path: string, snapshot: string | undefined): void {
     try {
       if (snapshot === undefined) this.files.remove(path);
@@ -443,7 +565,7 @@ export class TransferService implements ITransferService {
     }
   }
 
-  /** Exports flatten vault references into the inline key the destination can decrypt. */
+  /** Inline keys remain as a recovery cache if a bundled vault entry cannot be restored. */
   private resolveKey(stored: StoredProfile): string {
     if (!stored.provider_id) {
       return this.crypto.decrypt(stored.api_key);
@@ -541,7 +663,34 @@ function isPortableProfile(value: unknown): value is PortableProfile {
     typeof profile.model === 'string' &&
     typeof profile.notes === 'string' &&
     isStringRecord(profile.extras) &&
-    isStringRecord(profile.overrides)
+    isStringRecord(profile.overrides) &&
+    (profile.providerId === undefined || typeof profile.providerId === 'string') &&
+    (profile.providerEndpoint === undefined || typeof profile.providerEndpoint === 'string')
+  );
+}
+
+function isPortableProvider(value: unknown): value is PortableProvider {
+  if (typeof value !== 'object' || value === null) return false;
+  const provider = value as Partial<PortableProvider>;
+  return (
+    typeof provider.id === 'string' &&
+    provider.id.length > 0 &&
+    provider.id.length <= 64 &&
+    !/[\\/]/.test(provider.id) &&
+    provider.id !== '__proto__' &&
+    provider.id !== 'constructor' &&
+    typeof provider.name === 'string' &&
+    provider.name.length > 0 &&
+    typeof provider.apiKey === 'string' &&
+    provider.apiKey.length > 0 &&
+    (provider.notes === undefined || typeof provider.notes === 'string') &&
+    Array.isArray(provider.endpoints) &&
+    provider.endpoints.every(
+      (endpoint) =>
+        typeof endpoint?.key === 'string' &&
+        typeof endpoint.label === 'string' &&
+        typeof endpoint.baseUrl === 'string',
+    )
   );
 }
 

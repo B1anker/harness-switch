@@ -240,6 +240,8 @@ export type CodexAuthJsonEffect = 'none' | 'openai-api-key' | 'auth-override' | 
 export type TransferPreview = {
   exportedAt: string;
   profileCount: number;
+  /** Number of Provider Vault entries bundled with the encrypted export. */
+  providerCount: number;
   harnesses: TransferHarnessCount[];
   conflicts: TransferConflict[];
   activeCount: number;
@@ -258,6 +260,8 @@ export type TransferImportResponse = {
   imported: number;
   overwritten: number;
   skipped: number;
+  /** Provider Vault entries recreated from the encrypted export. */
+  providersCopied: number;
   activeRestored: number;
   codexLoginCacheMigrated: boolean;
   warnings: LocalizedMessage[];
