@@ -1,4 +1,6 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { once } from 'node:events';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { createApp } from './app';
 import { createServices } from './bootstrap';
 import { parseArgs } from './cli/args';
@@ -26,14 +28,56 @@ async function runServer(): Promise<void> {
 
   const app = createApp(services);
 
-  const server = Bun.serve({
-    hostname: environment.host,
-    port: environment.port,
-    fetch: app.fetch,
+  const server = createServer((request, response) => {
+    void handleNodeRequest(app.fetch, request, response);
   });
+  server.listen(environment.port, environment.host);
+  await once(server, 'listening');
 
   log.info(`data directory: ${environment.dataDir}`);
-  log.info(`listening on http://${server.hostname}:${server.port}`);
+  log.info(`listening on http://${environment.host}:${environment.port}`);
+}
+
+/** Adapt Node's HTTP server to Hono's standard Fetch handler without a runtime adapter. */
+async function handleNodeRequest(
+  handler: (request: Request) => Response | Promise<Response>,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  try {
+    const origin = `http://${request.headers.host ?? 'localhost'}`;
+    const body = ['GET', 'HEAD'].includes(request.method ?? '')
+      ? undefined
+      : await readBody(request);
+    const headers = new Headers();
+    for (const [name, value] of Object.entries(request.headers)) {
+      if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value);
+    }
+    const result = await handler(
+      new Request(new URL(request.url ?? '/', origin).toString(), {
+        method: request.method,
+        headers,
+        ...(body ? { body, duplex: 'half' as const } : {}),
+      }),
+    );
+    response.statusCode = result.status;
+    const cookies = result.headers.getSetCookie?.() ?? [];
+    for (const [name, value] of result.headers) {
+      if (name !== 'set-cookie') response.setHeader(name, value);
+    }
+    if (cookies.length > 0) response.setHeader('set-cookie', cookies);
+    response.end(Buffer.from(await result.arrayBuffer()));
+  } catch {
+    response.statusCode = 500;
+    response.end('internal server error');
+  }
+}
+
+async function readBody(request: IncomingMessage): Promise<Buffer | undefined> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request)
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
 }
 
 const [command, ...rest] = process.argv.slice(2);

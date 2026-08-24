@@ -30,9 +30,11 @@
   ],
   "scripts": {
     "dev": "HSW_UPDATE_CHECK=0 bun --hot src/main.ts server",
-    "start": "bun dist/harness-switch.js",
-    "start:foreground": "bun dist/harness-switch.js server",
-    "build": "bun build src/main.ts --outfile dist/harness-switch.js --target bun && bun ../../scripts/postbuild.ts",
+    "start": "node dist/harness-switch.js",
+    "start:node": "node dist/harness-switch.js",
+    "start:bun": "bun dist/harness-switch.js",
+    "start:foreground": "node dist/harness-switch.js server",
+    "build": "bun build src/main.ts --outfile dist/harness-switch.js --target node && bun ../../scripts/postbuild.ts",
     "test": "bun test test"
   },
   "dependencies": {
@@ -47,6 +49,7 @@
     "typescript": "^5.9.3"
   },
   "engines": {
+    "node": ">=18.17.0",
     "bun": ">=1.2.0"
   },
   "publishConfig": {

@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { closeSync, mkdirSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 8787;
@@ -68,7 +70,7 @@ async function waitForExit(pid: number, timeoutMs = STOP_TIMEOUT_MS): Promise<bo
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (!isAlive(pid)) return true;
-    await Bun.sleep(100);
+    await sleep(100);
   }
   return !isAlive(pid);
 }
@@ -187,7 +189,7 @@ export async function daemonize(): Promise<number> {
     removeRecordIfMatches(token);
     console.error(`daemon failed its health check; tail of ${logPath}:`);
     try {
-      console.error((await Bun.file(logPath).text()).split('\n').slice(-15).join('\n'));
+      console.error((await readFile(logPath, 'utf8')).split('\n').slice(-15).join('\n'));
     } catch {
       // log missing; nothing more to show
     }
@@ -232,7 +234,7 @@ async function waitForReady(record: DaemonRecord, timeoutMs: number): Promise<bo
   while (Date.now() < deadline) {
     if (!isAlive(record.pid)) return false;
     if (await checkHealth(record)) return true;
-    await Bun.sleep(100);
+    await sleep(100);
   }
   return false;
 }
