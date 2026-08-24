@@ -1,3 +1,17 @@
+# [0.19.0](https://github.com/B1anker/harness-switch/compare/v0.18.0...v0.19.0) (2026-08-24)
+
+
+### Bug Fixes
+
+* **doctor:** report unreadable configs instead of failing the whole run ([30307f2](https://github.com/B1anker/harness-switch/commit/30307f283a2cf5d2d87bea58baf8d8efa1464d3f))
+
+
+### Features
+
+* **runtime:** support Node.js and Bun ([f1f8d8f](https://github.com/B1anker/harness-switch/commit/f1f8d8fcf6fed88516b2eb41681e3ff062b0fb05))
+* **transfer:** migrate provider vault entries ([3387796](https://github.com/B1anker/harness-switch/commit/33877968276469f75b92a58ed0c2d3a7ce97a693))
+* **web:** group user switching into account menu ([819ecbc](https://github.com/B1anker/harness-switch/commit/819ecbc2ac15247f6a5ba9a6fd500720bf8405f5))
+
 # [0.18.0](https://github.com/B1anker/harness-switch/compare/v0.17.0...v0.18.0) (2026-08-23)
 
 
