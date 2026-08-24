@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync } from 'node:fs';
+import { accessSync, constants, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { MessageParams } from '@seaveyon/harness-switch-shared';
 import { USER_BLOCK_CODES } from '@seaveyon/harness-switch-shared';
@@ -80,12 +80,13 @@ export class UserAccessService implements IUserAccessService {
     }
 
     // Even with a writable directory, every file the manager creates is chowned to the
-    // target account. Cross-uid chown needs root, so a non-root manager would get as
-    // far as writing a temp file and then fail — better to say so before switching.
+    // target account. Handing a file to a different uid needs CAP_CHOWN, so a manager
+    // without it would get as far as writing a temp file and then fail — better to say
+    // so before switching.
     if (!this.canOwnAs(user)) {
       return this.blocked(
         USER_BLOCK_CODES.ownershipRequiresRoot,
-        `把文件所有权设置为 ${user.username} 需要以 root 运行`,
+        `把文件所有权设置为 ${user.username} 需要以 root 运行或授予 CAP_CHOWN`,
         { username: user.username },
       );
     }
@@ -98,9 +99,13 @@ export class UserAccessService implements IUserAccessService {
   }
 
   /**
-   * Whether this process may hand a file to `user`. Ownership is only ever changed to
-   * the selected account, so matching uid and gid needs no privilege at all — that is
-   * the same condition `FileService.applyOwner` uses to decide a chown failure is fatal.
+   * Whether this process may hand a file to `user`, mirroring what `chown(2)` will
+   * actually permit rather than guessing from the uid alone.
+   *
+   * An unprivileged process may leave the uid untouched and move the file to any group
+   * it belongs to; changing the uid at all needs `CAP_CHOWN`. Testing the capability
+   * instead of `uid === 0` matters for a service running with file capabilities or
+   * inside a container that granted the bit without granting root.
    */
   private canOwnAs(user: LocalUser): boolean {
     const uid = process.getuid?.();
@@ -108,9 +113,12 @@ export class UserAccessService implements IUserAccessService {
     if (uid === undefined || gid === undefined) {
       return true;
     }
-    // Root can chown to anyone. Anyone else can only "chown" to themselves, which is
-    // a no-op the kernel allows.
-    return uid === 0 || (uid === user.uid && gid === user.gid);
+    // Not a change of ownership at all, so no privilege is involved: the uid already
+    // matches and the gid is one this process carries.
+    if (uid === user.uid && (gid === user.gid || groupsOf().includes(user.gid))) {
+      return true;
+    }
+    return hasChownCapability(uid);
   }
 
   private blocked(code: string, reason: string, params: MessageParams): UserAccess {
@@ -125,5 +133,44 @@ function can(path: string, mode: number): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/** Cached because the list cannot change without `setgroups`, which this service never calls. */
+let cachedGroups: number[] | undefined;
+
+function groupsOf(): number[] {
+  cachedGroups ??= process.getgroups?.() ?? [];
+  return cachedGroups;
+}
+
+/** `CAP_CHOWN` is capability 0, so it is the low bit of the effective set. */
+const CAP_CHOWN_BIT = 1n;
+
+/**
+ * Whether this process holds `CAP_CHOWN` and may therefore give a file away to another
+ * account. Falls back to the uid when the effective set cannot be read — the case on
+ * every non-Linux platform, where `uid === 0` is the only answer available.
+ *
+ * Cached: capabilities only change through `capset`, which this service never calls.
+ */
+let cachedChownCapability: boolean | undefined;
+
+function hasChownCapability(uid: number): boolean {
+  if (cachedChownCapability === undefined) {
+    const effective = readEffectiveCaps();
+    cachedChownCapability =
+      effective === undefined ? uid === 0 : (effective & CAP_CHOWN_BIT) !== 0n;
+  }
+  return cachedChownCapability;
+}
+
+/** The effective capability set, or `undefined` where procfs cannot answer. */
+function readEffectiveCaps(): bigint | undefined {
+  try {
+    const match = /^CapEff:\s*([0-9a-fA-F]+)$/m.exec(readFileSync('/proc/self/status', 'utf8'));
+    return match ? BigInt(`0x${match[1]}`) : undefined;
+  } catch {
+    return undefined;
   }
 }
