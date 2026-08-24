@@ -307,6 +307,7 @@
       "fileOk": "{{target}} exists and is readable and writable ({{path}})",
       "parseOk": "{{target}} parses cleanly",
       "parseFailed": "{{target}} could not be parsed: {{reason}}",
+      "parseUnreadable": "{{target}} could not be read: {{reason}}",
       "driftNoProfile": "No active profile, so there is no drift to check",
       "driftInvalid": "The live files contain content that cannot be parsed",
       "driftMismatch_one": "{{count}} file does not match the active profile ({{status}})",

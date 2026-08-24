@@ -125,6 +125,50 @@ describe('doctor', () => {
     expect(check?.status).toBe('error');
   });
 
+  test('reports an unreadable live file without failing the whole run', async () => {
+    fakeBin('claude');
+    mkdirSync(join(homeDir, '.claude'), { recursive: true });
+    const settings = join(homeDir, '.claude', 'settings.json');
+    writeFileSync(settings, '{}');
+    chmodSync(settings, 0o000);
+
+    const report = await doctor().run({ harness: 'claude' });
+    expect(checksOf(report, 'claude', 'claude.files.settings')[0]?.code).toBe(
+      'doctor.check.fileUnreadable',
+    );
+    const parse = checksOf(report, 'claude', 'claude.parse.settings')[0];
+    expect(parse?.status).toBe('error');
+    expect(parse?.code).toBe('doctor.check.parseUnreadable');
+    expect((parse?.detail as { code?: string } | undefined)?.code).toBe('EACCES');
+    // The point of the check: every other harness still gets reported.
+    expect(checksOf(report, 'claude', 'claude.install')[0]?.status).toBe('ok');
+  });
+
+  test('an unreadable live file does not crash the drift check', async () => {
+    fakeBin('claude');
+    activateClaude();
+    chmodSync(join(homeDir, '.claude', 'settings.json'), 0o000);
+    const report = await doctor().run({ harness: 'claude' });
+    // Unreadable is reported as invalid, never as missing: "missing" would invite a
+    // reapply that overwrites a config the manager never managed to read.
+    const check = checksOf(report, 'claude', 'claude.drift')[0];
+    expect(check?.status).toBe('error');
+    expect(check?.code).toBe('doctor.check.driftInvalid');
+  });
+
+  test('a full run survives one unreadable harness and still reports the rest', async () => {
+    mkdirSync(join(homeDir, '.claude'), { recursive: true });
+    const settings = join(homeDir, '.claude', 'settings.json');
+    writeFileSync(settings, '{}');
+    chmodSync(settings, 0o000);
+
+    const report = await doctor().run({});
+    expect(report.items.length).toBeGreaterThan(1);
+    for (const item of report.items) {
+      expect(item.checks.length).toBeGreaterThan(0);
+    }
+  });
+
   test('reports drift against the active profile', async () => {
     fakeBin('claude');
     activateClaude();

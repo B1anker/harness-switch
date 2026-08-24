@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { accessSync, constants, statSync } from 'node:fs';
 import {
   DOCTOR_CODES,
@@ -150,8 +151,18 @@ export class DoctorService implements IDoctorService {
         continue;
       }
       // A config file holds credentials; group/other readability is a warning.
-      const mode = statSync(path).mode & 0o777;
-      if ((mode & 0o077) !== 0) {
+      const mode = this.modeOf(path);
+      if (mode === undefined) {
+        // The file vanished between the checks above and this one.
+        checks.push(
+          warn(
+            `${harness}.files.${target.key}`,
+            `${target.label} 不存在（${path}）`,
+            DOCTOR_CODES.fileMissing,
+            fileParams,
+          ),
+        );
+      } else if ((mode & 0o077) !== 0) {
         checks.push(
           warn(
             `${harness}.files.${target.key}`,
@@ -173,9 +184,24 @@ export class DoctorService implements IDoctorService {
       }
     }
 
-    // Parse: live content must be parseable back.
+    // Parse: live content must be parseable back. A file the manager cannot read at all
+    // is reported as its own check — doctor describes files it does not own, so one
+    // unreadable config must not throw away every other finding in the report.
     for (const target of targets) {
-      const content = this.files.readOptional(target.path);
+      const read = this.files.readForReport(target.path);
+      if (!read.ok) {
+        checks.push(
+          error(
+            `${harness}.parse.${target.key}`,
+            `${target.label} 无法读取：${read.reason}`,
+            DOCTOR_CODES.parseUnreadable,
+            { target: target.label, reason: read.reason },
+            { code: read.code ?? null },
+          ),
+        );
+        continue;
+      }
+      const content = read.content;
       if (content === undefined) {
         continue;
       }
@@ -242,12 +268,12 @@ export class DoctorService implements IDoctorService {
 
   private commandExists(bin: string): boolean {
     try {
-      // Pass the environment explicitly: Bun.spawnSync otherwise uses the process
-      // startup env, which would ignore runtime PATH overrides in tests.
-      const result = Bun.spawnSync(['/bin/sh', '-c', `command -v ${bin}`], {
+      // Pass the environment explicitly so runtime PATH overrides remain visible.
+      const result = spawnSync('/bin/sh', ['-c', `command -v ${bin}`], {
         env: process.env,
+        encoding: 'utf8',
       });
-      return result.exitCode === 0 && result.stdout.toString().trim().length > 0;
+      return result.status === 0 && result.stdout.trim().length > 0;
     } catch {
       return false;
     }
@@ -268,6 +294,15 @@ export class DoctorService implements IDoctorService {
       return true;
     } catch {
       return false;
+    }
+  }
+
+  /** Undefined when the file cannot be stat'd, so a race cannot abort the whole report. */
+  private modeOf(path: string): number | undefined {
+    try {
+      return statSync(path).mode & 0o777;
+    } catch {
+      return undefined;
     }
   }
 }

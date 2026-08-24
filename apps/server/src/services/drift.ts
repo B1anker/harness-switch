@@ -152,7 +152,7 @@ export class DriftService implements IDriftService {
         path: target.path,
         format: target.format,
         expectedContent: null,
-        currentContent: this.files.readOptional(target.path) ?? null,
+        currentContent: this.reportContent(target.path),
         status: 'invalid',
       }));
     }
@@ -185,7 +185,8 @@ export class DriftService implements IDriftService {
       targets = adapter.targets().filter((target) => target.key !== 'auth');
     }
     return targets.map((target) => {
-      const live = this.files.readOptional(target.path) ?? null;
+      const read = this.files.readForReport(target.path);
+      const live = read.ok ? (read.content ?? null) : null;
       const base = {
         key: target.key,
         label: target.label,
@@ -194,6 +195,11 @@ export class DriftService implements IDriftService {
         expectedContent: null,
         currentContent: live,
       };
+      // An unreadable file is not an absent one: reporting it as `missing` would invite
+      // a reapply that overwrites a config the manager never managed to read.
+      if (!read.ok) {
+        return { ...base, status: 'invalid' as const };
+      }
       if (live === null) {
         return { ...base, status: 'missing' as const };
       }
@@ -245,6 +251,16 @@ export class DriftService implements IDriftService {
       current[target.key] = this.files.readOptional(target.path);
     }
     return current;
+  }
+
+  /**
+   * Live content for a report field only. An unreadable file has no content to show and
+   * must not abort the inspection, so it reads as null just like an absent one; the
+   * per-file `status` is what distinguishes the two.
+   */
+  private reportContent(path: string): string | null {
+    const read = this.files.readForReport(path);
+    return read.ok ? (read.content ?? null) : null;
   }
 }
 

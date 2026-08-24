@@ -307,6 +307,7 @@
       "fileOk": "{{target}} 存在且可读可写（{{path}}）",
       "parseOk": "{{target}} 解析正常",
       "parseFailed": "{{target}} 无法解析：{{reason}}",
+      "parseUnreadable": "{{target}} 无法读取：{{reason}}",
       "driftNoProfile": "未激活任何配置，无漂移可检查",
       "driftInvalid": "live 文件存在无法解析的内容",
       "driftMismatch_one": "{{count}} 个文件与激活配置不一致（{{status}}）",
