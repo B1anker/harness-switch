@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { USER_BLOCK_CODES } from '@seaveyon/harness-switch-shared';
@@ -11,6 +11,21 @@ let rootDir = '';
 let services: ReturnType<typeof createServices>;
 
 const me = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
+
+/**
+ * Whether this test process could actually give a file to another account. Read from the
+ * real capability set rather than assumed from the uid, so the expectations stay right
+ * both in CI as an ordinary user and in a container that granted CAP_CHOWN.
+ */
+function canChown(): boolean {
+  try {
+    const match = /^CapEff:\s*([0-9a-fA-F]+)$/m.exec(readFileSync('/proc/self/status', 'utf8'));
+    if (match) return (BigInt(`0x${match[1]}`) & 1n) !== 0n;
+  } catch {
+    // Not Linux; fall through to the uid.
+  }
+  return me.uid === 0;
+}
 
 beforeEach(() => {
   rootDir = mkdtempSync(join(tmpdir(), 'hsw-access-'));
@@ -108,8 +123,32 @@ describe('user access probe', () => {
   test('a foreign uid needs root because every file is chowned to the target', () => {
     home('foreign');
     const verdict = access().inspect(peer('foreign', { uid: me.uid + 4242, gid: me.gid + 4242 }));
-    if (me.uid === 0) {
-      // Root can chown to anyone, so this is genuinely manageable.
+    if (canChown()) {
+      // Root, or a service granted CAP_CHOWN, can hand a file to anyone.
+      expect(verdict.ok).toBe(true);
+      return;
+    }
+    expect(verdict.ok).toBe(false);
+    if (verdict.ok) return;
+    expect(verdict.code).toBe(USER_BLOCK_CODES.ownershipRequiresRoot);
+  });
+
+  test('a group this process already belongs to needs no privilege', () => {
+    // `chown(2)` lets an unprivileged caller leave the uid alone and move the file to
+    // any of its groups, so demanding an exact gid match would refuse a working switch.
+    const supplementary = (process.getgroups?.() ?? []).find((group) => group !== me.gid);
+    if (supplementary === undefined) return;
+    home('sibling');
+    expect(access().inspect(peer('sibling', { gid: supplementary })).ok).toBe(true);
+  });
+
+  test('a group this process does not belong to is refused without the capability', () => {
+    home('outsider');
+    const mine = new Set([me.gid, ...(process.getgroups?.() ?? [])]);
+    let foreign = me.gid + 4242;
+    while (mine.has(foreign)) foreign += 1;
+    const verdict = access().inspect(peer('outsider', { gid: foreign }));
+    if (canChown()) {
       expect(verdict.ok).toBe(true);
       return;
     }
