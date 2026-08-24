@@ -1,3 +1,10 @@
+# [0.20.0](https://github.com/B1anker/harness-switch/compare/v0.19.0...v0.20.0) (2026-08-24)
+
+
+### Features
+
+* add provider connectivity test and model catalog ([c3163cb](https://github.com/B1anker/harness-switch/commit/c3163cb1c966f84c8235c7ed619fa72ac174451c))
+
 # [0.19.0](https://github.com/B1anker/harness-switch/compare/v0.18.0...v0.19.0) (2026-08-24)
 
 
