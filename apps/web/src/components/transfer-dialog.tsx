@@ -79,10 +79,11 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
       return;
     }
     let disposed = false;
-    setIncludeCodexLoginCache(false);
     void api<TransferExportPreview>('/api/transfer/export/preview')
       .then((result) => {
-        if (!disposed) setExportPreview(result);
+        if (disposed) return;
+        setExportPreview(result);
+        setIncludeCodexLoginCache(result.codexLoginCacheAvailable === true);
       })
       .catch(() => {
         if (!disposed) setExportPreview(null);
@@ -166,7 +167,10 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
       setPreview(result);
       setPreviewStale(false);
       setConfirmingImport(false);
-      setMigrateCodexLoginCache(false);
+      setMigrateCodexLoginCache(
+        result.codexLoginCache?.available === true &&
+          result.codexLoginCache.migrationNeeded === true,
+      );
     } catch (err) {
       setPreview(null);
       setError(errorLine(err));
@@ -219,7 +223,7 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="max-h-[90vh] overflow-x-hidden overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t('transfer.title')}</DialogTitle>
           <DialogDescription>{t('transfer.intro')}</DialogDescription>
@@ -265,14 +269,14 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
             <p className="text-xs text-destructive">{t('transfer.passphraseMismatch')}</p>
           ) : null}
           {exportPreview?.codexLoginCacheAvailable ? (
-            <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+            <label className="block space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
               <span className="flex cursor-pointer items-start gap-3">
                 <Checkbox
                   checked={includeCodexLoginCache}
                   onCheckedChange={(checked) => setIncludeCodexLoginCache(checked === true)}
                   className="mt-0.5"
                 />
-                <span>
+                <span className="min-w-0">
                   <span className="block font-medium">{t('transfer.includeCache')}</span>
                   <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
                     {t('transfer.includeCacheHint')}
@@ -386,14 +390,14 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                 </div>
               ) : null}
               {preview.codexLoginCache?.available && preview.codexLoginCache.migrationNeeded ? (
-                <label className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
+                <label className="block space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
                   <span className="flex cursor-pointer items-start gap-3">
                     <Checkbox
                       checked={migrateCodexLoginCache}
                       onCheckedChange={(checked) => setMigrateCodexLoginCache(checked === true)}
                       className="mt-0.5"
                     />
-                    <span>
+                    <span className="min-w-0">
                       <span className="block font-medium">{t('transfer.migrateCache')}</span>
                       <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
                         {t('transfer.migrateCacheHint')}

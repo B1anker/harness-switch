@@ -62,7 +62,7 @@ test('exports all profiles only after the migration password is confirmed', asyn
   expect(await screen.findByText(/加密导出包已生成/)).toBeInTheDocument();
 });
 
-test('requires an explicit export choice to include a Codex login cache', async () => {
+test('includes Codex login cache by default when available', async () => {
   const requests: Array<{ path: string; body: string }> = [];
   globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
     requests.push({ path, body: String(init.body ?? '') });
@@ -75,7 +75,8 @@ test('requires an explicit export choice to include a Codex login cache', async 
   }) as typeof globalThis.fetch;
 
   render(<TransferDialog open onOpenChange={() => {}} />);
-  fireEvent.click(await screen.findByLabelText(/在导出包中包含 Codex 官方登录缓存/));
+  const checkbox = await screen.findByLabelText(/在导出包中包含 Codex 官方登录缓存/);
+  expect(checkbox).toBeChecked();
   fireEvent.change(screen.getByLabelText('迁移密码', { selector: '#export-passphrase' }), {
     target: { value: 'portable-secret' },
   });
@@ -181,8 +182,8 @@ test('requires a separate import choice before writing a bundled Codex login cac
     target: { value: 'portable-secret' },
   });
   fireEvent.click(screen.getByRole('button', { name: '检查导入内容' }));
-  await screen.findByText('迁移 Codex 官方登录缓存（auth.json）');
-  fireEvent.click(screen.getByLabelText(/迁移 Codex 官方登录缓存/));
+  const checkbox = await screen.findByLabelText(/迁移 Codex 官方登录缓存/);
+  expect(checkbox).toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
   expect(
     await screen.findByText(/完整 Codex 官方登录缓存会覆盖本机缓存，并自动创建备份/),
