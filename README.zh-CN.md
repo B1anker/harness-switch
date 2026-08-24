@@ -107,7 +107,7 @@ PREPARED → APPLYING → METADATA_COMMITTED → COMMITTED
 
 服务启动时会扫描每个可管理用户的记录并收尾。分界点是 `METADATA_COMMITTED`：到这一步为止该操作想改的东西已经全部落盘，所以它会被向前推进为 `COMMITTED`，而不是回滚一次用户看到已经成功的切换；停在 `APPLYING` 的则可能只写了一半，会整体回滚。回滚本身失败时记为 `DEGRADED` 并在界面上标出，等人工处理。
 
-激活时写 `active.json` 已被纳入同一个事务，所以配置文件和「当前激活」的记录不会再各说各话。每条记录就是一张收据，包含变更的文件、备份编号、目标用户和当时的状态；顶栏的 **操作记录** 可以查看并一键撤销 —— 撤销会把原生文件和 `active.json` 一起退回操作前，而不只是恢复几个文件。撤销本身也会先做一次快照。备份被轮换掉之后，对应收据会自动标为不可撤销。
+激活时写 `active.json` 已被纳入同一个事务，所以配置文件和「当前激活」的记录不会再各说各话。每条记录就是一张收据，包含变更的文件、备份编号、目标用户和当时的状态；每个 Harness 右侧栏的 **操作记录** 可以查看并一键撤销 —— 撤销会把原生文件和 `active.json` 一起退回操作前，而不只是恢复几个文件。撤销本身也会先做一次快照。备份被轮换掉之后，对应收据会自动标为不可撤销。
 
 `HSW_JOURNAL_RETAIN` 控制保留的记录条数，默认 50。
 
@@ -142,7 +142,7 @@ Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包
 
 ### 配置漂移
 
-仪表盘的 **配置漂移** 面板把「激活配置会渲染出的内容」与磁盘上的实际文件做比较；JSON/TOML/YAML 按解析后的值比较，因此仅键顺序变化的重新渲染不会误报为漂移。每个文件的状态为：
+仪表盘 **诊断** 面板会一并展示「激活配置会渲染出的内容」与磁盘上实际文件的对比；JSON/TOML/YAML 按解析后的值比较，因此仅键顺序变化的重新渲染不会误报为漂移。每个文件的状态为：
 
 - `in-sync` — 磁盘与配置将写入的内容一致；
 - `drifted` — 磁盘与配置将写入的内容不同；
@@ -157,7 +157,7 @@ Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包
 
 ### 诊断（Doctor）
 
-**诊断** 面板对每个 Harness 执行只读检查：工具的 CLI 是否在 `PATH` 中（`install`）、每个目标文件所在目录是否存在（`configDir`）、每个目标文件是否存在且可读可写（`files`，配置文件持有凭据且 group/other 可读时给出 warning）、文件能否解析（`parse`）、live 状态是否与激活配置漂移（`drift`）。另有全局的版本更新检查，报告是否有新版本可用（`updatedAvailable`）。
+**诊断** 在每个 Harness 的右侧栏中按工具单独运行：对以 CLI 交付的工具检查可执行文件是否在 `PATH` 中（`install`；DeepSeek Harness 这类 Web 服务部署会跳过此项）、每个目标文件是否存在且可读可写（`files`，配置文件持有凭据且 group/other 可读时给出 warning）、文件能否解析（`parse`）、live 状态是否与激活配置漂移（`drift`）。另有全局的版本更新检查，报告是否有新版本可用（`updatedAvailable`）。
 
 连通性探测在 MVP 中**默认关闭**：传入 `--probe` 也只会记录一条 `unknown` 状态的检查，报告当前激活的 base URL 并说明未发起任何网络请求。
 
@@ -272,7 +272,7 @@ Web 会话保存在 `~/.harness-switch/sessions.json`（同样是 `0600`），�
 | `GET` | `/api/doctor` | 只读诊断（`?probe=1` 包含默认关闭、不发网络请求的探测检查） |
 | `GET` | `/api/scan` | 五个工具磁盘上已有的 provider；只读，凭据以掩码返回 |
 | `POST` | `/api/scan/import` | 把选中的候选存成配置或凭据库条目；不改动工具本身的配置 |
-| `GET` | `/api/operations` | 操作收据，最新在前 |
+| `GET` | `/api/operations` | 操作收据，最新在前（`?harness=claude` 可按 Harness 过滤） |
 | `GET` | `/api/operations/:id` | 单条收据 |
 | `POST` | `/api/operations/:id/undo` | 把原生文件与「当前激活」一起退回该操作之前 |
 

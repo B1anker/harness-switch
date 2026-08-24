@@ -401,9 +401,9 @@ test('a referenced provider surfaces the 409 message', async () => {
 test('loading the doctor stores the reports and the update availability', async () => {
   responder = () => ({ status: 200, body: doctorResponse() });
 
-  await useAppStore.getState().loadDoctor();
+  await useAppStore.getState().loadDoctor('claude');
 
-  expect(requests[0]?.path).toBe('/api/doctor');
+  expect(requests[0]?.path).toBe('/api/doctor?harness=claude');
   expect(useAppStore.getState().doctor).toHaveLength(1);
   expect(useAppStore.getState().doctor?.[0]?.harness).toBe('claude');
   expect(useAppStore.getState().doctorUpdatedAvailable).toBe(true);

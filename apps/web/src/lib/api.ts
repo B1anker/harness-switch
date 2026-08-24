@@ -41,8 +41,8 @@ export function providerPath(id: string): string {
   return `${providersPath()}/${encodeURIComponent(id)}`;
 }
 
-export function doctorPath(): string {
-  return '/api/doctor';
+export function doctorPath(harnessId?: HarnessId | string): string {
+  return harnessId ? `/api/doctor?harness=${encodeURIComponent(harnessId)}` : '/api/doctor';
 }
 
 /** Drift reports for every harness, or a single harness when an id is given. */
@@ -68,8 +68,8 @@ export function scanImportPath(): string {
 }
 
 /** Receipts for completed operations, and the undo built on them. */
-export function operationsPath(): string {
-  return '/api/operations';
+export function operationsPath(harnessId?: HarnessId | string): string {
+  return harnessId ? `/api/operations?harness=${encodeURIComponent(harnessId)}` : '/api/operations';
 }
 
 export function operationUndoPath(id: string): string {

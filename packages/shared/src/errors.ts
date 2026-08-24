@@ -96,8 +96,7 @@ export type WarningCode = (typeof WARNING_CODES)[keyof typeof WARNING_CODES];
 export const DOCTOR_CODES = {
   installFound: 'doctor.check.installFound',
   installMissing: 'doctor.check.installMissing',
-  configDirPresent: 'doctor.check.configDirPresent',
-  configDirMissing: 'doctor.check.configDirMissing',
+  installNotRequired: 'doctor.check.installNotRequired',
   fileMissing: 'doctor.check.fileMissing',
   fileUnreadable: 'doctor.check.fileUnreadable',
   fileUnwritable: 'doctor.check.fileUnwritable',

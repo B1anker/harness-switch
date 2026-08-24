@@ -8,7 +8,14 @@ export function createOperationRoutes(services: InstantiationService): Hono {
   const app = new Hono();
   const journal = services.get(IJournalService);
 
-  app.get('/', (c) => c.json({ items: journal.list() } satisfies OperationsResponse));
+  app.get('/', (c) => {
+    const harnessParam = c.req.query('harness');
+    const items =
+      harnessParam && harnessParam.length > 0
+        ? journal.list().filter((item) => item.harness === harnessParam)
+        : journal.list();
+    return c.json({ items } satisfies OperationsResponse);
+  });
 
   app.get('/:id', (c) => c.json(journal.detail(decodeURIComponent(c.req.param('id')))));
 

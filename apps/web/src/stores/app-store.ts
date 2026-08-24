@@ -117,14 +117,14 @@ type AppState = {
   deleteProvider: (id: string) => Promise<void>;
   /** Reveals the stored key material; requires a server endpoint that returns it. */
   revealProvider: (id: string) => Promise<{ apiKey: string }>;
-  loadDoctor: () => Promise<void>;
+  loadDoctor: (harnessId: HarnessId) => Promise<void>;
   loadDrift: () => Promise<void>;
   reapplyDrift: (harnessId: HarnessId) => Promise<DriftFileState[]>;
   adoptDrift: (harnessId: HarnessId) => Promise<DriftAdoptResponse>;
   /** Reads what the five tools already have configured; never writes anything. */
   loadScan: () => Promise<void>;
   importScan: (selections: ScanImportSelection[]) => Promise<ScanImportResponse>;
-  loadOperations: () => Promise<void>;
+  loadOperations: (harnessId: HarnessId) => Promise<void>;
   undoOperation: (id: string) => Promise<void>;
 };
 
@@ -389,12 +389,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     return api<{ apiKey: string }>(`${providerPath(id)}/reveal`);
   },
 
-  loadDoctor: async () => {
+  loadDoctor: async (harnessId) => {
     set({ doctorLoading: true, doctorError: null });
     try {
-      const report = await api<DoctorResponse>(doctorPath());
+      const report = await api<DoctorResponse>(doctorPath(harnessId));
+      const previous = get().doctor ?? [];
+      const merged = [
+        ...previous.filter((item) => item.harness !== harnessId),
+        ...report.items.filter((item) => item.harness === harnessId),
+      ];
       set({
-        doctor: report.items,
+        doctor: merged,
         doctorUpdatedAvailable: report.updatedAvailable,
         doctorLoading: false,
       });
@@ -468,11 +473,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     return result;
   },
 
-  loadOperations: async () => {
+  loadOperations: async (harnessId) => {
     set({ operationsLoading: true, operationsError: null });
     try {
-      const data = await api<OperationsResponse>(operationsPath());
-      set({ operations: data.items, operationsLoading: false });
+      const data = await api<OperationsResponse>(operationsPath(harnessId));
+      const previous = get().operations ?? [];
+      const merged = [
+        ...previous.filter((item) => item.harness !== harnessId),
+        ...data.items.filter((item) => item.harness === harnessId),
+      ];
+      set({ operations: merged, operationsLoading: false });
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         set({ authenticated: false, operationsLoading: false, operations: [] });
@@ -489,7 +499,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const label =
       get().harnesses.find((item) => item.id === receipt.harness)?.label ?? receipt.harness;
     set({ notice: [{ key: 'operations.undone', params: { harness: label } }] });
-    await Promise.all([get().loadHarnesses(), get().loadBackups(), get().loadOperations()]);
+    await Promise.all([
+      get().loadHarnesses(),
+      get().loadBackups(),
+      get().loadOperations(receipt.harness),
+    ]);
   },
 
   setNotice: (notice) => set({ notice }),

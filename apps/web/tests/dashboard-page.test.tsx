@@ -64,7 +64,7 @@ test('switches the visible harness with the app tabs', () => {
   expect(within(screen.getByRole('tabpanel')).queryByText('claude-main')).toBeNull();
 });
 
-test('the header opens the vault and the doctor dialogs', () => {
+test('the header opens the vault dialog', () => {
   setDashboardState();
 
   render(<DashboardPage />);
@@ -78,17 +78,15 @@ test('the header opens the vault and the doctor dialogs', () => {
   expect(screen.getByRole('heading', { name: '从其他用户同步' })).toBeInTheDocument();
   expect(screen.getByText(/复制到 root/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-  fireEvent.click(screen.getByRole('button', { name: '诊断' }));
-  expect(screen.getByRole('heading', { name: '诊断' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 });
 
-test('the right column shows the drift card for the selected harness', () => {
+test('the right column shows the doctor and operations cards for the selected harness', () => {
   setDashboardState();
 
   render(<DashboardPage />);
 
-  expect(screen.getByText('配置漂移')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '查看差异' })).toBeDisabled();
+  expect(screen.getByText('诊断')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '查看差异' })).toBeNull();
+  expect(screen.getByText('操作记录')).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: '查看详情' })).toHaveLength(2);
 });

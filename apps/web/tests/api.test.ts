@@ -6,6 +6,7 @@ import {
   driftAdoptPath,
   driftPath,
   driftReapplyPath,
+  operationsPath,
   profilePath,
   profilesCollectionPath,
   providerPath,
@@ -43,6 +44,9 @@ test('provider vault, drift and doctor helpers build the api paths', () => {
   expect(driftReapplyPath('claude')).toBe('/api/drift/claude/reapply');
   expect(driftAdoptPath('claude')).toBe('/api/drift/claude/adopt');
   expect(doctorPath()).toBe('/api/doctor');
+  expect(doctorPath('claude')).toBe('/api/doctor?harness=claude');
+  expect(operationsPath()).toBe('/api/operations');
+  expect(operationsPath('claude')).toBe('/api/operations?harness=claude');
 });
 
 test('every harness has presets so the quick-fill row never renders empty', () => {

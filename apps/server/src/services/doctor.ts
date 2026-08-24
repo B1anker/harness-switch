@@ -1,10 +1,10 @@
 import { accessSync, constants, statSync } from 'node:fs';
-import { dirname } from 'node:path';
 import {
   DOCTOR_CODES,
   type DoctorCheck,
   type DoctorReport,
   type DoctorResponse,
+  HARNESS_LABELS,
   type HarnessId,
   type MessageParams,
 } from '@seaveyon/harness-switch-shared';
@@ -32,12 +32,16 @@ export interface IDoctorService {
 
 export const IDoctorService = createDecorator<IDoctorService>('doctorService');
 
-const BIN_NAMES: Record<HarnessId, string> = {
+/**
+ * PATH CLI names for harnesses that ship as interactive CLIs. Omitted harnesses
+ * (currently DeepSeek Harness) are web-service deployments: install is judged by
+ * config dirs/files below, not by a global `dsh` on PATH.
+ */
+const BIN_NAMES: Partial<Record<HarnessId, string>> = {
   claude: 'claude',
   codex: 'codex',
   kimi: 'kimi',
   pi: 'pi',
-  dsh: 'dsh',
 };
 
 @inject(
@@ -78,43 +82,36 @@ export class DoctorService implements IDoctorService {
   private harnessChecks(harness: HarnessId, probe: boolean): DoctorCheck[] {
     const checks: DoctorCheck[] = [];
 
-    // Installation: the tool's own CLI must exist on PATH.
+    // Installation: PATH CLIs must be findable; web-service harnesses skip this.
     const bin = BIN_NAMES[harness];
-    checks.push(
-      this.commandExists(bin)
-        ? ok(`${harness}.install`, `已找到可执行文件 ${bin}`, DOCTOR_CODES.installFound, { bin })
-        : error(
-            `${harness}.install`,
-            `未找到可执行文件 ${bin}（PATH 中不存在），工具可能未安装`,
-            DOCTOR_CODES.installMissing,
-            { bin },
-          ),
-    );
-
-    const targets = this.adapters.get(harness).targets();
-
-    // Config dir: every target's directory must exist so files can be written.
-    for (const target of targets) {
-      const dir = dirname(target.path);
-      const present = this.files.exists(dir);
+    if (bin === undefined) {
+      const label = HARNESS_LABELS[harness];
       checks.push(
-        present
-          ? ok(
-              `${harness}.configDir.${target.key}`,
-              `${target.label} 所在目录存在（${dir}）`,
-              DOCTOR_CODES.configDirPresent,
-              { target: target.label, dir },
-            )
+        ok(
+          `${harness}.install`,
+          `${label} 以 Web 服务部署，不要求 PATH 上有 CLI`,
+          DOCTOR_CODES.installNotRequired,
+          { harness: label },
+        ),
+      );
+    } else {
+      checks.push(
+        this.commandExists(bin)
+          ? ok(`${harness}.install`, `已找到可执行文件 ${bin}`, DOCTOR_CODES.installFound, { bin })
           : error(
-              `${harness}.configDir.${target.key}`,
-              `${target.label} 所在目录不存在（${dir}），无法写入配置`,
-              DOCTOR_CODES.configDirMissing,
-              { target: target.label, dir },
+              `${harness}.install`,
+              `未找到可执行文件 ${bin}（PATH 中不存在），工具可能未安装`,
+              DOCTOR_CODES.installMissing,
+              { bin },
             ),
       );
     }
 
+    const targets = this.adapters.get(harness).targets();
+
     // Files: existence, readability, writability and secret-file permissions.
+    // Parent directories are not checked separately — writes already ensureDir, and a
+    // readable/writable file implies its directory exists.
     for (const target of targets) {
       const path = target.path;
       const exists = this.files.exists(path);

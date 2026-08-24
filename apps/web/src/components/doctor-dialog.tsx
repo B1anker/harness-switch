@@ -3,7 +3,7 @@ import {
   type DoctorCheckStatus,
   type DoctorReport,
   HARNESS_LABELS,
-  isHarnessId,
+  type HarnessId,
 } from '@seaveyon/harness-switch-shared';
 import { RefreshCcw, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 type DoctorDialogProps = {
+  harnessId: HarnessId;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -35,10 +36,9 @@ const STATUS_DOT: Record<DoctorCheckStatus, string> = {
 };
 
 /**
- * Doctor: one-shot local health report per harness. Each check carries a status
- * dot and a label; re-running rebuilds the whole report.
+ * Doctor: one-shot local health report for a single harness.
  */
-export function DoctorDialog({ open, onOpenChange }: DoctorDialogProps) {
+export function DoctorDialog({ harnessId, open, onOpenChange }: DoctorDialogProps) {
   const { t } = useTranslation();
   const doctor = useAppStore((state) => state.doctor);
   const doctorLoading = useAppStore((state) => state.doctorLoading);
@@ -46,81 +46,79 @@ export function DoctorDialog({ open, onOpenChange }: DoctorDialogProps) {
   const doctorUpdatedAvailable = useAppStore((state) => state.doctorUpdatedAvailable);
   const loadDoctor = useAppStore((state) => state.loadDoctor);
 
-  useEffect(() => {
-    if (open && doctor === null) {
-      void loadDoctor();
-    }
-  }, [open, doctor, loadDoctor]);
+  const report = doctor?.find((item) => item.harness === harnessId) ?? null;
 
-  const reports = doctor ?? [];
-  const summary = summarize(reports);
+  useEffect(() => {
+    if (open && report === null) {
+      void loadDoctor(harnessId);
+    }
+  }, [open, report, harnessId, loadDoctor]);
+
+  const summary = summarize(report);
+  const label = HARNESS_LABELS[harnessId];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>{t('doctor.title')}</DialogTitle>
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="shrink-0 space-y-1.5 px-6 pb-4 pt-6 pr-12">
+          <DialogTitle>{t('doctor.titleFor', { harness: label })}</DialogTitle>
           <DialogDescription>{t('doctor.intro')}</DialogDescription>
         </DialogHeader>
 
-        {doctorLoading && reports.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t('doctor.checking')}</p>
-        ) : null}
-        {doctorError ? (
-          <p className="text-sm text-destructive">{lineText(t, doctorError)}</p>
-        ) : null}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6">
+          {doctorLoading && report === null ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{t('doctor.checking')}</p>
+          ) : null}
+          {doctorError ? (
+            <p className="text-sm text-destructive">{lineText(t, doctorError)}</p>
+          ) : null}
 
-        {reports.length > 0 ? (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              {summary.ok > 0 ? (
-                <Badge variant="secondary">{t('doctor.countOk', { count: summary.ok })}</Badge>
-              ) : null}
-              {summary.warn > 0 ? (
-                <Badge
-                  variant="outline"
-                  className="border-amber-500/30 text-amber-700 dark:text-amber-300"
-                >
-                  {t('doctor.countWarn', { count: summary.warn })}
-                </Badge>
-              ) : null}
-              {summary.error > 0 ? (
-                <Badge variant="destructive">
-                  {t('doctor.countError', { count: summary.error })}
-                </Badge>
-              ) : null}
-              {summary.unknown > 0 ? (
-                <Badge variant="outline">
-                  {t('doctor.countUnknown', { count: summary.unknown })}
-                </Badge>
-              ) : null}
-              {doctorUpdatedAvailable ? (
-                <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                  <Sparkles className="size-3.5" />
-                  {t('doctor.updateAvailable')}
-                </span>
-              ) : null}
-            </div>
-
-            {reports.map((report) => (
-              <section key={report.harness}>
-                <h3 className="mb-2 text-sm font-semibold">
-                  {harnessLabel(report.harness)}
-                  <span className="ml-2 font-mono text-[11px] font-normal text-muted-foreground">
-                    {report.harness}
+          {report ? (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {summary.ok > 0 ? (
+                  <Badge variant="secondary">{t('doctor.countOk', { count: summary.ok })}</Badge>
+                ) : null}
+                {summary.warn > 0 ? (
+                  <Badge
+                    variant="outline"
+                    className="border-amber-500/30 text-amber-700 dark:text-amber-300"
+                  >
+                    {t('doctor.countWarn', { count: summary.warn })}
+                  </Badge>
+                ) : null}
+                {summary.error > 0 ? (
+                  <Badge variant="destructive">
+                    {t('doctor.countError', { count: summary.error })}
+                  </Badge>
+                ) : null}
+                {summary.unknown > 0 ? (
+                  <Badge variant="outline">
+                    {t('doctor.countUnknown', { count: summary.unknown })}
+                  </Badge>
+                ) : null}
+                {doctorUpdatedAvailable ? (
+                  <span className="ml-auto flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                    <Sparkles className="size-3.5" />
+                    {t('doctor.updateAvailable')}
                   </span>
-                </h3>
-                <CheckList checks={report.checks} />
-              </section>
-            ))}
-          </>
-        ) : null}
-        {reports.length === 0 && !doctorLoading && !doctorError ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t('doctor.notRun')}</p>
-        ) : null}
+                ) : null}
+              </div>
 
-        <DialogFooter>
-          <Button variant="outline" disabled={doctorLoading} onClick={() => void loadDoctor()}>
+              <CheckList checks={report.checks} />
+            </>
+          ) : null}
+          {report === null && !doctorLoading && !doctorError ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{t('doctor.notRun')}</p>
+          ) : null}
+        </div>
+
+        <DialogFooter className="shrink-0 px-6 py-4">
+          <Button
+            variant="outline"
+            disabled={doctorLoading}
+            onClick={() => void loadDoctor(harnessId)}
+          >
             <RefreshCcw className={doctorLoading ? 'animate-spin' : undefined} />
             {t('doctor.rerun')}
           </Button>
@@ -168,18 +166,13 @@ function checkKey(check: DoctorCheck): string {
   return check.code ?? 'doctor.unknownCheck';
 }
 
-function harnessLabel(harness: string): string {
-  return isHarnessId(harness) ? HARNESS_LABELS[harness] : harness;
-}
-
 type Summary = { ok: number; warn: number; error: number; unknown: number };
 
-function summarize(reports: DoctorReport[]): Summary {
+function summarize(report: DoctorReport | null): Summary {
   const summary: Summary = { ok: 0, warn: 0, error: 0, unknown: 0 };
-  for (const report of reports) {
-    for (const check of report.checks) {
-      summary[check.status]++;
-    }
+  if (!report) return summary;
+  for (const check of report.checks) {
+    summary[check.status]++;
   }
   return summary;
 }

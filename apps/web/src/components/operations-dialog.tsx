@@ -1,4 +1,4 @@
-import type { OperationReceipt, OperationState } from '@seaveyon/harness-switch-shared';
+import type { HarnessId, OperationReceipt, OperationState } from '@seaveyon/harness-switch-shared';
 import { HARNESS_LABELS } from '@seaveyon/harness-switch-shared';
 import { Loader2, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -17,6 +17,7 @@ import { errorLineWith, lineText, type MessageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
 type OperationsDialogProps = {
+  harnessId: HarnessId;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -26,7 +27,7 @@ type OperationsDialogProps = {
  * whole switch" rather than "restore some files": the native config and the recorded
  * active profile go back together.
  */
-export function OperationsDialog({ open, onOpenChange }: OperationsDialogProps) {
+export function OperationsDialog({ harnessId, open, onOpenChange }: OperationsDialogProps) {
   const { locale } = useI18n();
   const { t } = useTranslation();
   const operations = useAppStore((state) => state.operations);
@@ -38,12 +39,15 @@ export function OperationsDialog({ open, onOpenChange }: OperationsDialogProps) 
   const [undoing, setUndoing] = useState(false);
   const [error, setError] = useState<MessageLine | null>(null);
 
+  const items = operations?.filter((item) => item.harness === harnessId) ?? [];
+  const label = HARNESS_LABELS[harnessId];
+
   useEffect(() => {
     if (open) {
       setError(null);
-      void loadOperations();
+      void loadOperations(harnessId);
     }
-  }, [open, loadOperations]);
+  }, [open, harnessId, loadOperations]);
 
   async function confirmUndo(): Promise<void> {
     if (!pending) {
@@ -64,14 +68,14 @@ export function OperationsDialog({ open, onOpenChange }: OperationsDialogProps) 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[85vh] w-[min(52rem,calc(100vw-2rem))] max-w-2xl flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>{t('operations.title')}</DialogTitle>
+        <DialogContent className="flex max-h-[85vh] w-[min(52rem,calc(100vw-2rem))] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 space-y-1.5 px-6 pb-4 pt-6 pr-12">
+            <DialogTitle>{t('operations.titleFor', { harness: label })}</DialogTitle>
             <DialogDescription>{t('operations.intro')}</DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {loading ? (
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
+            {loading && items.length === 0 ? (
               <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
                 {t('operations.loading')}
@@ -80,20 +84,19 @@ export function OperationsDialog({ open, onOpenChange }: OperationsDialogProps) 
             {loadError ? (
               <p className="py-6 text-sm text-destructive">{lineText(t, loadError)}</p>
             ) : null}
-            {operations?.length === 0 ? (
+            {!loading && items.length === 0 ? (
               <p className="py-10 text-center text-sm text-muted-foreground">
                 {t('operations.empty')}
               </p>
             ) : null}
-            {operations && operations.length > 0 ? (
+            {items.length > 0 ? (
               <ul className="divide-y rounded-xl border">
-                {operations.map((receipt) => (
+                {items.map((receipt) => (
                   <li key={receipt.id} className="flex items-center gap-3 px-3 py-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-medium">
-                          {t(`operations.kind.${receipt.kind}`)} ·{' '}
-                          {HARNESS_LABELS[receipt.harness] ?? receipt.harness}/{receipt.profile}
+                          {t(`operations.kind.${receipt.kind}`)} · {receipt.profile}
                         </span>
                         <Badge variant={badgeVariant(receipt.state)}>
                           {t(`operations.state.${receipt.state}`)}
@@ -123,6 +126,10 @@ export function OperationsDialog({ open, onOpenChange }: OperationsDialogProps) 
               </ul>
             ) : null}
           </div>
+
+          <DialogFooter className="shrink-0 px-6 py-4">
+            <Button onClick={() => onOpenChange(false)}>{t('operations.close')}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -3,26 +3,23 @@ import {
   ArrowRightLeft,
   ChevronDown,
   FileSearch,
-  History,
   KeyRound,
   LogOut,
   Plus,
   RefreshCw,
   Server,
   SlidersHorizontal,
-  Stethoscope,
   UserRound,
 } from 'lucide-react';
 import { useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
-import { DoctorDialog } from '@/components/doctor-dialog';
-import { DriftPanel } from '@/components/drift-panel';
+import { DoctorPanel } from '@/components/doctor-panel';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
 import { ImportWizardDialog } from '@/components/import-wizard-dialog';
 import { LanguageToggle } from '@/components/language-toggle';
 import { NoticeToast } from '@/components/notice-toast';
-import { OperationsDialog } from '@/components/operations-dialog';
+import { OperationsPanel } from '@/components/operations-panel';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -61,10 +58,8 @@ export function DashboardPage() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
-  const [doctorOpen, setDoctorOpen] = useState(false);
   const [userSyncOpen, setUserSyncOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [operationsOpen, setOperationsOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
@@ -115,10 +110,6 @@ export function DashboardPage() {
               <FileSearch />
               <span className="hidden lg:inline">{t('nav.importExisting')}</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => setOperationsOpen(true)}>
-              <History />
-              <span className="hidden lg:inline">{t('nav.operations')}</span>
-            </Button>
             <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft />
               <span className="hidden sm:inline">{t('nav.transfer')}</span>
@@ -126,10 +117,6 @@ export function DashboardPage() {
             <Button variant="outline" size="sm" onClick={() => setVaultOpen(true)}>
               <KeyRound />
               <span className="hidden sm:inline">{t('nav.vault')}</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setDoctorOpen(true)}>
-              <Stethoscope />
-              <span className="hidden sm:inline">{t('nav.doctor')}</span>
             </Button>
             <LanguageToggle />
             <ThemeToggle />
@@ -202,10 +189,8 @@ export function DashboardPage() {
       ) : null}
       <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <ProviderVaultDialog open={vaultOpen} onOpenChange={setVaultOpen} />
-      <DoctorDialog open={doctorOpen} onOpenChange={setDoctorOpen} />
       <UserSyncDialog open={userSyncOpen} onOpenChange={setUserSyncOpen} />
       <ImportWizardDialog open={importOpen} onOpenChange={setImportOpen} />
-      <OperationsDialog open={operationsOpen} onOpenChange={setOperationsOpen} />
       <NoticeToast />
     </div>
   );
@@ -349,7 +334,9 @@ function ContextPanel({
           </div>
         </section>
 
-        <DriftPanel harness={harness} />
+        <DoctorPanel harness={harness} />
+
+        <OperationsPanel harness={harness} />
 
         <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
           <h3 className="font-semibold">{t('backup.latest')}</h3>

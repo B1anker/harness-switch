@@ -107,7 +107,7 @@ PREPARED → APPLYING → METADATA_COMMITTED → COMMITTED
 
 On startup the service settles whatever it finds, for every account it may manage. The boundary that matters is `METADATA_COMMITTED`: by then everything the operation set out to change is already on disk, so it rolls forward to `COMMITTED` rather than undoing a switch the user saw succeed. Anything still at `APPLYING` may be half written and is rolled back whole. A rollback that itself fails is recorded as `DEGRADED` and surfaced in the UI for a human.
 
-Writing `active.json` now happens inside the same transaction as the native files, so the config on disk and the record of what is live can no longer disagree. Each record doubles as a receipt: the files it changed, the backup id, the target user and where it got to. The **Operation log** in the top bar lists them and offers a one-click undo that puts the native files *and* `active.json` back together, rather than just restoring a few files. The undo takes its own snapshot first. Once a backup has been rotated away, its receipt is automatically marked as no longer undoable.
+Writing `active.json` now happens inside the same transaction as the native files, so the config on disk and the record of what is live can no longer disagree. Each record doubles as a receipt: the files it changed, the backup id, the target user and where it got to. Each harness’s right-hand **Operation history** card lists them and offers a one-click undo that puts the native files *and* `active.json` back together, rather than just restoring a few files. The undo takes its own snapshot first. Once a backup has been rotated away, its receipt is automatically marked as no longer undoable.
 
 `HSW_JOURNAL_RETAIN` controls how many receipts are kept; the default is 50.
 
@@ -142,7 +142,7 @@ The **Provider Vault** stores an API key once under a named entry with one or mo
 
 ### Configuration drift
 
-The dashboard's **Configuration drift** panel compares what the active profile would render against the actual files on disk, using parsed-value comparison for JSON/TOML/YAML so a re-render that only reorders keys does not count as drift. Each file is reported as:
+The dashboard **Diagnostics** panel also compares what the active profile would render against the actual files on disk, using parsed-value comparison for JSON/TOML/YAML so a re-render that only reorders keys does not count as drift. Each file is reported as:
 
 - `in-sync` — disk matches what the profile would write,
 - `drifted` — disk differs from what the profile would write,
@@ -157,7 +157,7 @@ Two repair actions are offered per harness:
 
 ### Diagnostics (Doctor)
 
-The **Diagnostics (Doctor)** panel runs read-only checks per harness: whether the tool's CLI is on `PATH` (`install`), whether each target's config directory exists (`configDir`), whether each target file exists and is readable/writable (`files`, with a warning when a config file holding credentials is group/other-readable), whether the files parse (`parse`), and whether live state drifts from the active profile (`drift`). A global update check reports whether a newer release exists (`updatedAvailable`).
+**Diagnostics (Doctor)** run per harness from that tool’s right-hand column: for CLI-delivered tools, whether the executable is on `PATH` (`install`; skipped for web-service harnesses such as DeepSeek Harness), whether each target file exists and is readable/writable (`files`, with a warning when a config file holding credentials is group/other-readable), whether the files parse (`parse`), and whether live state drifts from the active profile (`drift`). A global update check reports whether a newer release exists (`updatedAvailable`).
 
 The connectivity probe is **disabled by default in the MVP**: passing `--probe` only records a `unknown`-status check that reports the active base URL and explains that no network request is made.
 
@@ -273,7 +273,7 @@ The UI is a React SPA. Authentication uses an HttpOnly `hsw_session` cookie.
 | `GET` | `/api/doctor` | Read-only diagnostics (`?probe=1` includes the MVP-disabled, non-network probe check) |
 | `GET` | `/api/scan` | Providers the five tools already have on disk; read-only, credentials masked |
 | `POST` | `/api/scan/import` | Save selected candidates as profiles or vault entries; the tools' own config is untouched |
-| `GET` | `/api/operations` | Operation receipts, newest first |
+| `GET` | `/api/operations` | Operation receipts, newest first (`?harness=claude` to filter) |
 | `GET` | `/api/operations/:id` | One receipt |
 | `POST` | `/api/operations/:id/undo` | Put the native files and the active profile back to before that operation |
 

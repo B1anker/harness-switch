@@ -89,17 +89,16 @@ describe('doctor', () => {
     expect(checksOf(report, 'claude', 'claude.install')[0]?.status).toBe('ok');
   });
 
-  test('flags a missing config directory as an error', async () => {
-    fakeBin('claude');
-    const report = await doctor().run({ harness: 'claude' });
-    const check = checksOf(report, 'claude', 'claude.configDir.settings')[0];
-    expect(check?.status).toBe('error');
-    expect(messageOf(check)).toContain('不存在');
+  test('skips PATH CLI install check for web-service harnesses', async () => {
+    const report = await doctor().run({ harness: 'dsh' });
+    const check = checksOf(report, 'dsh', 'dsh.install')[0];
+    expect(check?.status).toBe('ok');
+    expect(check?.code).toBe('doctor.check.installNotRequired');
+    expect(messageOf(check)).toContain('Web 服务');
   });
 
   test('flags a missing target file as a files warning', async () => {
     fakeBin('claude');
-    mkdirSync(join(homeDir, '.claude'), { recursive: true });
     const report = await doctor().run({ harness: 'claude' });
     const check = checksOf(report, 'claude', 'claude.files.settings')[0];
     expect(check?.status).toBe('warn');

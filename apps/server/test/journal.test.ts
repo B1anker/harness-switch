@@ -125,6 +125,24 @@ describe('operation journal', () => {
     expect(items[0]?.user).toBeTruthy();
   });
 
+  test('the receipt list can be filtered by harness', async () => {
+    const context = await boot();
+    await activateProfile(context, 'first', 'https://one.example.com');
+
+    const response = await context.app.request('/api/operations?harness=claude', {
+      headers: { Cookie: context.cookie },
+    });
+    expect(response.status).toBe(200);
+    const { items } = (await response.json()) as { items: OperationReceipt[] };
+    expect(items).toHaveLength(1);
+    expect(items[0]?.harness).toBe('claude');
+
+    const empty = await context.app.request('/api/operations?harness=codex', {
+      headers: { Cookie: context.cookie },
+    });
+    expect(((await empty.json()) as { items: OperationReceipt[] }).items).toHaveLength(0);
+  });
+
   test('undo puts the live file and the active pointer back together', async () => {
     const context = await boot();
     await activateProfile(context, 'first', 'https://one.example.com');
