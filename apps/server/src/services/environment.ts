@@ -131,7 +131,10 @@ export class EnvironmentService implements IEnvironmentService {
   get writeRoots(): string[] {
     // Home already covers every default location. An env override is set by whoever
     // launched the service, so it stays trusted even when it points outside home.
-    const roots = [this.homeDir, this.dataDir, this.managerDataDir];
+    // Sessions always live under the service owner's data directory. Check it first:
+    // a request scoped to an untraversable account (for example /root when the
+    // server runs as a regular user) must not prevent that session write.
+    const roots = [this.managerDataDir, this.homeDir, this.dataDir];
     for (const home of Object.values(this.harnessHomes)) {
       if (!isInside(this.homeDir, home)) {
         roots.push(home);
