@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ERROR_CODES, USER_BLOCK_CODES } from '@seaveyon/harness-switch-shared';
@@ -381,6 +389,37 @@ describe('local Unix users', () => {
     });
     expect(response.status).toBe(400);
   });
+
+  // Root traverses a mode-000 directory, so the EACCES this guards against cannot be
+  // staged; the ordering it checks only matters for an unprivileged service anyway.
+  test.skipIf((process.getuid?.() ?? 0) === 0)(
+    'manager session writes survive a selected user whose home cannot be traversed',
+    () => {
+      const services = createServices();
+      const environment = services.get(IEnvironmentService);
+      const files = services.get(IFileService);
+      environment.ensureDataDir();
+      const blocked: LocalUser = {
+        username: 'unreadable-test',
+        uid: process.getuid?.() ?? 0,
+        gid: process.getgid?.() ?? 0,
+        homeDir: join(rootDir, 'unreadable'),
+      };
+      mkdirSync(blocked.homeDir, { recursive: true });
+      chmodSync(blocked.homeDir, 0o000);
+      try {
+        // `assertManaged` resolves each write root, and resolving a path under an
+        // untraversable home throws EACCES rather than returning a non-match. The
+        // manager's own data directory has to be tested before the selected user's,
+        // or the session write dies on an account it never needed to look at.
+        environment.runAsUser(blocked, () => {
+          expect(() => files.assertManaged(environment.managerFiles.sessions)).not.toThrow();
+        });
+      } finally {
+        chmodSync(blocked.homeDir, 0o700);
+      }
+    },
+  );
 
   test('new files use the selected target user ownership metadata', () => {
     const services = createServices();
