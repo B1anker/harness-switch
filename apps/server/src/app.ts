@@ -114,7 +114,7 @@ export function createApp(services: InstantiationService): Hono {
         error.status as 400,
       );
     }
-    log.error(`unhandled error on ${request}: ${describe(error)}`, error);
+    log.error(`unhandled error on ${request}`, error);
     return c.json({ error: 'internal server error' }, 500);
   });
 
@@ -143,21 +143,4 @@ function contentType(path: string): string {
     default:
       return 'application/octet-stream';
   }
-}
-
-/**
- * A one-line summary of a thrown value. Node's errno errors carry the facts that
- * actually identify the failure (`EACCES`, the syscall, the path) outside `message`,
- * and a non-Error throw has no `stack` for the logger to fall back on.
- */
-function describe(error: unknown): string {
-  if (!(error instanceof Error)) {
-    return `non-error thrown: ${String(error)}`;
-  }
-  const errno = error as NodeJS.ErrnoException;
-  const parts = [error.name, error.message];
-  if (errno.code) parts.push(`code=${errno.code}`);
-  if (errno.syscall) parts.push(`syscall=${errno.syscall}`);
-  if (errno.path) parts.push(`path=${errno.path}`);
-  return parts.join(' ');
 }
