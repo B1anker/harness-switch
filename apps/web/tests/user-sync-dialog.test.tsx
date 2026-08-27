@@ -9,8 +9,22 @@ beforeEach(() => {
   useAppStore.setState({
     currentUser: 'owner',
     users: [
-      { username: 'owner', uid: 1000, gid: 1000, homeDir: '/home/owner', current: true },
-      { username: 'source', uid: 1001, gid: 1001, homeDir: '/home/source', current: false },
+      {
+        username: 'owner',
+        uid: 1000,
+        gid: 1000,
+        homeDir: '/home/owner',
+        current: true,
+        manageable: true,
+      },
+      {
+        username: 'source',
+        uid: 1001,
+        gid: 1001,
+        homeDir: '/home/source',
+        current: false,
+        manageable: true,
+      },
     ],
     loadHarnesses: async () => {},
     loadProviders: async () => {},

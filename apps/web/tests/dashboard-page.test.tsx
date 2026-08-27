@@ -27,8 +27,15 @@ function setDashboardState() {
     backups: [],
     currentUser: 'root',
     users: [
-      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true },
-      { username: 'alice', uid: 1000, gid: 1000, homeDir: '/home/alice', current: false },
+      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
+      {
+        username: 'alice',
+        uid: 1000,
+        gid: 1000,
+        homeDir: '/home/alice',
+        current: false,
+        manageable: true,
+      },
     ],
     usersLoading: false,
     notice: null,
@@ -84,6 +91,89 @@ test('the header opens the vault dialog', () => {
   expect(screen.getByRole('heading', { name: '从其他用户同步' })).toBeInTheDocument();
   expect(screen.getByText(/复制到 root/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+});
+
+test('an unmanageable user cannot be selected and says why', () => {
+  setDashboardState();
+  let selected = '';
+  useAppStore.setState({
+    users: [
+      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
+      {
+        username: 'alice',
+        uid: 1000,
+        gid: 1000,
+        homeDir: '/home/alice',
+        current: false,
+        manageable: false,
+        blockCode: 'user.block.homeUnsearchable',
+        blockParams: { username: 'alice', home: '/home/alice' },
+        blockReason: 'server prose',
+      },
+    ],
+    switchUser: async (username: string) => {
+      selected = username;
+    },
+  });
+
+  render(<DashboardPage />);
+  fireEvent.click(screen.getByRole('button', { name: '当前本地用户' }));
+
+  const entry = screen.getByRole('menuitemradio', { name: /alice/ });
+  expect(entry).toBeDisabled();
+  // Short and path-free so the narrow menu cannot wrap; the full server prose with the
+  // directory stays available as the tooltip.
+  expect(entry).toHaveTextContent('没有权限访问');
+  expect(entry.textContent ?? '').not.toContain('/home/alice');
+  expect(entry).toHaveAttribute('title', 'server prose');
+  // A row that cannot be picked must not light up under the cursor.
+  expect(entry.className).not.toContain('hover:bg-accent');
+  expect(entry.className).toContain('cursor-default');
+
+  fireEvent.click(entry);
+  expect(selected).toBe('');
+});
+
+test('a selectable user keeps a pointer and hover state', () => {
+  setDashboardState();
+
+  render(<DashboardPage />);
+  fireEvent.click(screen.getByRole('button', { name: '当前本地用户' }));
+
+  const entry = screen.getByRole('menuitemradio', { name: 'alice' });
+  expect((entry as HTMLButtonElement).disabled).toBe(false);
+  expect(entry.className).toContain('cursor-pointer');
+  expect(entry.className).toContain('hover:bg-accent');
+  // The current user is not a target, so it gets neither.
+  const current = screen.getByRole('menuitemradio', { name: 'root' });
+  expect(current).toBeDisabled();
+  expect(current.className).not.toContain('hover:bg-accent');
+});
+
+test('a user whose block code this build does not know falls back to server prose', () => {
+  setDashboardState();
+  useAppStore.setState({
+    users: [
+      { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
+      {
+        username: 'alice',
+        uid: 1000,
+        gid: 1000,
+        homeDir: '/home/alice',
+        current: false,
+        manageable: false,
+        blockCode: 'user.block.inventedLater',
+        blockReason: '来自服务端的原因',
+      },
+    ],
+  });
+
+  render(<DashboardPage />);
+  fireEvent.click(screen.getByRole('button', { name: '当前本地用户' }));
+
+  const entry = screen.getByRole('menuitemradio', { name: /alice/ });
+  expect(entry).toBeDisabled();
+  expect(entry).toHaveTextContent('来自服务端的原因');
 });
 
 test('the right column shows the doctor and operations cards for the selected harness', () => {

@@ -416,7 +416,15 @@
       "sourceEqualsTarget": "源用户与目标用户相同"
     },
     "user": {
-      "notManageable": "用户 {{username}} 不可管理"
+      "notManageable": "用户 {{username}} 不可管理",
+      "notSwitchable": "无法切换到用户 {{username}}",
+      "block": {
+        "homeUnsearchable": "没有权限访问",
+        "homeUnwritable": "没有权限写入",
+        "storeInaccessible": "配置目录不可写",
+        "ownershipRequiresRoot": "需要以 root 运行",
+        "homeMissing": "主目录不存在"
+      }
     },
     "storage": {
       "unreadable": "无法读取 {{file}}",

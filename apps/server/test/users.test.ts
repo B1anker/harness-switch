@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ERROR_CODES, USER_BLOCK_CODES } from '@seaveyon/harness-switch-shared';
 import { createApp } from '../src/app';
 import { createServices } from '../src/bootstrap';
 import { IAuthService } from '../src/services/auth';
@@ -46,6 +55,41 @@ describe('local Unix users', () => {
     ).toBe(peer.username);
     expect((await json(app, '/api/users', firstCookie)).currentUser).toBe(peer.username);
     expect((await json(app, '/api/users', secondCookie)).currentUser).toBe(owner.username);
+  });
+
+  test('refuses to switch to a user whose files this process cannot manage', async () => {
+    const { app, firstCookie, services, owner } = await setup();
+    const users = services.get(IUserService);
+    // A peer with no home on disk: the manager could not create its store.
+    const stranger: LocalUser = {
+      username: 'stranger-test',
+      uid: owner.uid,
+      gid: owner.gid,
+      homeDir: join(rootDir, 'stranger-missing'),
+    };
+    users.list = () => [owner, stranger];
+
+    const listed = await json(app, '/api/users', firstCookie);
+    expect(listed.items).toMatchObject([
+      { username: owner.username, manageable: true },
+      { username: stranger.username, manageable: false, blockCode: USER_BLOCK_CODES.homeMissing },
+    ]);
+    // The reason travels as prose for the CLI and as params for the web UI.
+    const blocked = listed.items[1];
+    expect(blocked.blockReason).toContain(stranger.homeDir);
+    expect(blocked.blockParams).toMatchObject({ home: stranger.homeDir });
+
+    const response = await app.request(`/api/users/${stranger.username}/select`, {
+      method: 'POST',
+      headers: { Cookie: firstCookie },
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: ERROR_CODES.userNotSwitchable,
+      params: { username: stranger.username },
+    });
+    // The refusal must not have moved the session.
+    expect((await json(app, '/api/users', firstCookie)).currentUser).toBe(owner.username);
   });
 
   test('copies profiles and vault credentials but not active state', async () => {
@@ -346,6 +390,37 @@ describe('local Unix users', () => {
     expect(response.status).toBe(400);
   });
 
+  // Root traverses a mode-000 directory, so the EACCES this guards against cannot be
+  // staged; the ordering it checks only matters for an unprivileged service anyway.
+  test.skipIf((process.getuid?.() ?? 0) === 0)(
+    'manager session writes survive a selected user whose home cannot be traversed',
+    () => {
+      const services = createServices();
+      const environment = services.get(IEnvironmentService);
+      const files = services.get(IFileService);
+      environment.ensureDataDir();
+      const blocked: LocalUser = {
+        username: 'unreadable-test',
+        uid: process.getuid?.() ?? 0,
+        gid: process.getgid?.() ?? 0,
+        homeDir: join(rootDir, 'unreadable'),
+      };
+      mkdirSync(blocked.homeDir, { recursive: true });
+      chmodSync(blocked.homeDir, 0o000);
+      try {
+        // `assertManaged` resolves each write root, and resolving a path under an
+        // untraversable home throws EACCES rather than returning a non-match. The
+        // manager's own data directory has to be tested before the selected user's,
+        // or the session write dies on an account it never needed to look at.
+        environment.runAsUser(blocked, () => {
+          expect(() => files.assertManaged(environment.managerFiles.sessions)).not.toThrow();
+        });
+      } finally {
+        chmodSync(blocked.homeDir, 0o700);
+      }
+    },
+  );
+
   test('new files use the selected target user ownership metadata', () => {
     const services = createServices();
     const environment = services.get(IEnvironmentService);
@@ -376,6 +451,9 @@ async function setup() {
     gid: owner.gid,
     homeDir: join(rootDir, 'alice'),
   };
+  // The access probe reports an account with no home as unmanageable, so the peer needs
+  // a real directory to stand in for a switchable second user.
+  mkdirSync(peer.homeDir, { recursive: true });
   const users = services.get(IUserService);
   users.list = () => [owner, peer];
   const app = createApp(services);

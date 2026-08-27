@@ -50,7 +50,9 @@ export function UserSyncDialog({
   const loadProviders = useAppStore((state) => state.loadProviders);
   const setNotice = useAppStore((state) => state.setNotice);
   const sources = useMemo(
-    () => users.filter((user) => user.username !== currentUser),
+    // Reading a source user's config needs the same access as managing it, so an
+    // unmanageable account cannot be a sync source either.
+    () => users.filter((user) => user.username !== currentUser && user.manageable !== false),
     [users, currentUser],
   );
   const [sourceUser, setSourceUser] = useState('');

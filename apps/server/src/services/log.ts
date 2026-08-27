@@ -21,10 +21,20 @@ export class LogService implements ILogService {
   }
 
   error(message: string, error?: unknown): void {
-    if (error) {
-      console.error(`[harness-switch] ${message}`, error);
-      return;
-    }
-    console.error(`[harness-switch] ${message}`);
+    // Keep an error on one line. The dev task runner elides long multi-line stack
+    // traces, which can hide the errno and path needed to diagnose filesystem errors.
+    console.error(`[harness-switch] ${message}${formatError(error)}`);
   }
+}
+
+function formatError(error: unknown): string {
+  if (error === undefined) return '';
+  if (!(error instanceof Error)) return ` | thrown=${String(error)}`;
+
+  const errno = error as NodeJS.ErrnoException;
+  const details = [`${error.name}: ${error.message}`];
+  if (errno.code) details.push(`code=${errno.code}`);
+  if (errno.syscall) details.push(`syscall=${errno.syscall}`);
+  if (errno.path) details.push(`path=${errno.path}`);
+  return ` | ${details.join(' | ')}`;
 }

@@ -17,6 +17,7 @@ import { IProfileService, ProfileService } from './services/profiles';
 import { HarnessRegistry, IHarnessRegistry } from './services/registry';
 import { IScanService, ScanService } from './services/scan';
 import { ITransferService, TransferService } from './services/transfer';
+import { IUserAccessService, UserAccessService } from './services/user-access';
 import { IUserSyncService, UserSyncService } from './services/user-sync';
 import { IUserService, UserService } from './services/users';
 import { IVaultService, VaultService } from './services/vault';
@@ -26,6 +27,7 @@ export function createServices(): InstantiationService {
   collection.set(ILogService, new SyncDescriptor(LogService));
   collection.set(IEnvironmentService, new SyncDescriptor(EnvironmentService));
   collection.set(IUserService, new SyncDescriptor(UserService));
+  collection.set(IUserAccessService, new SyncDescriptor(UserAccessService));
   collection.set(IUserSyncService, new SyncDescriptor(UserSyncService));
   collection.set(IFileService, new SyncDescriptor(FileService));
   collection.set(ICodexLoginCacheService, new SyncDescriptor(CodexLoginCacheService));
