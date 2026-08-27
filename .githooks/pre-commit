@@ -5,8 +5,6 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 export PATH="$ROOT/node_modules/.bin:$ROOT/.tools:$PATH"
 
-echo "▶ pre-commit: bun run check"
-bun run check
-
-echo "▶ pre-commit: bun run test"
-bun run test
+# Typecheck, tests and build run in CI (.github/workflows/ci.yml).
+echo "▶ pre-commit: bun run precommit"
+bun run precommit
