@@ -1,3 +1,16 @@
+## [0.21.1](https://github.com/B1anker/harness-switch/compare/v0.21.0...v0.21.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **build:** disable rspack dev lazy compilation ([234f27c](https://github.com/B1anker/harness-switch/commit/234f27c1892ca2b13ed8384a8374735d7402c0a4))
+* **web:** keep config diffs readable across themes ([2294627](https://github.com/B1anker/harness-switch/commit/2294627c9685bf3a7e0a8eda4572a92ead7c5409))
+
+
+### Performance Improvements
+
+* **hooks:** keep pre-commit to lint-only checks ([4a8ccb1](https://github.com/B1anker/harness-switch/commit/4a8ccb11143f6b5c11b951a07df2c9f2d3f4e6b9))
+
 # [0.21.0](https://github.com/B1anker/harness-switch/compare/v0.20.1...v0.21.0) (2026-08-27)
 
 
