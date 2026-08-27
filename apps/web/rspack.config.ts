@@ -11,6 +11,12 @@ export default defineConfig({
   entry: {
     main: './src/main.tsx',
   },
+  // Off explicitly: `rspack dev` enables lazy compilation by default for web-only
+  // apps, which makes lazily imported modules fetch themselves from the dev
+  // server at runtime (`POST /lazy-compilation-*`). Those endpoints die behind
+  // the :8787 server/reverse proxies, so static files must always be complete
+  // enough to serve on their own.
+  lazyCompilation: false,
   devtool: isDev ? 'cheap-module-source-map' : false,
   output: {
     path: path.resolve(rootDir, '../server/public'),
