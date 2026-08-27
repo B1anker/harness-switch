@@ -1,3 +1,17 @@
+# [0.21.0](https://github.com/B1anker/harness-switch/compare/v0.20.1...v0.21.0) (2026-08-27)
+
+
+### Bug Fixes
+
+* **log:** keep an error and its errno on one line ([12bcba7](https://github.com/B1anker/harness-switch/commit/12bcba72077ec4cbc0fe19c6a0a5a4d05f488172))
+* **users:** check the manager data dir before the selected user's home ([9c5fd24](https://github.com/B1anker/harness-switch/commit/9c5fd24a9bb31e984338810fda55285f4d51e9e8))
+* **users:** test CAP_CHOWN and group membership instead of assuming root ([9d41b49](https://github.com/B1anker/harness-switch/commit/9d41b49c908166fa433f376df767f17e8c50b9c2))
+
+
+### Features
+
+* **users:** probe permissions and refuse unmanageable user switches ([3e088ce](https://github.com/B1anker/harness-switch/commit/3e088ce7185fa223cd10754cb3d6df42645c005a))
+
 ## [0.20.1](https://github.com/B1anker/harness-switch/compare/v0.20.0...v0.20.1) (2026-08-24)
 
 
