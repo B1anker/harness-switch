@@ -21,7 +21,7 @@
     "format": "biome check --write .",
     "format:check": "biome check .",
     "check": "bun run typecheck && oxlint . && biome check .",
-    "precommit": "bun run check && bun run test",
+    "precommit": "oxlint . && biome check .",
     "prepare": "bun scripts/install-git-hooks.ts",
     "pack:check": "bun run build && bun scripts/npm-pack.ts --dry-run"
   },

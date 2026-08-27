@@ -64,7 +64,7 @@ export function ActivateDialog({ harness, profile, open, onOpenChange }: Activat
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+      <AlertDialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl">
         <AlertDialogHeader>
           <AlertDialogTitle>{t('activate.title')}</AlertDialogTitle>
           <AlertDialogDescription>

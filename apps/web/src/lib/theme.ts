@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 const STORAGE_KEY = 'hs-theme';
 
 export type Theme = 'light' | 'dark';
@@ -36,4 +38,23 @@ export function toggleTheme(current: Theme): Theme {
   const next = current === 'dark' ? 'light' : 'dark';
   applyTheme(next);
   return next;
+}
+
+/** Reactive mirror of the class the stylesheet keys on, so consumers (e.g. the
+ * diff renderer) can follow the page theme no matter what toggled it. */
+export function usePageTheme(): Theme {
+  const [theme, setTheme] = useState<Theme>(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+      ? 'dark'
+      : 'light',
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setTheme(root.classList.contains('dark') ? 'dark' : 'light');
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+  return theme;
 }
