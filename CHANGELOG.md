@@ -1,3 +1,10 @@
+# [0.22.0](https://github.com/B1anker/harness-switch/compare/v0.21.1...v0.22.0) (2026-08-28)
+
+
+### Features
+
+* add GitHub Gist cloud synchronization with end-to-end encryption ([5512a0d](https://github.com/B1anker/harness-switch/commit/5512a0df0803ec751118c9abb37904e2d017618f))
+
 ## [0.21.1](https://github.com/B1anker/harness-switch/compare/v0.21.0...v0.21.1) (2026-08-27)
 
 
