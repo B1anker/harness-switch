@@ -82,7 +82,7 @@ type ImportPlan = {
 export interface ITransferService {
   readonly _serviceBrand: undefined;
   exportPreview(): TransferExportPreview;
-  exportAll(passphrase: string, includeCodexLoginCache: boolean): TransferEnvelope;
+  exportAll(passphrase: string, includeCodexLoginCache?: boolean): TransferEnvelope;
   preview(
     envelope: TransferEnvelope,
     passphrase: string,
@@ -94,7 +94,7 @@ export interface ITransferService {
     passphrase: string,
     conflictPolicy: TransferConflictPolicy,
     restoreActive: boolean,
-    migrateCodexLoginCache: boolean,
+    migrateCodexLoginCache?: boolean,
   ): TransferImportResponse;
 }
 
@@ -128,14 +128,11 @@ export class TransferService implements ITransferService {
     return { codexLoginCacheAvailable: this.codexLoginCache.exists() };
   }
 
-  exportAll(passphrase: string, includeCodexLoginCache: boolean): TransferEnvelope {
+  exportAll(passphrase: string, includeCodexLoginCache = true): TransferEnvelope {
     this.assertPassphrase(passphrase);
     const codexLoginCache = includeCodexLoginCache
       ? this.codexLoginCache.readOptional()
       : undefined;
-    if (includeCodexLoginCache && codexLoginCache === undefined) {
-      throw new HttpError(400, '当前用户没有可导出的 Codex 登录缓存');
-    }
     const store = this.readStore();
     const vault = this.readVault();
     const providers = Object.values(vault.entries).map((entry) => ({
@@ -239,18 +236,17 @@ export class TransferService implements ITransferService {
     passphrase: string,
     conflictPolicy: TransferConflictPolicy,
     restoreActive: boolean,
-    migrateCodexLoginCache: boolean,
+    migrateCodexLoginCache = true,
   ): TransferImportResponse {
     this.assertConflictPolicy(conflictPolicy);
     const payload = this.decrypt(envelope, passphrase);
-    if (migrateCodexLoginCache && payload.codexLoginCache === undefined) {
-      throw new HttpError(400, '导出包不包含可迁移的 Codex 登录缓存');
-    }
     const cacheWrite: PlannedWrite[] =
-      migrateCodexLoginCache && !this.codexLoginCache.matchesCurrent(payload.codexLoginCache!)
+      migrateCodexLoginCache &&
+      payload.codexLoginCache !== undefined &&
+      !this.codexLoginCache.matchesCurrent(payload.codexLoginCache)
         ? [
             {
-              ...this.codexLoginCache.prepareWrite(payload.codexLoginCache!),
+              ...this.codexLoginCache.prepareWrite(payload.codexLoginCache),
               format: 'json',
               secret: true,
             },

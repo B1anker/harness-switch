@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
+  GitHubDevicePollResponse,
   GitHubPushResponse,
   GitHubSyncStatus,
   TransferImportResponse,
@@ -60,6 +61,47 @@ describe('GitHub Sync Service and Routes', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as GitHubSyncStatus;
     expect(body.connected).toBe(false);
+  });
+
+  test('device poll treats TLS/network failures as pending', async () => {
+    const { app, cookie } = await createTestApp();
+
+    globalThis.fetch = (async () => {
+      const error = new TypeError('unknown certificate verification error') as TypeError & {
+        code?: string;
+      };
+      error.code = 'UNKNOWN_CERTIFICATE_VERIFICATION_ERROR';
+      throw error;
+    }) as typeof fetch;
+
+    const res = await app.request('/api/github/device/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie },
+      body: JSON.stringify({ deviceCode: 'device_code_fake' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as GitHubDevicePollResponse;
+    expect(body.status).toBe('pending');
+  });
+
+  test('device code request surfaces network failures as 502', async () => {
+    const { app, cookie } = await createTestApp();
+
+    globalThis.fetch = (async () => {
+      throw new TypeError('unknown certificate verification error');
+    }) as typeof fetch;
+
+    const res = await app.request('/api/github/device/code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', cookie },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string; code?: string };
+    expect(body.error).toContain('无法连接 GitHub');
+    expect(body.code).toBe('http.requestFailed');
   });
 
   test('authenticateWithToken connects and stores user info', async () => {

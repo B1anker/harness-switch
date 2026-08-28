@@ -2,7 +2,6 @@ import {
   HARNESS_LABELS,
   type TransferConflictPolicy,
   type TransferEnvelope,
-  type TransferExportPreview,
   type TransferImportResponse,
   type TransferPreview,
 } from '@seaveyon/harness-switch-shared';
@@ -55,14 +54,11 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [exportPassphrase, setExportPassphrase] = useState('');
   const [exportConfirmation, setExportConfirmation] = useState('');
-  const [exportPreview, setExportPreview] = useState<TransferExportPreview | null>(null);
-  const [includeCodexLoginCache, setIncludeCodexLoginCache] = useState(false);
   const [envelope, setEnvelope] = useState<TransferEnvelope | null>(null);
   const [fileName, setFileName] = useState('');
   const [importPassphrase, setImportPassphrase] = useState('');
   const [preview, setPreview] = useState<TransferPreview | null>(null);
   const [previewStale, setPreviewStale] = useState(false);
-  const [migrateCodexLoginCache, setMigrateCodexLoginCache] = useState(false);
   const [conflictPolicy, setConflictPolicy] = useState<TransferConflictPolicy>('skip');
   const [restoreActive, setRestoreActive] = useState(true);
   const [confirmingImport, setConfirmingImport] = useState(false);
@@ -72,25 +68,9 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
 
   useEffect(() => {
     if (!open) {
-      setIncludeCodexLoginCache(false);
-      setMigrateCodexLoginCache(false);
       setPreviewStale(false);
       setConfirmingImport(false);
-      return;
     }
-    let disposed = false;
-    void api<TransferExportPreview>('/api/transfer/export/preview')
-      .then((result) => {
-        if (disposed) return;
-        setExportPreview(result);
-        setIncludeCodexLoginCache(result.codexLoginCacheAvailable === true);
-      })
-      .catch(() => {
-        if (!disposed) setExportPreview(null);
-      });
-    return () => {
-      disposed = true;
-    };
   }, [open]);
 
   async function exportAll() {
@@ -102,15 +82,11 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
         method: 'POST',
         body: JSON.stringify({
           passphrase: exportPassphrase,
-          includeCodexLoginCache,
+          includeCodexLoginCache: true,
         }),
       });
       downloadEnvelope(result);
-      setMessage(
-        includeCodexLoginCache
-          ? t('transfer.exportedWithCache')
-          : t('transfer.exportedWithoutCache'),
-      );
+      setMessage(t('transfer.exported'));
     } catch (err) {
       setError(errorLine(err));
     } finally {
@@ -122,7 +98,6 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
     setPreview(null);
     setPreviewStale(false);
     setConfirmingImport(false);
-    setMigrateCodexLoginCache(false);
     setMessage(null);
     setError(null);
     if (!file) {
@@ -167,10 +142,6 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
       setPreview(result);
       setPreviewStale(false);
       setConfirmingImport(false);
-      setMigrateCodexLoginCache(
-        result.codexLoginCache?.available === true &&
-          result.codexLoginCache.migrationNeeded === true,
-      );
     } catch (err) {
       setPreview(null);
       setError(errorLine(err));
@@ -194,14 +165,13 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
           passphrase: importPassphrase,
           conflictPolicy,
           restoreActive,
-          migrateCodexLoginCache,
+          migrateCodexLoginCache: true,
         }),
       });
       await loadHarnesses();
       setNotice(buildImportNotice(t, result));
       setPreview(null);
       setPreviewStale(false);
-      setMigrateCodexLoginCache(false);
       onOpenChange(false);
     } catch (err) {
       setError(errorLine(err));
@@ -268,25 +238,6 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
           {exportConfirmation && exportPassphrase !== exportConfirmation ? (
             <p className="text-xs text-destructive">{t('transfer.passphraseMismatch')}</p>
           ) : null}
-          {exportPreview?.codexLoginCacheAvailable ? (
-            <label className="block space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-              <span className="flex cursor-pointer items-start gap-3">
-                <Checkbox
-                  checked={includeCodexLoginCache}
-                  onCheckedChange={(checked) => setIncludeCodexLoginCache(checked === true)}
-                  className="mt-0.5"
-                />
-                <span className="min-w-0">
-                  <span className="block font-medium">{t('transfer.includeCache')}</span>
-                  <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                    {t('transfer.includeCacheHint')}
-                  </span>
-                </span>
-              </span>
-            </label>
-          ) : exportPreview ? (
-            <p className="text-xs text-muted-foreground">{t('transfer.noCacheToExport')}</p>
-          ) : null}
           <Button type="button" onClick={() => void exportAll()} disabled={!canExport}>
             <Download />
             {pending === 'export' ? t('transfer.encrypting') : t('transfer.download')}
@@ -341,7 +292,6 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                   setPreview(null);
                   setPreviewStale(false);
                   setConfirmingImport(false);
-                  setMigrateCodexLoginCache(false);
                 }}
                 placeholder={t('transfer.importPassphrasePlaceholder')}
               />
@@ -388,28 +338,6 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                       .join(t('common.listSeparator')),
                   })}
                 </div>
-              ) : null}
-              {preview.codexLoginCache?.available && preview.codexLoginCache.migrationNeeded ? (
-                <label className="block space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-                  <span className="flex cursor-pointer items-start gap-3">
-                    <Checkbox
-                      checked={migrateCodexLoginCache}
-                      onCheckedChange={(checked) => setMigrateCodexLoginCache(checked === true)}
-                      className="mt-0.5"
-                    />
-                    <span className="min-w-0">
-                      <span className="block font-medium">{t('transfer.migrateCache')}</span>
-                      <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
-                        {t('transfer.migrateCacheHint')}
-                      </span>
-                    </span>
-                  </span>
-                  {preview.codexLoginCache?.targetExists ? (
-                    <span className="block text-xs leading-relaxed text-amber-700 dark:text-amber-300">
-                      {t('transfer.migrateCacheOverwrite')}
-                    </span>
-                  ) : null}
-                </label>
               ) : null}
               {activationEffect ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
@@ -470,11 +398,6 @@ export function TransferDialog({ open, onOpenChange }: TransferDialogProps) {
                       {conflictPolicy === 'overwrite' && preview.conflicts.length > 0
                         ? t('transfer.confirmOverwrite', { count: preview.conflicts.length })
                         : t('transfer.confirmKeep')}
-                      {migrateCodexLoginCache
-                        ? preview.codexLoginCache?.targetExists
-                          ? t('transfer.confirmCacheOverwrite')
-                          : t('transfer.confirmCacheWrite')
-                        : t('transfer.confirmCacheSkip')}
                       {activationEffect ? ` ${activationEffect}` : null}
                     </AlertDialogDescription>
                   </AlertDialogHeader>

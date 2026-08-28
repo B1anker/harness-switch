@@ -990,7 +990,7 @@ describe('rest api', () => {
     const withoutCache = await context.app.request('/api/transfer/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ passphrase: 'portable-secret' }),
+      body: JSON.stringify({ passphrase: 'portable-secret', includeCodexLoginCache: false }),
     });
     expect(withoutCache.status).toBe(200);
     const withoutCachePreview = await context.app.request('/api/transfer/preview', {
@@ -1005,13 +1005,13 @@ describe('rest api', () => {
       codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
     });
 
-    const withCache = await context.app.request('/api/transfer/export', {
+    const defaultWithCache = await context.app.request('/api/transfer/export', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ passphrase: 'portable-secret', includeCodexLoginCache: true }),
+      body: JSON.stringify({ passphrase: 'portable-secret' }),
     });
-    expect(withCache.status).toBe(200);
-    const envelope = await withCache.json();
+    expect(defaultWithCache.status).toBe(200);
+    const envelope = await defaultWithCache.json();
     expect(JSON.stringify(envelope)).not.toContain('portable-login-session');
     const withCachePreview = await context.app.request('/api/transfer/preview', {
       method: 'POST',
@@ -1031,6 +1031,7 @@ describe('rest api', () => {
         passphrase: 'portable-secret',
         conflictPolicy: 'skip',
         restoreActive: false,
+        migrateCodexLoginCache: false,
       }),
     });
     expect((await preserved.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
@@ -1046,7 +1047,6 @@ describe('rest api', () => {
         passphrase: 'portable-secret',
         conflictPolicy: 'skip',
         restoreActive: false,
-        migrateCodexLoginCache: true,
       }),
     });
     expect((await migrated.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
@@ -1182,7 +1182,7 @@ describe('rest api', () => {
     });
     expect((await preview.json()) as TransferPreview).toMatchObject({
       codexActivationAuthEffect: 'openai-api-key',
-      codexLoginCache: { available: false },
+      codexLoginCache: { available: true },
     });
 
     const imported = await context.app.request('/api/transfer/import', {
@@ -1267,6 +1267,7 @@ describe('rest api', () => {
         passphrase: 'portable-secret',
         conflictPolicy: 'skip',
         restoreActive: true,
+        migrateCodexLoginCache: false,
       }),
     });
     expect(skipped.status).toBe(200);

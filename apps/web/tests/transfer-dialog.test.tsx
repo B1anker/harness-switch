@@ -57,87 +57,12 @@ test('exports all profiles only after the migration password is confirmed', asyn
   const request = requests.find((item) => item.path === '/api/transfer/export');
   expect(JSON.parse(request?.body ?? '{}')).toEqual({
     passphrase: 'portable-secret',
-    includeCodexLoginCache: false,
+    includeCodexLoginCache: true,
   });
   expect(await screen.findByText(/加密导出包已生成/)).toBeInTheDocument();
 });
 
-test('includes Codex login cache by default when available', async () => {
-  const requests: Array<{ path: string; body: string }> = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push({ path, body: String(init.body ?? '') });
-    const body =
-      path === '/api/transfer/export/preview' ? { codexLoginCacheAvailable: true } : envelope;
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
-
-  render(<TransferDialog open onOpenChange={() => {}} />);
-  const checkbox = await screen.findByLabelText(/在导出包中包含 Codex 官方登录缓存/);
-  expect(checkbox).toBeChecked();
-  fireEvent.change(screen.getByLabelText('迁移密码', { selector: '#export-passphrase' }), {
-    target: { value: 'portable-secret' },
-  });
-  fireEvent.change(screen.getByLabelText('确认迁移密码'), {
-    target: { value: 'portable-secret' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: /下载加密导出包/ }));
-
-  await waitFor(() =>
-    expect(requests.some((request) => request.path === '/api/transfer/export')).toBe(true),
-  );
-  const request = requests.find((item) => item.path === '/api/transfer/export');
-  expect(JSON.parse(request?.body ?? '{}')).toEqual({
-    passphrase: 'portable-secret',
-    includeCodexLoginCache: true,
-  });
-});
-
-test('previews file contents and conflicts before enabling import', async () => {
-  globalThis.fetch = (async (path: string) => {
-    const body =
-      path === '/api/transfer/export/preview'
-        ? { codexLoginCacheAvailable: false }
-        : {
-            exportedAt: '2026-08-18T00:00:00.000Z',
-            profileCount: 2,
-            harnesses: [{ harness: 'claude', profiles: 2 }],
-            conflicts: [{ harness: 'claude', name: 'main' }],
-            activeCount: 1,
-            conflictPolicy: 'skip',
-            restoreActive: true,
-            codexActivationAuthEffect: 'none',
-            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
-
-  render(<TransferDialog open onOpenChange={() => {}} />);
-  const file = new File(['ignored'], 'portable.hsw-backup', { type: 'application/json' });
-  Object.defineProperty(file, 'text', { value: async () => JSON.stringify(envelope) });
-  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-    target: { files: [file] },
-  });
-  expect(await screen.findByText('portable.hsw-backup')).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('迁移密码', { selector: '#import-passphrase' }), {
-    target: { value: 'portable-secret' },
-  });
-  const inspect = screen.getByRole('button', { name: '检查导入内容' });
-  await waitFor(() => expect(inspect).toBeEnabled());
-  fireEvent.click(inspect);
-
-  expect(await screen.findByText('2 个配置')).toBeInTheDocument();
-  expect(screen.getByText('1 个同名冲突')).toBeInTheDocument();
-  expect(screen.getByText(/Claude Code \/ main/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: '确认导入' })).toBeInTheDocument();
-});
-
-test('requires a separate import choice before writing a bundled Codex login cache', async () => {
+test('automatically migrates Codex login cache on import without separate checkbox', async () => {
   const requests: Array<{ path: string; body: string }> = [];
   globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
     requests.push({ path, body: String(init.body ?? '') });
@@ -182,13 +107,9 @@ test('requires a separate import choice before writing a bundled Codex login cac
     target: { value: 'portable-secret' },
   });
   fireEvent.click(screen.getByRole('button', { name: '检查导入内容' }));
-  const checkbox = await screen.findByLabelText(/迁移 Codex 官方登录缓存/);
-  expect(checkbox).toBeChecked();
+  await screen.findByRole('button', { name: '确认导入' });
+  expect(screen.queryByLabelText(/迁移 Codex 官方登录缓存/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
-  expect(
-    await screen.findByText(/完整 Codex 官方登录缓存会覆盖本机缓存，并自动创建备份/),
-  ).toBeInTheDocument();
-  expect(requests.filter((request) => request.path === '/api/transfer/import')).toHaveLength(0);
 
   fireEvent.click(screen.getByRole('button', { name: '安全导入' }));
   await waitFor(() =>

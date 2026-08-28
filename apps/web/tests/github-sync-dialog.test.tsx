@@ -94,7 +94,7 @@ test('shows connected account and pushes config to cloud', async () => {
   const pushReq = requests.find((r) => r.url === '/api/github/push');
   expect(JSON.parse(pushReq?.body ?? '{}')).toEqual({
     passphrase: 'my-sync-secret',
-    includeCodexLoginCache: false,
+    includeCodexLoginCache: true,
   });
 });
 
@@ -143,7 +143,7 @@ test('handles manual check device code flow', async () => {
   const getCodeBtn = await screen.findByText('获取设备授权码');
   fireEvent.click(getCodeBtn);
 
-  const checkBtn = await screen.findByText('我已在 GitHub 授权，立即检查');
+  const checkBtn = await screen.findByText('立即检查');
   fireEvent.click(checkBtn);
 
   await waitFor(() => {

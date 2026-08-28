@@ -234,18 +234,26 @@ export class GitHubSyncService implements IGitHubSyncService {
 
   async getDeviceCode(clientId?: string): Promise<GitHubDeviceCodeResponse> {
     const id = clientId || DEFAULT_CLIENT_ID;
-    const response = await fetch('https://github.com/login/device/code', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-      },
-      body: JSON.stringify({
-        client_id: id,
-        scope: 'gist',
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch('https://github.com/login/device/code', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': USER_AGENT,
+        },
+        body: JSON.stringify({
+          client_id: id,
+          scope: 'gist',
+        }),
+      });
+    } catch (error) {
+      this.log.warn(`[github-sync] getDeviceCode network error: ${String(error)}`);
+      throw new HttpError(502, '无法连接 GitHub，请检查网络或代理后重试', {
+        code: ERROR_CODES.requestFailed,
+      });
+    }
 
     if (!response.ok) {
       throw new HttpError(response.status, '获取 GitHub 设备验证码失败', {
@@ -280,19 +288,27 @@ export class GitHubSyncService implements IGitHubSyncService {
 
   async pollDeviceCode(deviceCode: string, clientId?: string): Promise<GitHubDevicePollResponse> {
     const id = clientId || DEFAULT_CLIENT_ID;
-    const response = await fetch('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'User-Agent': USER_AGENT,
-      },
-      body: JSON.stringify({
-        client_id: id,
-        device_code: deviceCode,
-        grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': USER_AGENT,
+        },
+        body: JSON.stringify({
+          client_id: id,
+          device_code: deviceCode,
+          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+        }),
+      });
+    } catch (error) {
+      // Transient TLS/network failures (e.g. Bun UNKNOWN_CERTIFICATE_VERIFICATION_ERROR)
+      // are common against github.com; keep polling instead of failing the flow.
+      this.log.warn(`[github-sync] pollDeviceCode network error: ${String(error)}`);
+      return { status: 'pending' };
+    }
 
     if (!response.ok) {
       return { status: 'error', error: 'GitHub 认证请求失败' };
@@ -379,7 +395,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     });
   }
 
-  async push(passphrase: string, includeCodexLoginCache = false): Promise<GitHubPushResponse> {
+  async push(passphrase: string, includeCodexLoginCache = true): Promise<GitHubPushResponse> {
     const token = this.requireToken();
     const envelope = this.transfer.exportAll(passphrase, includeCodexLoginCache);
     const content = JSON.stringify(envelope, null, 2);
@@ -548,7 +564,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     passphrase: string,
     conflictPolicy: TransferConflictPolicy = 'skip',
     restoreActive = false,
-    migrateCodexLoginCache = false,
+    migrateCodexLoginCache = true,
   ): Promise<TransferImportResponse> {
     const token = this.requireToken();
     const { envelope } = await this.fetchGistEnvelope(token);

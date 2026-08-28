@@ -41,7 +41,7 @@ export function createGitHubRoutes(services: InstantiationService): Hono {
 
   app.post('/push', async (c) => {
     const body = await readJsonBody(c, gitHubPushRequestSchema);
-    return c.json(await github.push(body.passphrase, body.includeCodexLoginCache === true));
+    return c.json(await github.push(body.passphrase, body.includeCodexLoginCache !== false));
   });
 
   app.post('/pull/preview', async (c) => {
@@ -62,7 +62,7 @@ export function createGitHubRoutes(services: InstantiationService): Hono {
         body.passphrase,
         body.conflictPolicy ?? 'skip',
         body.restoreActive === true,
-        body.migrateCodexLoginCache === true,
+        body.migrateCodexLoginCache !== false,
       ),
     );
   });

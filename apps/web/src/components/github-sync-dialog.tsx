@@ -73,6 +73,7 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
   // Device code login state
   const [deviceCode, setDeviceCode] = useState<GitHubDeviceCodeResponse | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [requestingCode, setRequestingCode] = useState(false);
   const [polling, setPolling] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(false);
   const [pollIntervalSec, setPollIntervalSec] = useState(5);
@@ -84,14 +85,12 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
 
   // Push state
   const [pushPassphrase, setPushPassphrase] = useState('');
-  const [includeCodexLoginCache, setIncludeCodexLoginCache] = useState(false);
   const [pushing, setPushing] = useState(false);
 
   // Pull state
   const [pullPassphrase, setPullPassphrase] = useState('');
   const [conflictPolicy, setConflictPolicy] = useState<TransferConflictPolicy>('skip');
   const [restoreActive, setRestoreActive] = useState(true);
-  const [migrateCodexLoginCache, setMigrateCodexLoginCache] = useState(false);
   const [preview, setPreview] = useState<TransferPreview | null>(null);
   const [gistUpdatedAt, setGistUpdatedAt] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -134,6 +133,7 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
   }, []);
 
   async function requestDeviceCode() {
+    setRequestingCode(true);
     setError(null);
     setMessage(null);
     try {
@@ -145,6 +145,8 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
       startPolling(res.deviceCode, res.interval);
     } catch (err) {
       setError(errorLine(err));
+    } finally {
+      setRequestingCode(false);
     }
   }
 
@@ -182,9 +184,6 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
           // GitHub requested to slow down polling
           setPollIntervalSec(res.interval);
           startPolling(targetCode, res.interval);
-        }
-        if (manual) {
-          setMessage(t('githubSync.pendingAuth'));
         }
       }
     } catch (err) {
@@ -255,7 +254,7 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
         method: 'POST',
         body: JSON.stringify({
           passphrase: pushPassphrase,
-          includeCodexLoginCache,
+          includeCodexLoginCache: true,
         }),
       });
       setMessage(
@@ -308,7 +307,7 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
           passphrase: pullPassphrase,
           conflictPolicy,
           restoreActive,
-          migrateCodexLoginCache,
+          migrateCodexLoginCache: true,
         }),
       });
       void loadHarnesses();
@@ -402,11 +401,17 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
                   size="sm"
                   onClick={() => void loadStatus()}
                   disabled={loadingStatus}
+                  title="刷新状态"
                 >
                   <RefreshCw className={`size-4 ${loadingStatus ? 'animate-spin' : ''}`} />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => void handleDisconnect()}>
-                  <LogOut className="mr-1 size-4" />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+                  onClick={() => void handleDisconnect()}
+                >
+                  <LogOut className="mr-1.5 size-4" />
                   {t('githubSync.disconnect')}
                 </Button>
               </div>
@@ -462,25 +467,12 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="push-codex-cache"
-                      checked={includeCodexLoginCache}
-                      onCheckedChange={(checked) => setIncludeCodexLoginCache(Boolean(checked))}
-                    />
-                    <Label htmlFor="push-codex-cache" className="text-sm font-normal">
-                      {t('githubSync.includeCache')}
-                    </Label>
+                  <div className="flex justify-end pt-2">
+                    <Button disabled={!pushPassphrase || pushing} onClick={() => void handlePush()}>
+                      <CloudUpload className={`mr-1.5 size-4 ${pushing ? 'animate-bounce' : ''}`} />
+                      {pushing ? t('githubSync.pushing') : t('githubSync.pushTitle')}
+                    </Button>
                   </div>
-
-                  <Button
-                    className="w-full"
-                    disabled={!pushPassphrase || pushing}
-                    onClick={() => void handlePush()}
-                  >
-                    <CloudUpload className="mr-2 size-4" />
-                    {pushing ? t('githubSync.pushing') : t('githubSync.pushTitle')}
-                  </Button>
                 </div>
               )}
 
@@ -541,19 +533,6 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
                         {t('transfer.restoreActive')}
                       </Label>
                     </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="pull-migrate-cache"
-                        checked={migrateCodexLoginCache}
-                        onCheckedChange={(checked) => {
-                          setMigrateCodexLoginCache(Boolean(checked));
-                        }}
-                      />
-                      <Label htmlFor="pull-migrate-cache" className="text-sm font-normal">
-                        {t('transfer.migrateCache')}
-                      </Label>
-                    </div>
                   </div>
 
                   {preview ? (
@@ -604,25 +583,26 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
                         </div>
                       )}
 
-                      <Button
-                        className="w-full"
-                        disabled={pulling}
-                        onClick={() => void handlePull()}
-                      >
-                        <CloudDownload className="mr-2 size-4" />
-                        {pulling ? t('githubSync.pulling') : t('githubSync.confirmPull')}
-                      </Button>
+                      <div className="flex justify-end pt-2">
+                        <Button disabled={pulling} onClick={() => void handlePull()}>
+                          <CloudDownload className="mr-1.5 size-4" />
+                          {pulling ? t('githubSync.pulling') : t('githubSync.confirmPull')}
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      disabled={!pullPassphrase || previewing}
-                      onClick={() => void handlePullPreview()}
-                    >
-                      <RefreshCw className={`mr-2 size-4 ${previewing ? 'animate-spin' : ''}`} />
-                      {previewing ? t('transfer.inspecting') : t('githubSync.inspect')}
-                    </Button>
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        variant="outline"
+                        disabled={!pullPassphrase || previewing}
+                        onClick={() => void handlePullPreview()}
+                      >
+                        <RefreshCw
+                          className={`mr-1.5 size-4 ${previewing ? 'animate-spin' : ''}`}
+                        />
+                        {previewing ? t('transfer.inspecting') : t('githubSync.inspect')}
+                      </Button>
+                    </div>
                   )}
                 </div>
               )}
@@ -660,82 +640,106 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
 
             {authTab === 'device' && (
               <div className="space-y-4 pt-1">
-                <p className="text-sm text-muted-foreground">{t('githubSync.deviceIntro')}</p>
-
                 {deviceCode ? (
-                  <div className="space-y-4 rounded-xl border bg-muted/30 p-4">
-                    <div className="space-y-1 text-center">
-                      <span className="text-xs text-muted-foreground">
+                  <div className="space-y-5 rounded-2xl border bg-muted/20 p-5">
+                    {/* User Code Hero Display */}
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                         {t('githubSync.userCode')}
                       </span>
-                      <div className="flex items-center justify-center gap-2">
-                        <code className="rounded-md bg-background px-3 py-1.5 font-mono text-2xl font-bold tracking-widest text-primary border">
-                          {deviceCode.userCode}
-                        </code>
-                        <Button variant="outline" size="icon" onClick={copyUserCode}>
+                      <button
+                        type="button"
+                        onClick={copyUserCode}
+                        className="group relative inline-flex items-center gap-3 rounded-xl border border-primary/20 bg-background/90 px-5 py-2.5 font-mono text-3xl font-extrabold tracking-widest text-primary shadow-sm backdrop-blur-sm transition-all hover:border-primary/50 hover:bg-primary/5 hover:scale-[1.02] active:scale-[0.98]"
+                        title={t('githubSync.copyCode')}
+                      >
+                        <span>{deviceCode.userCode}</span>
+                        <span className="rounded-md bg-primary/10 p-1 text-primary transition-colors group-hover:bg-primary/20">
                           {copiedCode ? (
-                            <Check className="size-4 text-emerald-500" />
+                            <Check className="size-4 text-emerald-600 dark:text-emerald-400" />
                           ) : (
                             <Copy className="size-4" />
                           )}
-                        </Button>
-                      </div>
+                        </span>
+                      </button>
+                      {copiedCode ? (
+                        <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          {t('githubSync.copied')}
+                        </p>
+                      ) : null}
                     </div>
 
-                    <div className="flex flex-col gap-2">
-                      <Button className="w-full" asChild>
+                    {/* Single Main Action */}
+                    <div className="flex flex-col items-center space-y-3">
+                      <Button size="default" className="px-6 font-semibold shadow-sm" asChild>
                         <a
                           href={deviceCode.verificationUri}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={copyUserCode}
                         >
-                          <ExternalLink className="mr-2 size-4" />
+                          <ExternalLink className="mr-1.5 size-4" />
                           {t('githubSync.openAuthPage')}
                         </a>
                       </Button>
 
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="w-full"
-                        disabled={checkingAuth}
-                        onClick={() => {
-                          if (deviceCode?.deviceCode) {
-                            void checkDeviceCodeStatus(deviceCode.deviceCode, true);
-                          }
-                        }}
-                      >
-                        <RefreshCw
-                          className={`mr-2 size-4 ${checkingAuth ? 'animate-spin' : ''}`}
-                        />
-                        {checkingAuth ? t('githubSync.checkingAuth') : t('githubSync.checkNow')}
-                      </Button>
-
-                      <div className="flex items-center justify-between pt-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs text-muted-foreground hover:text-foreground h-auto p-1"
-                          onClick={() => void requestDeviceCode()}
-                        >
-                          {t('githubSync.regenerateCode')}
-                        </Button>
-                        {polling && (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <RefreshCw className="size-3 animate-spin" />
-                            {pollIntervalSec > 5
-                              ? t('githubSync.waitingAuthInterval', { seconds: pollIntervalSec })
-                              : t('githubSync.waitingAuth')}
-                          </div>
-                        )}
+                      {/* Status / Polling Footer */}
+                      <div className="flex w-full items-center justify-between rounded-xl bg-background/50 px-3 py-2 text-xs text-muted-foreground border border-border/40">
+                        <div className="flex items-center gap-2">
+                          <RefreshCw
+                            className={`size-3.5 text-primary ${polling || checkingAuth ? 'animate-spin' : ''}`}
+                          />
+                          <span>
+                            {checkingAuth
+                              ? t('githubSync.checkingAuth')
+                              : polling
+                                ? pollIntervalSec > 5
+                                  ? t('githubSync.waitingAuthInterval', {
+                                      seconds: pollIntervalSec,
+                                    })
+                                  : t('githubSync.waitingAuth')
+                                : t('githubSync.waitingAuth')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            className="font-medium text-primary hover:underline disabled:opacity-50"
+                            disabled={checkingAuth}
+                            onClick={() => {
+                              if (deviceCode?.deviceCode) {
+                                void checkDeviceCodeStatus(deviceCode.deviceCode, true);
+                              }
+                            }}
+                          >
+                            {t('githubSync.checkNow')}
+                          </button>
+                          <span>·</span>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() => void requestDeviceCode()}
+                          >
+                            {t('githubSync.regenerateCode')}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <Button className="w-full" onClick={() => void requestDeviceCode()}>
-                    <Github className="mr-2 size-4" />
-                    {t('githubSync.getCode')}
-                  </Button>
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">{t('githubSync.deviceIntro')}</p>
+                    <div className="flex justify-center pt-2">
+                      <Button
+                        disabled={requestingCode}
+                        onClick={() => void requestDeviceCode()}
+                        className="px-6"
+                      >
+                        <Github className="mr-2 size-4" />
+                        {requestingCode ? t('githubSync.checkingAuth') : t('githubSync.getCode')}
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -761,14 +765,15 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
                   </p>
                 </div>
 
-                <Button
-                  className="w-full"
-                  disabled={!tokenInput.trim() || connectingToken}
-                  onClick={() => void handleTokenConnect()}
-                >
-                  <Github className="mr-2 size-4" />
-                  {connectingToken ? '连接中…' : t('githubSync.connectToken')}
-                </Button>
+                <div className="flex justify-end pt-2">
+                  <Button
+                    disabled={!tokenInput.trim() || connectingToken}
+                    onClick={() => void handleTokenConnect()}
+                  >
+                    <Github className="mr-2 size-4" />
+                    {connectingToken ? t('githubSync.connecting') : t('githubSync.connectToken')}
+                  </Button>
+                </div>
               </div>
             )}
           </div>

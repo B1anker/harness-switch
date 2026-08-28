@@ -15,7 +15,7 @@ export function createTransferRoutes(services: InstantiationService): Hono {
 
   app.post('/export', async (c) => {
     const body = await readJsonBody(c, transferExportRequestSchema);
-    return c.json(transfer.exportAll(body.passphrase, body.includeCodexLoginCache === true));
+    return c.json(transfer.exportAll(body.passphrase, body.includeCodexLoginCache !== false));
   });
 
   app.post('/preview', async (c) => {
@@ -38,7 +38,7 @@ export function createTransferRoutes(services: InstantiationService): Hono {
         body.passphrase,
         body.conflictPolicy ?? 'skip',
         body.restoreActive === true,
-        body.migrateCodexLoginCache === true,
+        body.migrateCodexLoginCache !== false,
       ),
     );
   });
