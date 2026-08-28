@@ -9,6 +9,7 @@ import { DoctorService, IDoctorService } from './services/doctor';
 import { DriftService, IDriftService } from './services/drift';
 import { EnvironmentService, IEnvironmentService } from './services/environment';
 import { FileService, IFileService } from './services/files';
+import { GitHubSyncService, IGitHubSyncService } from './services/github-sync';
 import { IJournalService, JournalService } from './services/journal';
 import { ILiveWriteService, LiveWriteService } from './services/live-write';
 import { ILogService, LogService } from './services/log';
@@ -44,6 +45,7 @@ export function createServices(): InstantiationService {
   collection.set(IProbeService, new SyncDescriptor(ProbeService));
   collection.set(IActivationService, new SyncDescriptor(ActivationService));
   collection.set(ITransferService, new SyncDescriptor(TransferService));
+  collection.set(IGitHubSyncService, new SyncDescriptor(GitHubSyncService));
   collection.set(IDriftService, new SyncDescriptor(DriftService));
   collection.set(IDoctorService, new SyncDescriptor(DoctorService));
   return new InstantiationService(collection);

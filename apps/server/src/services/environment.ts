@@ -21,6 +21,7 @@ type EnvironmentFiles = {
   env: string;
   sessions: string;
   vault: string;
+  github: string;
 };
 
 export interface IEnvironmentService {
@@ -107,6 +108,7 @@ export class EnvironmentService implements IEnvironmentService {
       env: join(dataDir, 'env.sh'),
       sessions: join(dataDir, 'sessions.json'),
       vault: join(dataDir, 'vault.json'),
+      github: join(dataDir, 'github.json'),
     };
   }
 

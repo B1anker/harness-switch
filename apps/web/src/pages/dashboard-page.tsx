@@ -2,6 +2,7 @@ import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness
 import {
   ArrowRightLeft,
   ChevronDown,
+  Cloud,
   FileSearch,
   KeyRound,
   Lock,
@@ -15,6 +16,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
 import { DoctorPanel } from '@/components/doctor-panel';
+import { GitHubSyncDialog } from '@/components/github-sync-dialog';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
 import { ImportWizardDialog } from '@/components/import-wizard-dialog';
@@ -47,6 +49,7 @@ export function DashboardPage() {
   const backups = useAppStore((state) => state.backups);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [githubSyncOpen, setGithubSyncOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [userSyncOpen, setUserSyncOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -86,6 +89,10 @@ export function DashboardPage() {
             <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft />
               <span className="hidden sm:inline">{t('nav.transfer')}</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setGithubSyncOpen(true)}>
+              <Cloud />
+              <span className="hidden sm:inline">{t('nav.githubSync')}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setVaultOpen(true)}>
               <KeyRound />
@@ -158,6 +165,7 @@ export function DashboardPage() {
         />
       ) : null}
       <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
+      <GitHubSyncDialog open={githubSyncOpen} onOpenChange={setGithubSyncOpen} />
       <ProviderVaultDialog open={vaultOpen} onOpenChange={setVaultOpen} />
       <UserSyncDialog open={userSyncOpen} onOpenChange={setUserSyncOpen} />
       <ImportWizardDialog open={importOpen} onOpenChange={setImportOpen} />

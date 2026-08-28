@@ -178,6 +178,38 @@ export const probeStoredRequestSchema = z.object({
   endpoint: optionalText(MAX_NAME).optional(),
 });
 
+/** GitHub Sync schemas */
+export const gitHubDeviceCodeRequestSchema = z.object({
+  clientId: optionalText(100).optional(),
+});
+
+export const gitHubDevicePollRequestSchema = z.object({
+  deviceCode: z.string().min(1).max(200),
+  clientId: optionalText(100).optional(),
+});
+
+export const gitHubTokenAuthRequestSchema = z.object({
+  token: z.string().trim().min(1, 'Token 不能为空').max(500),
+});
+
+export const gitHubPushRequestSchema = z.object({
+  passphrase: optionalText(MAX_KEY),
+  includeCodexLoginCache: z.boolean().optional(),
+});
+
+export const gitHubPullPreviewRequestSchema = z.object({
+  passphrase: optionalText(MAX_KEY),
+  conflictPolicy: conflictPolicySchema.optional(),
+  restoreActive: z.boolean().optional(),
+});
+
+export const gitHubPullRequestSchema = z.object({
+  passphrase: optionalText(MAX_KEY),
+  conflictPolicy: conflictPolicySchema.optional(),
+  restoreActive: z.boolean().optional(),
+  migrateCodexLoginCache: z.boolean().optional(),
+});
+
 /** Neither drift action takes options yet, but both still reject a non-object body. */
 export const emptyRequestSchema = z.object({});
 
@@ -194,6 +226,12 @@ export type ScanImportSelection = z.infer<typeof scanImportSelectionSchema>;
 export type ScanImportRequest = z.infer<typeof scanImportRequestSchema>;
 export type ProbeRequest = z.infer<typeof probeRequestSchema>;
 export type ProbeStoredRequest = z.infer<typeof probeStoredRequestSchema>;
+export type GitHubDeviceCodeRequest = z.infer<typeof gitHubDeviceCodeRequestSchema>;
+export type GitHubDevicePollRequest = z.infer<typeof gitHubDevicePollRequestSchema>;
+export type GitHubTokenAuthRequestSchemaType = z.infer<typeof gitHubTokenAuthRequestSchema>;
+export type GitHubPushRequestSchemaType = z.infer<typeof gitHubPushRequestSchema>;
+export type GitHubPullPreviewRequestSchemaType = z.infer<typeof gitHubPullPreviewRequestSchema>;
+export type GitHubPullRequestSchemaType = z.infer<typeof gitHubPullRequestSchema>;
 
 /**
  * Flattens a failure into one line naming the offending fields, which is what both the

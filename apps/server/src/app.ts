@@ -9,6 +9,7 @@ import { createAuthRoutes } from './http/routes/auth';
 import { createBackupRoutes } from './http/routes/backups';
 import { createDoctorRoutes } from './http/routes/doctor';
 import { createDriftRoutes } from './http/routes/drift';
+import { createGitHubRoutes } from './http/routes/github';
 import { createHarnessRoutes } from './http/routes/harnesses';
 import { createOperationRoutes } from './http/routes/operations';
 import { createProbeRoutes } from './http/routes/probe';
@@ -58,6 +59,9 @@ export function createApp(services: InstantiationService): Hono {
   api.route('/operations', createOperationRoutes(services));
   api.use('/transfer/*', createAuthGuard(services));
   api.route('/transfer', createTransferRoutes(services));
+  api.use('/github/*', createAuthGuard(services));
+  api.use('/github', createAuthGuard(services));
+  api.route('/github', createGitHubRoutes(services));
   api.use('/update/*', createAuthGuard(services));
   api.use('/update', createAuthGuard(services));
   api.route('/update', createUpdateRoutes(services));

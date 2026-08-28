@@ -577,3 +577,61 @@ export type DoctorResponse = {
   /** True when a newer release exists on the registry. */
   updatedAvailable: boolean;
 };
+
+/* ------------------------------------------------------------------ */
+/* GitHub Sync                                                        */
+/* ------------------------------------------------------------------ */
+
+export type GitHubSyncStatus = {
+  connected: boolean;
+  username?: string;
+  avatarUrl?: string;
+  gistId?: string;
+  gistUpdatedAt?: string;
+  lastSyncedAt?: string;
+};
+
+export type GitHubDeviceCodeResponse = {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+};
+
+export type GitHubDevicePollResponse = {
+  status: 'pending' | 'authorized' | 'expired' | 'error';
+  error?: string;
+  username?: string;
+  interval?: number;
+};
+
+export type GitHubPushRequest = {
+  passphrase: string;
+  includeCodexLoginCache?: boolean;
+};
+
+export type GitHubPushResponse = {
+  ok: true;
+  gistId: string;
+  gistUpdatedAt: string;
+  lastSyncedAt: string;
+  exportedProfilesCount: number;
+  exportedVaultCount: number;
+};
+
+export type GitHubPullPreviewResponse = {
+  gistUpdatedAt: string;
+  preview: TransferPreview;
+};
+
+export type GitHubPullRequest = {
+  passphrase: string;
+  conflictPolicy?: TransferConflictPolicy;
+  restoreActive?: boolean;
+  migrateCodexLoginCache?: boolean;
+};
+
+export type GitHubTokenAuthRequest = {
+  token: string;
+};

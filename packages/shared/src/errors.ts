@@ -40,6 +40,13 @@ export const ERROR_CODES = {
   syncSourceCacheMissing: 'sync.sourceCodexLoginCacheMissing',
   syncSourceEqualsTarget: 'sync.sourceEqualsTarget',
 
+  /* GitHub sync */
+  githubNotConnected: 'github.notConnected',
+  githubAuthFailed: 'github.authFailed',
+  githubGistNotFound: 'github.gistNotFound',
+  githubDeviceCodeExpired: 'github.deviceCodeExpired',
+  githubRateLimitExceeded: 'github.rateLimitExceeded',
+
   /* Local users and persistent storage */
   userNotManageable: 'user.notManageable',
   userNotSwitchable: 'user.notSwitchable',
