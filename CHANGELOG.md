@@ -1,3 +1,10 @@
+# [0.23.0](https://github.com/B1anker/harness-switch/compare/v0.22.0...v0.23.0) (2026-08-28)
+
+
+### Features
+
+* **web:** display direct link to cloud backup Gist in sync dialog ([f0d266a](https://github.com/B1anker/harness-switch/commit/f0d266ad25a25bdb6dd84fec246b9f99859bc13c))
+
 # [0.22.0](https://github.com/B1anker/harness-switch/compare/v0.21.1...v0.22.0) (2026-08-28)
 
 
