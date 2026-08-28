@@ -380,6 +380,20 @@ export function GitHubSyncDialog({ open, onOpenChange }: GitHubSyncDialogProps) 
                       ? new Date(status.lastSyncedAt).toLocaleString()
                       : t('githubSync.neverSynced')}
                   </p>
+                  {status.gistId && (
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>{t('githubSync.cloudGist')}</span>
+                      <a
+                        href={`https://gist.github.com/${status.username ? `${status.username}/` : ''}${status.gistId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-primary hover:underline font-mono"
+                      >
+                        {status.gistId.slice(0, 8)}…
+                        <ExternalLink className="size-3" />
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
