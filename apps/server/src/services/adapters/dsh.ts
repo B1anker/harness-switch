@@ -33,11 +33,29 @@ export class DshAdapter implements HarnessAdapter {
 
   readonly fields: FieldSpec[] = [
     {
+      key: 'providerType',
+      label: '提供方类型',
+      kind: 'select',
+      defaultValue: 'custom',
+      options: [
+        { value: 'custom', label: '自定义提供方' },
+        { value: 'official', label: 'DeepSeek 官方' },
+      ],
+    },
+    {
       key: 'providerId',
       label: 'Provider ID（可选）',
       kind: 'text',
       placeholder: '默认取配置名称',
       help: 'DSH 的模型路由标识；必须以小写字母开头。',
+    },
+    {
+      key: 'models',
+      label: '模型目录（可选）',
+      kind: 'textarea',
+      fullWidth: true,
+      placeholder: '每行一个模型 ID；留空时只注册上方的默认模型',
+      help: '一个提供方可注册多个模型；上方“模型”作为新会话的默认模型。',
     },
     {
       key: 'api',
@@ -118,34 +136,33 @@ export class DshAdapter implements HarnessAdapter {
 
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     this.validate(profile);
-    const providerId = this.providerId(profile);
+    const official = this.isOfficial(profile);
+    const providerId = official ? 'deepseek-official' : this.providerId(profile);
     const credentialRef = this.credentialRef(providerId);
     const settings = parseYamlDocument(current[SETTINGS]);
-
-    const model: Record<string, unknown> = {
-      id: profile.model,
-      name: profile.model,
-      contextWindow: this.numeric(profile.extras.contextWindow, DEFAULT_CONTEXT),
-      maxTokens: this.numeric(profile.extras.maxTokens, DEFAULT_MAX_TOKENS),
-    };
-    const reasoningEfforts = this.reasoningEfforts(profile.extras.reasoningEfforts);
-    if (reasoningEfforts !== undefined) {
-      model.reasoningEfforts = reasoningEfforts;
+    const models = this.models(profile, official);
+    if (official) {
+      settings.setIn(['llm-deepseek', 'apiKeyEnv'], credentialRef);
+      settings.setIn(['llm-deepseek', 'baseURL'], profile.baseUrl || 'https://api.deepseek.com');
+      settings.setIn(['llm-deepseek', 'models'], models);
+      settings.setIn(['llm-deepseek', 'maxTokens'], this.numeric(profile.extras.maxTokens, 256000));
+    } else {
+      settings.setIn(['llm-pi-ai', 'providers', providerId], {
+        displayName: profile.name,
+        apiKeyEnv: credentialRef,
+        api: profile.extras.api || 'openai-responses',
+        baseURL: profile.baseUrl,
+        models,
+      });
     }
-
-    settings.setIn(['llm-pi-ai', 'providers', providerId], {
-      displayName: profile.name,
-      apiKeyEnv: credentialRef,
-      api: profile.extras.api || 'openai-responses',
-      baseURL: profile.baseUrl,
-      models: [model],
-    });
     settings.setIn(['agent-default-model', 'provider'], providerId);
     settings.setIn(['agent-default-model', 'model'], profile.model);
     settings.deleteIn(['agent-default-model', 'reasoningEffort']);
 
     const credentials = parseYamlDocument(current[CREDENTIALS]);
-    credentials.setIn([credentialRef], profile.apiKey);
+    this.normalizeCredentials(credentials);
+    credentials.setIn(['version'], 1);
+    credentials.setIn(['refs', credentialRef], profile.apiKey);
 
     return {
       [SETTINGS]: settings.toString(),
@@ -153,14 +170,27 @@ export class DshAdapter implements HarnessAdapter {
     };
   }
 
+  renderAvailable(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
+    const rendered = this.render(profile, current);
+    const settings = parseYamlDocument(rendered[SETTINGS]);
+    const currentSettings = parseYamlDocument(current[SETTINGS]);
+    const currentDefault = currentSettings.getIn(['agent-default-model']);
+    if (currentDefault === undefined) settings.deleteIn(['agent-default-model']);
+    else settings.setIn(['agent-default-model'], currentDefault);
+    rendered[SETTINGS] = settings.toString();
+    return rendered;
+  }
+
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
-    const providerId = this.providerId(profile);
+    const official = this.isOfficial(profile);
+    const providerId = official ? 'deepseek-official' : this.providerId(profile);
     const rendered: RenderedFiles = {};
 
     if (current[SETTINGS] !== undefined) {
       try {
         const settings = parseYamlDocument(current[SETTINGS]);
-        settings.deleteIn(['llm-pi-ai', 'providers', providerId]);
+        if (official) settings.deleteIn(['llm-deepseek']);
+        else settings.deleteIn(['llm-pi-ai', 'providers', providerId]);
         if (settings.getIn(['agent-default-model', 'provider']) === providerId) {
           settings.deleteIn(['agent-default-model']);
         }
@@ -173,7 +203,8 @@ export class DshAdapter implements HarnessAdapter {
     if (current[CREDENTIALS] !== undefined) {
       try {
         const credentials = parseYamlDocument(current[CREDENTIALS]);
-        credentials.deleteIn([this.credentialRef(providerId)]);
+        this.normalizeCredentials(credentials);
+        credentials.deleteIn(['refs', this.credentialRef(providerId)]);
         rendered[CREDENTIALS] = credentials.toString();
       } catch {
         // The credential provider rejects an invalid document too, so leave it intact.
@@ -185,13 +216,17 @@ export class DshAdapter implements HarnessAdapter {
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
     try {
-      const providerId = this.providerId(profile);
+      const official = this.isOfficial(profile);
+      const providerId = official ? 'deepseek-official' : this.providerId(profile);
       const settings = parseYamlDocument(current[SETTINGS]);
       const credentials = parseYamlDocument(current[CREDENTIALS]);
-      const route = toPlain(settings.getIn(['llm-pi-ai', 'providers', providerId]));
+      const route = toPlain(
+        settings.getIn(official ? ['llm-deepseek'] : ['llm-pi-ai', 'providers', providerId]),
+      );
       const models = Array.isArray(route?.models) ? route.models : [];
       const firstModel = toPlain(models[0]);
-      const apiKey = credentials.getIn([this.credentialRef(providerId)]);
+      const ref = this.credentialRef(providerId);
+      const apiKey = credentials.getIn(['refs', ref]) ?? credentials.getIn([ref]);
 
       return {
         baseUrl: typeof route?.baseURL === 'string' ? route.baseURL : profile.baseUrl,
@@ -199,7 +234,12 @@ export class DshAdapter implements HarnessAdapter {
         model: typeof firstModel?.id === 'string' ? firstModel.id : profile.model,
         extras: {
           ...profile.extras,
+          providerType: official ? 'official' : 'custom',
           api: typeof route?.api === 'string' ? route.api : profile.extras.api || '',
+          models: models
+            .map((entry) => toPlain(entry)?.id)
+            .filter((id): id is string => typeof id === 'string')
+            .join('\n'),
           contextWindow: valueString(firstModel?.contextWindow, profile.extras.contextWindow),
           maxTokens: valueString(firstModel?.maxTokens, profile.extras.maxTokens),
           reasoningEfforts: reasoningEffortsString(
@@ -249,7 +289,50 @@ export class DshAdapter implements HarnessAdapter {
   }
 
   private credentialRef(providerId: string): string {
-    return `${providerId.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}_API_KEY`;
+    return providerId === 'deepseek-official'
+      ? 'DEEPSEEK_API_KEY'
+      : `${providerId.toUpperCase().replace(/[^A-Z0-9_]/g, '_')}_API_KEY`;
+  }
+
+  private isOfficial(profile: AdapterProfile): boolean {
+    return profile.extras.providerType === 'official';
+  }
+
+  private models(profile: AdapterProfile, official: boolean): Record<string, unknown>[] {
+    const ids = [profile.model, ...(profile.extras.models || '').split(/[\n,]/)]
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const contextWindow = this.numeric(
+      profile.extras.contextWindow,
+      official ? 1000000 : DEFAULT_CONTEXT,
+    );
+    const maxTokens = this.numeric(
+      profile.extras.maxTokens,
+      official ? 256000 : DEFAULT_MAX_TOKENS,
+    );
+    const reasoningEfforts = this.reasoningEfforts(profile.extras.reasoningEfforts);
+    return [...new Set(ids)].map((id) => ({
+      id,
+      name: id,
+      contextWindow,
+      maxTokens,
+      ...(!official && reasoningEfforts !== undefined ? { reasoningEfforts } : {}),
+    }));
+  }
+
+  private normalizeCredentials(credentials: ReturnType<typeof parseYamlDocument>): void {
+    const root = toPlain(credentials) ?? {};
+    for (const [key, value] of Object.entries(root)) {
+      if (
+        ['version', 'refs', 'records'].includes(key) ||
+        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
+        typeof value !== 'string' ||
+        !value
+      )
+        continue;
+      if (credentials.getIn(['refs', key]) === undefined) credentials.setIn(['refs', key], value);
+      credentials.deleteIn([key]);
+    }
   }
 
   private numeric(raw: string | undefined, fallback: number): number {

@@ -111,12 +111,22 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
   const providerMissing = providers !== null && providerId !== '' && selectedProvider === null;
   const endpointMissing =
     selectedProvider !== null && providerEndpoint !== '' && selectedEndpoint === undefined;
+  const dshProviderTypeField =
+    harness.id === 'dsh' ? harness.fields.find((field) => field.key === 'providerType') : undefined;
+  const isDshOfficial = harness.id === 'dsh' && extras.providerType === 'official';
   const regularFields =
     harness.id === 'claude'
       ? harness.fields.filter((field) => !CLAUDE_MODEL_FIELD_KEYS.has(field.key))
-      : harness.fields;
-  const fieldsBeforeMapping =
-    harness.id === 'claude'
+      : harness.id === 'dsh'
+        ? harness.fields.filter(
+            (field) =>
+              field.key !== 'providerType' &&
+              (!isDshOfficial || ['models', 'contextWindow', 'maxTokens'].includes(field.key)),
+          )
+        : harness.fields;
+  const fieldsBeforeMapping = isDshOfficial
+    ? []
+    : harness.id === 'claude'
       ? regularFields.filter((field) => field.key === 'authVar')
       : regularFields;
   const fieldsAfterMapping =
@@ -250,10 +260,13 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
     setError(null);
     try {
       const payload = {
-        name,
-        baseUrl:
-          selectedProvider && providerEndpoint ? (selectedEndpoint?.baseUrl ?? baseUrl) : baseUrl,
-        model,
+        name: isDshOfficial ? 'deepseek-official' : name,
+        baseUrl: isDshOfficial
+          ? baseUrl || 'https://api.deepseek.com'
+          : selectedProvider && providerEndpoint
+            ? (selectedEndpoint?.baseUrl ?? baseUrl)
+            : baseUrl,
+        model: isDshOfficial ? model || 'deepseek-v4-flash' : model,
         notes,
         extras,
         ...(providerId
@@ -300,163 +313,200 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             data-slot="profile-dialog-scroll"
             className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
           >
-            <div data-slot="provider-reference-fields" className="space-y-3 rounded-xl border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="provider-select" className="font-medium">
-                  {t('profile.useSharedProvider')}
-                </Label>
+            {dshProviderTypeField && !(isEdit && isDshOfficial) ? (
+              <ExtraField
+                field={dshProviderTypeField}
+                value={extras.providerType ?? 'custom'}
+                onChange={(value) => {
+                  setExtras((current) => ({
+                    ...current,
+                    providerType: value,
+                    ...(value === 'official'
+                      ? {
+                          models:
+                            current.models ||
+                            'deepseek-v4-flash\ndeepseek-v4-pro\ndeepseek-v4-flash-vision-exp',
+                        }
+                      : {}),
+                  }));
+                  if (value === 'official') {
+                    setName('deepseek-official');
+                    setBaseUrl('https://api.deepseek.com');
+                    setModel('deepseek-v4-flash');
+                    setProviderId('');
+                    setProviderEndpoint('');
+                  }
+                }}
+              />
+            ) : null}
+            {!isDshOfficial ? (
+              <div
+                data-slot="provider-reference-fields"
+                className="space-y-3 rounded-xl border p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="provider-select" className="font-medium">
+                    {t('profile.useSharedProvider')}
+                  </Label>
+                  {selectedProvider ? (
+                    <Badge variant="secondary">{t('profile.keyFromVault')}</Badge>
+                  ) : null}
+                </div>
+                <Select
+                  value={providerId}
+                  onValueChange={(value) => {
+                    setProviderId(value);
+                    const nextProvider = providerEntries.find((entry) => entry.id === value);
+                    setProviderEndpoint(nextProvider?.endpoints[0]?.key ?? '');
+                    clearFieldErrors('providerId', 'providerEndpoint', 'baseUrl', 'apiKey');
+                  }}
+                >
+                  <SelectTrigger
+                    id="provider-select"
+                    aria-label={t('profile.useSharedProviderLabel')}
+                    aria-invalid={fieldErrors.providerId ? true : undefined}
+                    aria-describedby={fieldErrors.providerId ? 'provider-select-error' : undefined}
+                  >
+                    <SelectValue placeholder={t('profile.providerNone')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">{t('profile.providerNone')}</SelectItem>
+                    {providerEntries.map((entry) => (
+                      <SelectItem key={entry.id} value={entry.id}>
+                        {entry.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {fieldErrors.providerId ? (
+                  <p id="provider-select-error" className="text-xs text-destructive">
+                    {lineText(t, fieldErrors.providerId)}
+                  </p>
+                ) : null}
+                {providerEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t('profile.vaultEmpty')}</p>
+                ) : null}
                 {selectedProvider ? (
-                  <Badge variant="secondary">{t('profile.keyFromVault')}</Badge>
+                  <div className="space-y-2">
+                    <Label htmlFor="provider-endpoint">{t('profile.namedEndpoint')}</Label>
+                    <Select
+                      value={providerEndpoint}
+                      onValueChange={(value) => {
+                        setProviderEndpoint(value);
+                        clearFieldErrors('providerEndpoint', 'baseUrl');
+                      }}
+                    >
+                      <SelectTrigger
+                        id="provider-endpoint"
+                        aria-label={t('profile.namedEndpointLabel')}
+                        aria-invalid={fieldErrors.providerEndpoint ? true : undefined}
+                        aria-describedby={
+                          fieldErrors.providerEndpoint ? 'provider-endpoint-error' : undefined
+                        }
+                      >
+                        <SelectValue placeholder={t('profile.endpointNone')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">{t('profile.endpointNone')}</SelectItem>
+                        {selectedProvider.endpoints.map((endpoint) => (
+                          <SelectItem key={endpoint.key} value={endpoint.key}>
+                            {endpoint.label
+                              ? t('profile.endpointOption', {
+                                  label: endpoint.label,
+                                  key: endpoint.key,
+                                })
+                              : endpoint.key}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {fieldErrors.providerEndpoint ? (
+                      <p id="provider-endpoint-error" className="text-xs text-destructive">
+                        {lineText(t, fieldErrors.providerEndpoint)}
+                      </p>
+                    ) : null}
+                    {selectedProvider.endpoints.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">{t('profile.noEndpoints')}</p>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
-              <Select
-                value={providerId}
-                onValueChange={(value) => {
-                  setProviderId(value);
-                  const nextProvider = providerEntries.find((entry) => entry.id === value);
-                  setProviderEndpoint(nextProvider?.endpoints[0]?.key ?? '');
-                  clearFieldErrors('providerId', 'providerEndpoint', 'baseUrl', 'apiKey');
+            ) : null}
+
+            {!isDshOfficial ? (
+              <PresetRow
+                harnessId={harness.id}
+                onPick={(preset) => {
+                  setBaseUrl(preset.baseUrl);
+                  clearFieldErrors('baseUrl');
+                  if (preset.model) {
+                    setModel(preset.model);
+                    clearFieldErrors('model');
+                  }
+                  if (preset.extras) {
+                    setExtras((current) => ({ ...current, ...preset.extras }));
+                  }
                 }}
-              >
-                <SelectTrigger
-                  id="provider-select"
-                  aria-label={t('profile.useSharedProviderLabel')}
-                  aria-invalid={fieldErrors.providerId ? true : undefined}
-                  aria-describedby={fieldErrors.providerId ? 'provider-select-error' : undefined}
-                >
-                  <SelectValue placeholder={t('profile.providerNone')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">{t('profile.providerNone')}</SelectItem>
-                  {providerEntries.map((entry) => (
-                    <SelectItem key={entry.id} value={entry.id}>
-                      {entry.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {fieldErrors.providerId ? (
-                <p id="provider-select-error" className="text-xs text-destructive">
-                  {lineText(t, fieldErrors.providerId)}
-                </p>
-              ) : null}
-              {providerEntries.length === 0 ? (
-                <p className="text-xs text-muted-foreground">{t('profile.vaultEmpty')}</p>
-              ) : null}
-              {selectedProvider ? (
-                <div className="space-y-2">
-                  <Label htmlFor="provider-endpoint">{t('profile.namedEndpoint')}</Label>
-                  <Select
-                    value={providerEndpoint}
-                    onValueChange={(value) => {
-                      setProviderEndpoint(value);
-                      clearFieldErrors('providerEndpoint', 'baseUrl');
+              />
+            ) : null}
+
+            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+              {!isDshOfficial ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="name">{t('profile.name')}</Label>
+                  <Input
+                    id="name"
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      clearFieldErrors('name');
                     }}
-                  >
-                    <SelectTrigger
-                      id="provider-endpoint"
-                      aria-label={t('profile.namedEndpointLabel')}
-                      aria-invalid={fieldErrors.providerEndpoint ? true : undefined}
-                      aria-describedby={
-                        fieldErrors.providerEndpoint ? 'provider-endpoint-error' : undefined
-                      }
-                    >
-                      <SelectValue placeholder={t('profile.endpointNone')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">{t('profile.endpointNone')}</SelectItem>
-                      {selectedProvider.endpoints.map((endpoint) => (
-                        <SelectItem key={endpoint.key} value={endpoint.key}>
-                          {endpoint.label
-                            ? t('profile.endpointOption', {
-                                label: endpoint.label,
-                                key: endpoint.key,
-                              })
-                            : endpoint.key}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {fieldErrors.providerEndpoint ? (
-                    <p id="provider-endpoint-error" className="text-xs text-destructive">
-                      {lineText(t, fieldErrors.providerEndpoint)}
+                    placeholder={t('profile.namePlaceholder')}
+                    aria-invalid={fieldErrors.name ? true : undefined}
+                    aria-describedby={fieldErrors.name ? 'profile-name-error' : undefined}
+                  />
+                  {fieldErrors.name ? (
+                    <p id="profile-name-error" className="text-xs text-destructive">
+                      {lineText(t, fieldErrors.name)}
                     </p>
                   ) : null}
-                  {selectedProvider.endpoints.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">{t('profile.noEndpoints')}</p>
+                  {isEdit ? (
+                    <p className="text-xs text-muted-foreground">{t('profile.renameHint')}</p>
                   ) : null}
                 </div>
               ) : null}
-            </div>
 
-            <PresetRow
-              harnessId={harness.id}
-              onPick={(preset) => {
-                setBaseUrl(preset.baseUrl);
-                clearFieldErrors('baseUrl');
-                if (preset.model) {
-                  setModel(preset.model);
-                  clearFieldErrors('model');
-                }
-                if (preset.extras) {
-                  setExtras((current) => ({ ...current, ...preset.extras }));
-                }
-              }}
-            />
-
-            <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="name">{t('profile.name')}</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    clearFieldErrors('name');
-                  }}
-                  placeholder={t('profile.namePlaceholder')}
-                  aria-invalid={fieldErrors.name ? true : undefined}
-                  aria-describedby={fieldErrors.name ? 'profile-name-error' : undefined}
-                />
-                {fieldErrors.name ? (
-                  <p id="profile-name-error" className="text-xs text-destructive">
-                    {lineText(t, fieldErrors.name)}
-                  </p>
-                ) : null}
-                {isEdit ? (
-                  <p className="text-xs text-muted-foreground">{t('profile.renameHint')}</p>
-                ) : null}
-              </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="baseUrl">{t('profile.baseUrl')}</Label>
-                <Input
-                  id="baseUrl"
-                  value={
-                    selectedProvider && providerEndpoint
-                      ? (selectedEndpoint?.baseUrl ?? baseUrl)
-                      : baseUrl
-                  }
-                  onChange={(event) => {
-                    setBaseUrl(event.target.value);
-                    clearFieldErrors('baseUrl');
-                  }}
-                  placeholder={t('profile.baseUrlPlaceholder')}
-                  disabled={selectedProvider !== null && providerEndpoint !== ''}
-                  aria-invalid={fieldErrors.baseUrl ? true : undefined}
-                  aria-describedby={fieldErrors.baseUrl ? 'profile-base-url-error' : undefined}
-                />
-                {fieldErrors.baseUrl ? (
-                  <p id="profile-base-url-error" className="text-xs text-destructive">
-                    {lineText(t, fieldErrors.baseUrl)}
-                  </p>
-                ) : null}
-                {selectedProvider && providerEndpoint ? (
-                  <p className="text-xs text-muted-foreground">
-                    {t('profile.baseUrlFromVault', { endpoint: providerEndpoint })}
-                  </p>
-                ) : null}
-              </div>
+              {!isDshOfficial ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="baseUrl">{t('profile.baseUrl')}</Label>
+                  <Input
+                    id="baseUrl"
+                    value={
+                      selectedProvider && providerEndpoint
+                        ? (selectedEndpoint?.baseUrl ?? baseUrl)
+                        : baseUrl
+                    }
+                    onChange={(event) => {
+                      setBaseUrl(event.target.value);
+                      clearFieldErrors('baseUrl');
+                    }}
+                    placeholder={t('profile.baseUrlPlaceholder')}
+                    disabled={selectedProvider !== null && providerEndpoint !== ''}
+                    aria-invalid={fieldErrors.baseUrl ? true : undefined}
+                    aria-describedby={fieldErrors.baseUrl ? 'profile-base-url-error' : undefined}
+                  />
+                  {fieldErrors.baseUrl ? (
+                    <p id="profile-base-url-error" className="text-xs text-destructive">
+                      {lineText(t, fieldErrors.baseUrl)}
+                    </p>
+                  ) : null}
+                  {selectedProvider && providerEndpoint ? (
+                    <p className="text-xs text-muted-foreground">
+                      {t('profile.baseUrlFromVault', { endpoint: providerEndpoint })}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="space-y-2">
                 <Label htmlFor="apiKey">{t('profile.apiKey')}</Label>
@@ -489,61 +539,65 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 ) : null}
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="model">
-                  {harness.id === 'claude' ? t('profile.fallbackModel') : t('profile.model')}
-                </Label>
-                <Input
-                  id="model"
-                  value={model}
-                  list={catalogModels.length > 0 ? 'profile-model-options' : undefined}
-                  onChange={(event) => {
-                    setModel(event.target.value);
-                    clearFieldErrors('model');
-                  }}
-                  placeholder={
-                    harness.id === 'claude'
-                      ? t('profile.fallbackModelPlaceholder')
-                      : t('profile.modelPlaceholder')
-                  }
-                  aria-invalid={fieldErrors.model ? true : undefined}
-                  aria-describedby={fieldErrors.model ? 'profile-model-error' : undefined}
-                />
-                {catalogModels.length > 0 ? (
-                  <datalist id="profile-model-options">
-                    {catalogModels.map((id) => (
-                      <option key={id} value={id} />
-                    ))}
-                  </datalist>
-                ) : null}
-                {fieldErrors.model ? (
-                  <p id="profile-model-error" className="text-xs text-destructive">
-                    {lineText(t, fieldErrors.model)}
-                  </p>
-                ) : null}
-                {harness.id === 'claude' ? (
-                  <p className="text-xs text-muted-foreground">{t('profile.claudeModelHint')}</p>
-                ) : null}
-              </div>
-
-              <div className="space-y-2 sm:col-span-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={onProbe}
-                    disabled={probing}
-                  >
-                    {probing ? <Loader2 className="animate-spin" /> : null}
-                    {probing ? t('probe.probing') : t('probe.action')}
-                  </Button>
-                  {probeResult ? <ProbeResultLine result={probeResult} /> : null}
+              {!isDshOfficial ? (
+                <div className="space-y-2">
+                  <Label htmlFor="model">
+                    {harness.id === 'claude' ? t('profile.fallbackModel') : t('profile.model')}
+                  </Label>
+                  <Input
+                    id="model"
+                    value={model}
+                    list={catalogModels.length > 0 ? 'profile-model-options' : undefined}
+                    onChange={(event) => {
+                      setModel(event.target.value);
+                      clearFieldErrors('model');
+                    }}
+                    placeholder={
+                      harness.id === 'claude'
+                        ? t('profile.fallbackModelPlaceholder')
+                        : t('profile.modelPlaceholder')
+                    }
+                    aria-invalid={fieldErrors.model ? true : undefined}
+                    aria-describedby={fieldErrors.model ? 'profile-model-error' : undefined}
+                  />
+                  {catalogModels.length > 0 ? (
+                    <datalist id="profile-model-options">
+                      {catalogModels.map((id) => (
+                        <option key={id} value={id} />
+                      ))}
+                    </datalist>
+                  ) : null}
+                  {fieldErrors.model ? (
+                    <p id="profile-model-error" className="text-xs text-destructive">
+                      {lineText(t, fieldErrors.model)}
+                    </p>
+                  ) : null}
+                  {harness.id === 'claude' ? (
+                    <p className="text-xs text-muted-foreground">{t('profile.claudeModelHint')}</p>
+                  ) : null}
                 </div>
-                {probeResult?.ok && catalogModels.length > 0 ? (
-                  <p className="text-xs text-muted-foreground">{t('probe.catalogHint')}</p>
-                ) : null}
-              </div>
+              ) : null}
+
+              {!isDshOfficial ? (
+                <div className="space-y-2 sm:col-span-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onProbe}
+                      disabled={probing}
+                    >
+                      {probing ? <Loader2 className="animate-spin" /> : null}
+                      {probing ? t('probe.probing') : t('probe.action')}
+                    </Button>
+                    {probeResult ? <ProbeResultLine result={probeResult} /> : null}
+                  </div>
+                  {probeResult?.ok && catalogModels.length > 0 ? (
+                    <p className="text-xs text-muted-foreground">{t('probe.catalogHint')}</p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {fieldsBeforeMapping.map((field) => (
                 <ExtraField

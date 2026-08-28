@@ -106,7 +106,9 @@ export function DashboardPage() {
                 onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
               >
                 <Plus />
-                {t('harness.newProfile')}
+                {selectedHarness.id === 'dsh'
+                  ? t('harness.addCustomProvider')
+                  : t('harness.newProfile')}
               </Button>
             </div>
             <HarnessCard

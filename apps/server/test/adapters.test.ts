@@ -559,8 +559,8 @@ describe('dsh adapter', () => {
     });
 
     expect(parseYaml(rendered.credentials)).toEqual({
-      OTHER_API_KEY: 'keep',
-      CLIPROXY_MAIN_API_KEY: 'sk-new',
+      version: 1,
+      refs: { OTHER_API_KEY: 'keep', CLIPROXY_MAIN_API_KEY: 'sk-new' },
     });
   });
 
@@ -576,7 +576,10 @@ describe('dsh adapter', () => {
     expect(parsedSettings['llm-pi-ai'].providers['glm-main']).toBeUndefined();
     expect(parsedSettings['llm-pi-ai'].providers.other).toBeDefined();
     expect(parsedSettings['agent-default-model']).toBeUndefined();
-    expect(parseYaml(rendered.credentials)).toEqual({ OTHER_API_KEY: 'keep' });
+    expect(parseYaml(rendered.credentials)).toEqual({
+      version: 1,
+      refs: { OTHER_API_KEY: 'keep' },
+    });
   });
 
   test('recovers hand edits from both DSH documents', () => {
@@ -629,6 +632,32 @@ describe('dsh adapter', () => {
       xhigh: 'xhigh',
       max: 'max',
     });
+  });
+
+  test('saving registers a provider without changing the default model', () => {
+    const adapter = new DshAdapter(environment);
+    const rendered = adapter.renderAvailable!(profile({ name: 'new-route' }), {
+      settings: 'agent-default-model:\n  provider: existing\n  model: old-model\n',
+    });
+    const parsed = parseYaml(rendered.settings);
+    expect(parsed['llm-pi-ai'].providers['new-route']).toBeDefined();
+    expect(parsed['agent-default-model']).toEqual({ provider: 'existing', model: 'old-model' });
+  });
+
+  test('writes the native DeepSeek route and official credential', () => {
+    const adapter = new DshAdapter(environment);
+    const rendered = adapter.render(
+      profile({
+        model: 'deepseek-v4-flash',
+        baseUrl: 'https://api.deepseek.com',
+        extras: { providerType: 'official', models: 'deepseek-v4-flash\ndeepseek-v4-pro' },
+      }),
+      {},
+    );
+    const settings = parseYaml(rendered.settings);
+    expect(settings['llm-deepseek'].apiKeyEnv).toBe('DEEPSEEK_API_KEY');
+    expect(settings['llm-deepseek'].models).toHaveLength(2);
+    expect(parseYaml(rendered.credentials).refs.DEEPSEEK_API_KEY).toBe('sk-new');
   });
 });
 

@@ -29,9 +29,13 @@ type HarnessCardProps = {
 export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCardProps) {
   const { t } = useTranslation();
   const activateOfficial = useAppStore((state) => state.activateOfficial);
+  const activateProfile = useAppStore((state) => state.activateProfile);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [activating, setActivating] = useState<ProfilePublic | null>(null);
+  const dshOfficialCount = harness.profiles.filter(
+    (profile) => profile.extras.providerType === 'official',
+  ).length;
 
   // The stored name of the official entry is data on disk, so the display text
   // comes from the `official` flag rather than from matching the name.
@@ -47,7 +51,7 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
             <div className="min-w-0 sm:pr-5">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="size-2 rounded-full bg-primary shadow-[0_0_0_4px_rgb(99_91_255/0.1)]" />
-                {t('harness.activeConfig')}
+                {harness.id === 'dsh' ? t('harness.defaultModel') : t('harness.activeConfig')}
               </div>
               <CardTitle className="mt-3 truncate text-xl">
                 {activeName === null
@@ -84,7 +88,9 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">{t('harness.profiles')}</h3>
+            <h3 className="text-sm font-semibold">
+              {harness.id === 'dsh' ? t('harness.providers') : t('harness.profiles')}
+            </h3>
             <p className="mt-1 text-xs text-muted-foreground">
               {t('harness.profileCount', { count: harness.profiles.length })}
             </p>
@@ -137,6 +143,8 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
             harness.profiles.map((profile) => {
               const active =
                 harness.active?.official !== true && harness.active?.name === profile.name;
+              const dshOfficial =
+                harness.id === 'dsh' && profile.extras.providerType === 'official';
               return (
                 <div
                   key={profile.name}
@@ -156,8 +164,17 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">{profile.name}</p>
-                        {active ? <Badge>{t('harness.active')}</Badge> : null}
+                        <p className="font-medium">
+                          {dshOfficial ? t('harness.deepseekOfficial') : profile.name}
+                        </p>
+                        {active ? (
+                          <Badge>
+                            {harness.id === 'dsh' ? t('harness.default') : t('harness.active')}
+                          </Badge>
+                        ) : null}
+                        {dshOfficial ? (
+                          <Badge variant="secondary">{t('harness.official')}</Badge>
+                        ) : null}
                         {profile.overriddenTargets.length > 0 ? (
                           <Badge variant="outline">{t('harness.manualOverride')}</Badge>
                         ) : null}
@@ -176,10 +193,21 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     <Button
                       size="sm"
                       variant={active ? 'secondary' : 'outline'}
-                      onClick={() => setActivating(profile)}
+                      onClick={() =>
+                        harness.id === 'dsh'
+                          ? void activateProfile(harness.id, profile.name)
+                          : setActivating(profile)
+                      }
+                      disabled={active}
                     >
                       {!active ? <Play /> : null}
-                      {active ? t('harness.active') : t('harness.activate')}
+                      {active
+                        ? harness.id === 'dsh'
+                          ? t('harness.default')
+                          : t('harness.active')
+                        : harness.id === 'dsh'
+                          ? t('harness.setDefault')
+                          : t('harness.activate')}
                     </Button>
                     <Button
                       size="icon"
@@ -193,11 +221,17 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                       size="icon"
                       variant="ghost"
                       aria-label={t('harness.delete', { name: profile.name })}
-                      disabled={active}
+                      disabled={active || (dshOfficial && dshOfficialCount === 1)}
                       title={active ? t('harness.deleteBlocked') : undefined}
                       onClick={() => setPendingName(profile.name)}
                     >
-                      <Trash2 className={active ? undefined : 'text-destructive'} />
+                      <Trash2
+                        className={
+                          active || (dshOfficial && dshOfficialCount === 1)
+                            ? undefined
+                            : 'text-destructive'
+                        }
+                      />
                     </Button>
                   </div>
                 </div>

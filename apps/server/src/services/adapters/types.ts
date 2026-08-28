@@ -58,6 +58,9 @@ export interface HarnessAdapter {
   /** Produce the full content of every target for this profile. */
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles;
 
+  /** Add or update an additive entry without changing the harness's current default. */
+  renderAvailable?(profile: AdapterProfile, current: CurrentFiles): RenderedFiles;
+
   /**
    * Remove this manager's provider routing and return control to the harness's built-in
    * account login. Only implemented by harnesses with a native official login flow.

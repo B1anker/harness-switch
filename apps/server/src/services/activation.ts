@@ -37,6 +37,7 @@ export interface IActivationService {
   getActive(harness: HarnessId): ActivePublic | null;
   activate(harness: HarnessId, name: string): ActivationResult;
   activateOfficial(harness: HarnessId): ActivationResult;
+  syncProfile(harness: HarnessId, name: string): void;
   preview(harness: HarnessId, name: string): PreviewTarget[];
   /**
    * The exact writes the current ACTIVE state would produce (named profile or official
@@ -181,6 +182,21 @@ export class ActivationService implements IActivationService {
     return { envFile: this.environment.files.env, warnings };
   }
 
+  syncProfile(harness: HarnessId, name: string): void {
+    const adapter = this.adapters.get(harness);
+    if (!adapter.renderAvailable) return;
+    const profile = this.profiles.decrypt(harness, name);
+    adapter.validate?.(profile);
+    const targets = adapter.targets();
+    const current = this.readCurrent(targets);
+    this.liveWrite.apply({
+      kind: 'sync',
+      harness,
+      profile: name,
+      writes: this.toWrites(targets, adapter.renderAvailable(profile, current)),
+    });
+  }
+
   preview(harness: HarnessId, name: string): PreviewTarget[] {
     const adapter = this.adapters.get(harness);
     const profile = this.profiles.decrypt(harness, name);
@@ -236,10 +252,23 @@ export class ActivationService implements IActivationService {
     if (!adapter.revoke) {
       return;
     }
+    const profile = this.profiles.decrypt(harness, name);
+    if (
+      harness === 'dsh' &&
+      profile.extras.providerType === 'official' &&
+      this.profiles
+        .list('dsh')
+        .some(
+          (candidate) => candidate.name !== name && candidate.extras.providerType === 'official',
+        )
+    ) {
+      // Duplicate legacy records share one native route and credential. Removing only
+      // the stored duplicate must not revoke the route still owned by the survivor.
+      return;
+    }
     // Fail closed: if the provider cannot be removed from the live files, do not
     // delete the profile either, or the orphan entry would be left behind with
     // no record left to clean it up with.
-    const profile = this.profiles.decrypt(harness, name);
     const targets = adapter.targets();
     const rendered = adapter.revoke(profile, this.readCurrent(targets));
     this.liveWrite.apply({

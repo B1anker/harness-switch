@@ -99,6 +99,9 @@ export class ProfileService implements IProfileService {
 
   list(harness: HarnessId): ProfilePublic[] {
     const store = this.read();
+    if (this.repairEndpointReferences(store, harness)) {
+      this.files.writeJson(this.environment.files.profiles, store);
+    }
     return Object.entries(store[harness] ?? {}).map(([name, profile]) =>
       this.toPublic(harness, name, profile),
     );
@@ -273,6 +276,9 @@ export class ProfileService implements IProfileService {
             : undefined;
         if (endpoint) {
           stored.base_url = endpoint.baseUrl;
+        } else if (stored.provider_endpoint !== undefined && endpoints.length > 0) {
+          stored.provider_endpoint = endpoints[0]!.key;
+          stored.base_url = endpoints[0]!.baseUrl;
         }
         updated++;
       }
@@ -287,6 +293,26 @@ export class ProfileService implements IProfileService {
     // Strict: a corrupt profile store must never be mistaken for an empty one,
     // or a later write would overwrite the user's encrypted profiles.
     return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
+  }
+
+  private repairEndpointReferences(store: ProfileStore, harness: HarnessId): boolean {
+    let changed = false;
+    for (const stored of Object.values(store[harness] ?? {})) {
+      if (!stored.provider_id || !stored.provider_endpoint) continue;
+      try {
+        const provider = this.vault.get(stored.provider_id);
+        if (provider.endpoints.some((endpoint) => endpoint.key === stored.provider_endpoint))
+          continue;
+        const fallback = provider.endpoints[0];
+        if (!fallback) continue;
+        stored.provider_endpoint = fallback.key;
+        stored.base_url = fallback.baseUrl;
+        changed = true;
+      } catch {
+        // A missing provider still degrades to the encrypted cache in resolveKey.
+      }
+    }
+    return changed;
   }
 
   private toPublic(harness: HarnessId, name: string, profile: StoredProfile): ProfilePublic {
