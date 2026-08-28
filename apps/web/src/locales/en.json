@@ -26,10 +26,7 @@
   "nav": {
     "currentLocalUser": "Current local user",
     "localUser": "Local user",
-    "syncUserConfig": "Sync user config",
-    "importExisting": "Import existing config",
-    "transfer": "Import / Export",
-    "githubSync": "GitHub Sync",
+    "transfer": "Move configuration",
     "vault": "Provider vault",
     "signOut": "Sign out",
     "switchHarness": "Switch harness"
@@ -499,8 +496,8 @@
     "cacheNotMigrated": "The Codex login cache was not migrated."
   },
   "transfer": {
-    "title": "Move the whole configuration",
-    "intro": "Packs every harness profile, API key, raw file override, and activation state so another machine can reuse them.",
+    "title": "Move configuration",
+    "intro": "Bring profiles and credentials onto this machine, or pack them up to take along. Every source writes to this manager’s own store.",
     "exportTitle": "Export everything",
     "exportIntro": "The file is AES-256-GCM encrypted with the transfer passphrase, independent of this machine's local key.",
     "passphrase": "Transfer passphrase",
@@ -508,14 +505,9 @@
     "passphraseConfirm": "Confirm the passphrase",
     "passphraseConfirmPlaceholder": "Type it again",
     "passphraseMismatch": "The two passphrases do not match.",
-    "includeCache": "Include Codex's official login cache (auth.json) in the export",
-    "includeCacheHint": "The export stays encrypted with the transfer passphrase, but it will then contain a reusable Codex login session — hand it only to a recipient you trust.",
-    "noCacheToExport": "This user has no Codex login cache to export.",
     "encrypting": "Encrypting…",
     "download": "Download the encrypted export",
     "exported": "The encrypted export is ready. The passphrase is not written to the file — keep it separately.",
-    "exportedWithCache": "The encrypted export is ready and includes the Codex login cache. The passphrase is not written to the file — keep it separately.",
-    "exportedWithoutCache": "The encrypted export is ready, without the Codex login cache. The passphrase is not written to the file — keep it separately.",
     "importTitle": "Import onto this machine",
     "importIntro": "The file is decrypted and checked for conflicts first; nothing is written until you confirm. Profiles of the same name on this machine are kept by default.",
     "pickFile": "Choose a .hsw-backup file",
@@ -534,9 +526,6 @@
     "activeCount_other": "{{count}} activation states",
     "harnessProfiles": "{{harness}}: {{count}}",
     "conflictList": "Same name: {{items}}",
-    "migrateCache": "Migrate Codex's official login cache (auth.json)",
-    "migrateCacheHint": "The export contains a reusable Codex login session. It is not written to this machine by default — only pick this if the current user may use that login.",
-    "migrateCacheOverwrite": "This machine already has a login cache; continuing overwrites it and creates a backup.",
     "previewStale": "The import options changed — check the contents again before confirming.",
     "conflictPolicy": "Profiles with the same name",
     "policySkip": "Keep this machine’s profile, skip the import",
@@ -550,9 +539,6 @@
     "confirmOverwrite_one": "{{count}} of them has the same name and will be overwritten.",
     "confirmOverwrite_other": "{{count}} of them have the same name and will be overwritten.",
     "confirmKeep": "Profiles with the same name are kept, not overwritten.",
-    "confirmCacheOverwrite": "In addition, the export's full Codex login cache overwrites the one on this machine, with a backup created first.",
-    "confirmCacheWrite": "In addition, the export's full Codex login cache is written to this machine.",
-    "confirmCacheSkip": "The export's full Codex login cache is not migrated.",
     "proceedAware": "Understood, import anyway",
     "proceedOverwrite": "Overwrite and import",
     "proceedSafe": "Import safely",
@@ -573,7 +559,16 @@
       "openai-api-key": "Restoring the selected Codex profile updates OPENAI_API_KEY in this machine's auth.json; that is not the same as migrating the export's full official login session.",
       "auth-override": "Restoring the selected Codex profile writes that profile's raw auth override into this machine's auth.json.",
       "official-cleanup": "Restoring Codex's official-login state may clear a leftover OPENAI_API_KEY from this machine's auth.json."
-    }
+    },
+    "sourceLabel": "Pick a source",
+    "sources": {
+      "scan": "Config already here",
+      "user": "Another local user",
+      "file": "Encrypted file",
+      "gist": "GitHub Gist"
+    },
+    "currentPolicy": "Current policy: {{policy}}",
+    "importing": "Importing…"
   },
   "githubSync": {
     "title": "GitHub Cloud Sync",
@@ -594,7 +589,6 @@
     "tokenPlaceholder": "Enter GitHub Token with gist permission (ghp_...)",
     "connectToken": "Connect & Sign in",
     "connecting": "Connecting…",
-    "connectedAs": "Connected to GitHub:",
     "disconnect": "Disconnect",
     "lastSynced": "Last synced:",
     "neverSynced": "Never synced",
@@ -603,7 +597,6 @@
     "pushIntro": "Encrypts all profiles and provider credentials on this machine and uploads to your private Gist.",
     "passphrase": "Sync Passphrase",
     "passphrasePlaceholder": "Passphrase for end-to-end encryption",
-    "includeCache": "Include Codex official login session (auth.json)",
     "pushing": "Encrypting and uploading…",
     "pushSuccess": "Successfully synced to GitHub Gist ({{profiles}} profiles, {{vault}} credentials).",
     "pullTitle": "Pull from Cloud",
@@ -612,7 +605,18 @@
     "inspect": "Inspect Cloud Backup",
     "pulling": "Pulling…",
     "confirmPull": "Confirm Sync to Local",
-    "pullSuccess": "Cloud sync complete: {{summary}}"
+    "pullSuccess": "Cloud sync complete: {{summary}}",
+    "authorized": "GitHub authorized — welcome, {{user}}.",
+    "connected": "GitHub connected — welcome, {{user}}.",
+    "disconnected": "Disconnected from GitHub.",
+    "codeExpired": "The authorization code expired — request a new one.",
+    "authFailed": "Authorization failed — try again.",
+    "connectedBadge": "Connected",
+    "refreshStatus": "Refresh status",
+    "previewTitle": "What the cloud backup holds",
+    "backedUpAt": "Backed up {{time}}",
+    "tokenLabel": "Personal access token",
+    "tokenScopeHint": "The token needs the gist scope to read and write the encrypted config file."
   },
   "import": {
     "title": "Import existing configuration",

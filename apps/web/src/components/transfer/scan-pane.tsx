@@ -9,14 +9,6 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -29,11 +21,6 @@ import {
 import { useTranslation } from '@/lib/i18n';
 import { errorLineWith, lineText, type MessageLine, messageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
-
-type ImportWizardDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-};
 
 /** Per-candidate choices, keyed by candidate id. */
 type Choice = {
@@ -56,10 +43,13 @@ type Summary = {
 
 /**
  * Adopts configuration a user already set up by hand. The scan is read-only and the
- * import writes only to this manager's own store, so trying the wizard out can never
- * damage the setup it is reading.
+ * import writes only to this manager's own store, so trying it out can never damage the
+ * setup it is reading.
+ *
+ * Conflicts are decided per candidate, not by one global policy, because each row also
+ * needs its own name and a choice of where the credential lands.
  */
-export function ImportWizardDialog({ open, onOpenChange }: ImportWizardDialogProps) {
+export function ScanPane() {
   const { t } = useTranslation();
   const scan = useAppStore((state) => state.scan);
   const scanLoading = useAppStore((state) => state.scanLoading);
@@ -75,14 +65,9 @@ export function ImportWizardDialog({ open, onOpenChange }: ImportWizardDialogPro
   const [summary, setSummary] = useState<Summary | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-    setSummary(null);
-    setError(null);
     void loadScan();
     void loadProviders();
-  }, [open, loadScan, loadProviders]);
+  }, [loadScan, loadProviders]);
 
   // Seed one choice per candidate whenever a fresh scan arrives, keeping any edit the
   // user already made to a candidate that is still there.
@@ -155,106 +140,95 @@ export function ImportWizardDialog({ open, onOpenChange }: ImportWizardDialogPro
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] w-[min(56rem,calc(100vw-2rem))] max-w-3xl flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle>{t('import.title')}</DialogTitle>
-          <DialogDescription>{t('import.intro')}</DialogDescription>
-        </DialogHeader>
+    <div className="space-y-4">
+      <p className="text-sm leading-relaxed text-muted-foreground">{t('import.intro')}</p>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
-          {scanLoading ? (
-            <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {t('import.scanning')}
+      {scanLoading ? (
+        <p className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
+          {t('import.scanning')}
+        </p>
+      ) : null}
+      {scanError ? <p className="py-6 text-sm text-destructive">{lineText(t, scanError)}</p> : null}
+      {summary ? (
+        <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 px-4 py-3 text-sm">
+          <p className="flex items-center gap-2 font-medium">
+            <CheckCircle2 className="size-4 text-emerald-600" />
+            {t('import.summary', {
+              imported: summary.imported,
+              skipped: summary.skipped,
+              providersCreated: summary.providersCreated,
+            })}
+          </p>
+          {summary.warnings.map((warning) => (
+            <p key={warning.key + warning.scope} className="mt-1 text-xs text-muted-foreground">
+              {lineText(t, warning)}
             </p>
-          ) : null}
-          {scanError ? (
-            <p className="py-6 text-sm text-destructive">{lineText(t, scanError)}</p>
-          ) : null}
-          {summary ? (
-            <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 px-4 py-3 text-sm">
-              <p className="flex items-center gap-2 font-medium">
-                <CheckCircle2 className="size-4 text-emerald-600" />
-                {t('import.summary', {
-                  imported: summary.imported,
-                  skipped: summary.skipped,
-                  providersCreated: summary.providersCreated,
-                })}
-              </p>
-              {summary.warnings.map((warning) => (
-                <p key={warning.key + warning.scope} className="mt-1 text-xs text-muted-foreground">
-                  {lineText(t, warning)}
-                </p>
-              ))}
-            </div>
-          ) : null}
-
-          {(scan ?? []).map((result) => (
-            <section key={result.harness} className="rounded-2xl border bg-card px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold">{result.label}</h3>
-                {result.candidates.length > 0 ? (
-                  <Badge variant="secondary">
-                    {t('import.providerCount', { count: result.candidates.length })}
-                  </Badge>
-                ) : null}
-              </div>
-              <ul className="mt-2 space-y-0.5">
-                {result.sources.map((source) => (
-                  <li
-                    key={source.key}
-                    className="truncate font-mono text-[11px] text-muted-foreground"
-                  >
-                    {source.path} ·{' '}
-                    {!source.exists
-                      ? t('import.sourceMissing')
-                      : source.parsable
-                        ? t('import.sourceRead')
-                        : t('import.sourceUnparsable')}
-                  </li>
-                ))}
-              </ul>
-              {result.candidates.length === 0 ? (
-                <p className="mt-2 text-xs text-muted-foreground">{noteText(t, result)}</p>
-              ) : (
-                <ul className="mt-3 space-y-3">
-                  {result.candidates.map((candidate) => (
-                    <CandidateRow
-                      key={candidate.id}
-                      candidate={candidate}
-                      choice={choices[candidate.id]}
-                      providers={providers ?? []}
-                      onChange={(patch) => update(candidate.id, patch)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
           ))}
         </div>
+      ) : null}
 
-        {error ? <p className="text-sm text-destructive">{lineText(t, error)}</p> : null}
-        <DialogFooter className="items-center">
-          <span className="mr-auto text-xs text-muted-foreground">
-            {chosen.length > 0
-              ? t('import.selected', { count: chosen.length })
-              : t('import.selectPrompt')}
-          </span>
-          <Button variant="outline" onClick={() => void loadScan()} disabled={scanLoading}>
-            <FileSearch />
-            {t('import.rescan')}
-          </Button>
-          <Button
-            disabled={chosen.length === 0 || blocked.length > 0 || submitting}
-            onClick={() => void submit()}
-          >
-            {submitting ? <Loader2 className="animate-spin" /> : null}
-            {t('import.importSelected')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {(scan ?? []).map((result) => (
+        <section key={result.harness} className="rounded-2xl border bg-card px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">{result.label}</h3>
+            {result.candidates.length > 0 ? (
+              <Badge variant="secondary">
+                {t('import.providerCount', { count: result.candidates.length })}
+              </Badge>
+            ) : null}
+          </div>
+          <ul className="mt-2 space-y-0.5">
+            {result.sources.map((source) => (
+              <li key={source.key} className="truncate font-mono text-[11px] text-muted-foreground">
+                {source.path} ·{' '}
+                {!source.exists
+                  ? t('import.sourceMissing')
+                  : source.parsable
+                    ? t('import.sourceRead')
+                    : t('import.sourceUnparsable')}
+              </li>
+            ))}
+          </ul>
+          {result.candidates.length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">{noteText(t, result)}</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {result.candidates.map((candidate) => (
+                <CandidateRow
+                  key={candidate.id}
+                  candidate={candidate}
+                  choice={choices[candidate.id]}
+                  providers={providers ?? []}
+                  onChange={(patch) => update(candidate.id, patch)}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ))}
+
+      {error ? <p className="text-sm text-destructive">{lineText(t, error)}</p> : null}
+
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="mr-auto text-xs text-muted-foreground">
+          {chosen.length > 0
+            ? t('import.selected', { count: chosen.length })
+            : t('import.selectPrompt')}
+        </span>
+        <Button variant="outline" onClick={() => void loadScan()} disabled={scanLoading}>
+          <FileSearch />
+          {t('import.rescan')}
+        </Button>
+        <Button
+          disabled={chosen.length === 0 || blocked.length > 0 || submitting}
+          onClick={() => void submit()}
+        >
+          {submitting ? <Loader2 className="animate-spin" /> : null}
+          {t('import.importSelected')}
+        </Button>
+      </div>
+    </div>
   );
 }
 
