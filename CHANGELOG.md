@@ -1,3 +1,16 @@
+# [0.24.0](https://github.com/B1anker/harness-switch/compare/v0.23.0...v0.24.0) (2026-08-31)
+
+
+### Bug Fixes
+
+* **github:** tolerate device-poll TLS errors and default Codex cache sync on ([f180ff8](https://github.com/B1anker/harness-switch/commit/f180ff87c4aef3813a479cdbd767054f03317c0f))
+
+
+### Features
+
+* **dsh:** sync providers and support official credentials ([8995a4d](https://github.com/B1anker/harness-switch/commit/8995a4dbc9c5c7bbecef6615b20f433972fb4d94))
+* **web:** consolidate four config-transfer entries into one dialog ([0583819](https://github.com/B1anker/harness-switch/commit/0583819a736c2fc8d7bc3b9c5867bc16676dc5f7))
+
 # [0.23.0](https://github.com/B1anker/harness-switch/compare/v0.22.0...v0.23.0) (2026-08-28)
 
 
