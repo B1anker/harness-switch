@@ -7,11 +7,11 @@ import {
   LogOut,
   Plus,
   Server,
-  SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
+import { BrandMark } from '@/components/brand-mark';
 import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
 import { DoctorPanel } from '@/components/doctor-panel';
 import { HarnessCard } from '@/components/harness-card';
@@ -53,9 +53,7 @@ export function DashboardPage() {
       <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur-xl">
         <div className="flex min-h-20 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-2 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_10px_24px_-12px_rgb(99_91_255/0.8)]">
-              <SlidersHorizontal className="size-5" />
-            </span>
+            <BrandMark className="size-10 shrink-0 ring-1 ring-black/5 dark:ring-white/10" />
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
                 <h1 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight">

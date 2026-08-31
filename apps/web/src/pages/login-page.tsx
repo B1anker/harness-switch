@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { BrandMark } from '@/components/brand-mark';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,10 @@ export function LoginPage() {
   return (
     <main className="grid min-h-[100dvh] lg:grid-cols-2">
       <section className="hidden flex-col justify-between border-r bg-card p-10 lg:flex">
-        <p className="font-mono text-xs text-muted-foreground">{t('app.brandMark')}</p>
+        <div className="flex items-center gap-3">
+          <BrandMark className="size-9 ring-1 ring-black/5 dark:ring-white/10" />
+          <p className="font-mono text-xs text-muted-foreground">{t('app.brandMark')}</p>
+        </div>
         <div className="max-w-sm space-y-3">
           <h1 className="text-3xl font-semibold tracking-tight">{t('login.title')}</h1>
           <p className="text-sm leading-relaxed text-muted-foreground">{t('login.intro')}</p>
@@ -41,7 +45,10 @@ export function LoginPage() {
         <form className="w-full max-w-sm space-y-5" onSubmit={onSubmit}>
           <div className="flex items-start justify-between gap-3 lg:hidden">
             <div>
-              <p className="font-mono text-xs text-muted-foreground">{t('app.brandMark')}</p>
+              <div className="flex items-center gap-2">
+                <BrandMark className="size-7 ring-1 ring-black/5 dark:ring-white/10" />
+                <p className="font-mono text-xs text-muted-foreground">{t('app.brandMark')}</p>
+              </div>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t('login.title')}</h1>
             </div>
             <div className="flex gap-2">
