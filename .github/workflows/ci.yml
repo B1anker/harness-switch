@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+  # Also on pushes to main: the release workflow does not run the test suite, so
+  # without this a regression merged to main stays unnoticed until the next PR.
+  push:
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
