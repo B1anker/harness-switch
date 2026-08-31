@@ -187,6 +187,38 @@ describe('rest api', () => {
     ).toBe(401);
   });
 
+  test('every guarded prefix refuses anonymous requests on both its bare and sub paths', async () => {
+    const { app } = await createTestApp();
+    // The guard is registered once per prefix, as `/x/*`. Hono matches that against the bare
+    // `/x` too, so a single registration covers both shapes — this asserts it, and would
+    // catch a Hono change to that matching behaviour as well as a prefix added to `app.ts`
+    // without a guard.
+    const guarded = [
+      'users',
+      'harnesses',
+      'backups',
+      'scan',
+      'operations',
+      'transfer',
+      'github',
+      'update',
+      'providers',
+      'probe',
+      'doctor',
+      'drift',
+    ];
+
+    for (const prefix of guarded) {
+      for (const path of [`/api/${prefix}`, `/api/${prefix}/anything`]) {
+        expect((await app.request(path)).status, `${path} should require a session`).toBe(401);
+      }
+    }
+
+    // The two endpoints deliberately outside the guard stay reachable.
+    expect((await app.request('/api/version')).status).toBe(200);
+    expect((await app.request('/healthz')).status).toBe(200);
+  });
+
   test('issues a session cookie the browser cannot read from script', async () => {
     const { app, password } = await createTestApp();
     const login = await app.request('/api/auth/login', {

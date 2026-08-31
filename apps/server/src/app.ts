@@ -59,41 +59,33 @@ export function createApp(services: InstantiationService): Hono {
     c.json({ name: 'harness-switch', version: await serverVersion() }),
   );
   api.route('/auth', createAuthRoutes(services));
-  api.use('/users/*', createAuthGuard(services));
-  api.use('/users', createAuthGuard(services));
-  api.route('/users', createUserRoutes(services));
-  api.use('/harnesses/*', createAuthGuard(services));
-  api.use('/harnesses', createAuthGuard(services));
-  api.route('/harnesses', createHarnessRoutes(services));
-  api.use('/backups/*', createAuthGuard(services));
-  api.use('/backups', createAuthGuard(services));
-  api.route('/backups', createBackupRoutes(services));
-  api.use('/scan/*', createAuthGuard(services));
-  api.use('/scan', createAuthGuard(services));
-  api.route('/scan', createScanRoutes(services));
-  api.use('/operations/*', createAuthGuard(services));
-  api.use('/operations', createAuthGuard(services));
-  api.route('/operations', createOperationRoutes(services));
-  api.use('/transfer/*', createAuthGuard(services));
-  api.route('/transfer', createTransferRoutes(services));
-  api.use('/github/*', createAuthGuard(services));
-  api.use('/github', createAuthGuard(services));
-  api.route('/github', createGitHubRoutes(services));
-  api.use('/update/*', createAuthGuard(services));
-  api.use('/update', createAuthGuard(services));
-  api.route('/update', createUpdateRoutes(services));
-  api.use('/providers/*', createAuthGuard(services));
-  api.use('/providers', createAuthGuard(services));
-  api.route('/providers', createProviderRoutes(services));
-  api.use('/probe/*', createAuthGuard(services));
-  api.use('/probe', createAuthGuard(services));
-  api.route('/probe', createProbeRoutes(services));
-  api.use('/doctor/*', createAuthGuard(services));
-  api.use('/doctor', createAuthGuard(services));
-  api.route('/doctor', createDoctorRoutes(services));
-  api.use('/drift/*', createAuthGuard(services));
-  api.use('/drift', createAuthGuard(services));
-  api.route('/drift', createDriftRoutes(services));
+
+  /**
+   * Mounts a router behind the session guard.
+   *
+   * One `/x/*` registration is enough: Hono matches a trailing wildcard against the bare
+   * `/x` as well as its sub-paths, on every router implementation. Each prefix used to
+   * register the guard twice — once bare, once wildcard — which ran the session lookup
+   * twice for bare-path requests, and left `/transfer` looking under-protected next to
+   * its neighbours when it was not. `test/api.test.ts` asserts the coverage either way.
+   */
+  const guarded = (path: string, routes: Hono): void => {
+    api.use(`${path}/*`, createAuthGuard(services));
+    api.route(path, routes);
+  };
+
+  guarded('/users', createUserRoutes(services));
+  guarded('/harnesses', createHarnessRoutes(services));
+  guarded('/backups', createBackupRoutes(services));
+  guarded('/scan', createScanRoutes(services));
+  guarded('/operations', createOperationRoutes(services));
+  guarded('/transfer', createTransferRoutes(services));
+  guarded('/github', createGitHubRoutes(services));
+  guarded('/update', createUpdateRoutes(services));
+  guarded('/providers', createProviderRoutes(services));
+  guarded('/probe', createProbeRoutes(services));
+  guarded('/doctor', createDoctorRoutes(services));
+  guarded('/drift', createDriftRoutes(services));
   app.route('/api', api);
 
   const publicDir = environment.publicDir;
