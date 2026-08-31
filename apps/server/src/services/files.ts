@@ -127,7 +127,10 @@ export class FileService implements IFileService {
       throw error;
     }
     if (!stat.isFile()) {
-      throw new HttpError(400, `${file} 不是普通文件，拒绝读取`);
+      throw new HttpError(400, `${file} 不是普通文件，拒绝读取`, {
+        code: ERROR_CODES.fileNotRegular,
+        params: { file },
+      });
     }
     return this.readText(file);
   }
@@ -140,6 +143,7 @@ export class FileService implements IFileService {
     throw new HttpError(
       403,
       `${file} 解析后落在 ${this.environment.currentUser.username} 的可管理目录之外，拒绝操作`,
+      { code: ERROR_CODES.fileOutsideManagedDirectory, params: { file } },
     );
   }
 
@@ -285,6 +289,7 @@ export class FileService implements IFileService {
         throw new HttpError(
           403,
           `无法把 ${path} 的所有权设置为 ${this.environment.currentUser.username}，跨用户管理需要以 root 运行`,
+          { code: ERROR_CODES.fileOwnershipRequiresRoot, params: { path } },
         );
       }
       if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;

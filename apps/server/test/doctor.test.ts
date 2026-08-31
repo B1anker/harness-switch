@@ -15,6 +15,7 @@ let binDir = '';
 let services: ReturnType<typeof createServices>;
 let originalPath = '';
 let originalFetch: typeof globalThis.fetch;
+let originalUpdateCheck: string | undefined;
 
 beforeEach(() => {
   homeDir = mkdtempSync(join(tmpdir(), 'hsw-doctor-'));
@@ -24,6 +25,8 @@ beforeEach(() => {
   process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
   process.env.CODEX_HOME = join(homeDir, '.codex');
   originalPath = process.env.PATH ?? '';
+  originalUpdateCheck = process.env.HSW_UPDATE_CHECK;
+  process.env.HSW_UPDATE_CHECK = '0';
   process.env.PATH = binDir;
   // The registry update check must never hit the real network in tests.
   originalFetch = globalThis.fetch;
@@ -38,6 +41,8 @@ afterEach(() => {
   delete process.env.HSW_HOME_DIR;
   delete process.env.HSW_DATA_DIR;
   delete process.env.CODEX_HOME;
+  if (originalUpdateCheck === undefined) delete process.env.HSW_UPDATE_CHECK;
+  else process.env.HSW_UPDATE_CHECK = originalUpdateCheck;
   process.env.PATH = originalPath;
   globalThis.fetch = originalFetch;
   rmSync(homeDir, { recursive: true, force: true });

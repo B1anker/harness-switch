@@ -81,11 +81,11 @@ export class VaultService implements IVaultService {
   create(input: CreateProviderRequest): ProviderPublic {
     const name = String(input.name ?? '').trim();
     if (!name) {
-      throw new HttpError(400, 'name is required');
+      throw new HttpError(400, 'name is required', { code: ERROR_CODES.providerNameRequired });
     }
     const apiKey = String(input.apiKey ?? '');
     if (!apiKey) {
-      throw new HttpError(400, 'apiKey is required');
+      throw new HttpError(400, 'apiKey is required', { code: ERROR_CODES.providerApiKeyRequired });
     }
     const endpoints = this.validateEndpoints(input.endpoints);
     const id = this.nextId(name);
@@ -108,12 +108,12 @@ export class VaultService implements IVaultService {
     const store = this.read();
     const entry = store.entries[id];
     if (!entry) {
-      throw new HttpError(404, 'provider not found');
+      throw new HttpError(404, 'provider not found', { code: ERROR_CODES.providerNotFound });
     }
     if (input.name !== undefined) {
       const name = String(input.name).trim();
       if (!name) {
-        throw new HttpError(400, 'name is required');
+        throw new HttpError(400, 'name is required', { code: ERROR_CODES.providerNameRequired });
       }
       entry.name = name;
     }
@@ -141,7 +141,7 @@ export class VaultService implements IVaultService {
   remove(id: string): void {
     const store = this.read();
     if (!store.entries[id]) {
-      throw new HttpError(404, 'provider not found');
+      throw new HttpError(404, 'provider not found', { code: ERROR_CODES.providerNotFound });
     }
     const references = this.references(id);
     if (references.length > 0) {
@@ -184,7 +184,7 @@ export class VaultService implements IVaultService {
   private require(id: string): VaultEntry {
     const entry = this.read().entries[id];
     if (!entry) {
-      throw new HttpError(404, 'provider not found');
+      throw new HttpError(404, 'provider not found', { code: ERROR_CODES.providerNotFound });
     }
     return entry;
   }
@@ -226,24 +226,36 @@ export class VaultService implements IVaultService {
       return [];
     }
     if (!Array.isArray(endpoints)) {
-      throw new HttpError(400, 'endpoints must be an array');
+      throw new HttpError(400, 'endpoints must be an array', {
+        code: ERROR_CODES.providerEndpointsInvalid,
+      });
     }
     const seen = new Set<string>();
     return endpoints.map((endpoint) => {
       const key = String(endpoint?.key ?? '').trim();
       if (!key) {
-        throw new HttpError(400, 'endpoint key is required');
+        throw new HttpError(400, 'endpoint key is required', {
+          code: ERROR_CODES.providerEndpointKeyRequired,
+        });
       }
       if (key.includes('/') || key.includes('\\') || key.length > 60) {
-        throw new HttpError(400, 'endpoint key contains invalid characters');
+        throw new HttpError(400, 'endpoint key contains invalid characters', {
+          code: ERROR_CODES.providerEndpointKeyInvalid,
+        });
       }
       if (seen.has(key)) {
-        throw new HttpError(400, `duplicate endpoint ${key}`);
+        throw new HttpError(400, `duplicate endpoint ${key}`, {
+          code: ERROR_CODES.providerEndpointKeyDuplicate,
+          params: { key },
+        });
       }
       seen.add(key);
       const baseUrl = String(endpoint.baseUrl ?? '').trim();
       if (!baseUrl) {
-        throw new HttpError(400, `endpoint ${key} requires a baseUrl`);
+        throw new HttpError(400, `endpoint ${key} requires a baseUrl`, {
+          code: ERROR_CODES.providerEndpointUrlRequired,
+          params: { key },
+        });
       }
       return { key, label: endpoint.label?.trim() || key, baseUrl };
     });

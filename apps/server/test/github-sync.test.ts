@@ -99,8 +99,8 @@ describe('GitHub Sync Service and Routes', () => {
     });
 
     expect(res.status).toBe(502);
-    const body = (await res.json()) as { error: string; code?: string };
-    expect(body.error).toContain('无法连接 GitHub');
+    const body = (await res.json()) as { msg: string; code?: string };
+    expect(body.msg).toContain('请求失败');
     expect(body.code).toBe('http.requestFailed');
   });
 

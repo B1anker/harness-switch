@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { useTranslation } from '@/lib/i18n';
+import { useI18n, useTranslation } from '@/lib/i18n';
 import { errorLine, lineText, type MessageLine } from '@/lib/messages';
 import { useTransferImport } from '@/lib/use-transfer-import';
 import { cn } from '@/lib/utils';
@@ -41,6 +41,7 @@ const MIN_POLL_SECONDS = 5;
  */
 export function GistPane({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation();
+  const { locale } = useI18n();
   const loadHarnesses = useAppStore((state) => state.loadHarnesses);
   const setNotice = useAppStore((state) => state.setNotice);
 
@@ -290,7 +291,7 @@ export function GistPane({ onDone }: { onDone: () => void }) {
                 <p className="text-xs text-muted-foreground">
                   {t('githubSync.lastSynced')}{' '}
                   {status.lastSyncedAt
-                    ? new Date(status.lastSyncedAt).toLocaleString()
+                    ? new Date(status.lastSyncedAt).toLocaleString(locale)
                     : t('githubSync.neverSynced')}
                 </p>
                 {status.gistId ? (
@@ -441,7 +442,7 @@ export function GistPane({ onDone }: { onDone: () => void }) {
                       {gistUpdatedAt ? (
                         <span>
                           {t('githubSync.backedUpAt', {
-                            time: new Date(gistUpdatedAt).toLocaleString(),
+                            time: new Date(gistUpdatedAt).toLocaleString(locale),
                           })}
                         </span>
                       ) : null}

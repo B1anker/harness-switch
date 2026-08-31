@@ -1,4 +1,5 @@
 import {
+  ERROR_CODES,
   HARNESS_IDS,
   HARNESS_LABELS,
   type HarnessId,
@@ -35,7 +36,7 @@ export class HarnessRegistry implements IHarnessRegistry {
 
   require(id: string): HarnessId {
     if (!this.has(id)) {
-      throw new HttpError(404, 'unknown harness');
+      throw new HttpError(404, 'unknown harness', { code: ERROR_CODES.harnessNotFound });
     }
     return id;
   }

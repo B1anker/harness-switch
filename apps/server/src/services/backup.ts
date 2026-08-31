@@ -2,6 +2,7 @@ import { basename, join, resolve } from 'node:path';
 import {
   type BackupDetail,
   type BackupEntry,
+  ERROR_CODES,
   type HarnessId,
   isHarnessId,
 } from '@seaveyon/harness-switch-shared';
@@ -208,7 +209,10 @@ export class BackupService implements IBackupService {
     const stored: StoredFile[] = snapshots.map((snapshot, index) => {
       const target = targets.find((candidate) => candidate.key === snapshot.key);
       if (!target || resolve(target.path) !== resolve(snapshot.path)) {
-        throw new HttpError(500, `refusing to back up ${snapshot.path}: not a ${harness} target`);
+        throw new HttpError(500, `refusing to back up ${snapshot.path}: not a ${harness} target`, {
+          code: ERROR_CODES.backupTargetInvalid,
+          params: { path: snapshot.path, harness },
+        });
       }
       if (snapshot.content === undefined) {
         return { key: target.key, existed: false };
@@ -231,12 +235,12 @@ export class BackupService implements IBackupService {
 
   private require(id: string): LoadedBackup {
     if (id !== basename(id) || id === '.' || id === '..' || id.includes('\\')) {
-      throw new HttpError(400, 'invalid backup id');
+      throw new HttpError(400, 'invalid backup id', { code: ERROR_CODES.backupInvalidId });
     }
     const dir = join(this.environment.backupsDir, id);
     const manifest = this.parse(this.files.readJson<unknown>(join(dir, MANIFEST), null));
     if (!manifest) {
-      throw new HttpError(404, 'backup not found');
+      throw new HttpError(404, 'backup not found', { code: ERROR_CODES.backupNotFound });
     }
     return { id, dir, manifest };
   }
@@ -271,7 +275,10 @@ export class BackupService implements IBackupService {
       ? targets.find((candidate) => candidate.key === file.key)
       : targets.find((candidate) => file.path && resolve(candidate.path) === resolve(file.path));
     if (!target) {
-      throw new HttpError(400, `backup references a file ${harness} does not own`);
+      throw new HttpError(400, `backup references a file ${harness} does not own`, {
+        code: ERROR_CODES.backupFileNotOwned,
+        params: { harness },
+      });
     }
     return target;
   }
@@ -281,11 +288,17 @@ export class BackupService implements IBackupService {
       return null;
     }
     if (!file.stored) {
-      throw new HttpError(500, `backup payload missing for ${file.key || file.path}`);
+      throw new HttpError(500, `backup payload missing for ${file.key || file.path}`, {
+        code: ERROR_CODES.backupPayloadMissing,
+        params: { file: file.key || file.path || '' },
+      });
     }
     const content = this.files.readRegularOptional(this.payloadPath(dir, file.stored));
     if (content === undefined) {
-      throw new HttpError(500, `backup payload missing for ${file.key || file.path}`);
+      throw new HttpError(500, `backup payload missing for ${file.key || file.path}`, {
+        code: ERROR_CODES.backupPayloadMissing,
+        params: { file: file.key || file.path || '' },
+      });
     }
     return content;
   }
@@ -293,7 +306,9 @@ export class BackupService implements IBackupService {
   /** Keeps a payload name a plain entry of the backup directory rather than a path. */
   private payloadPath(dir: string, stored: string): string {
     if (stored !== basename(stored) || stored === '.' || stored === '..') {
-      throw new HttpError(400, 'invalid backup payload name');
+      throw new HttpError(400, 'invalid backup payload name', {
+        code: ERROR_CODES.backupPayloadNameInvalid,
+      });
     }
     return join(dir, stored);
   }

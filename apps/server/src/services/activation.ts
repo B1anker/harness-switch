@@ -351,7 +351,10 @@ export class ActivationService implements IActivationService {
   expectedOfficialWrites(harness: HarnessId): PlannedWrite[] {
     const adapter = this.adapters.get(harness);
     if (!adapter.renderOfficial) {
-      throw new HttpError(400, `${this.harnesses.label(harness)} 不支持官方账号登录模式`);
+      throw new HttpError(400, `${this.harnesses.label(harness)} 不支持官方账号登录模式`, {
+        code: ERROR_CODES.officialLoginUnsupported,
+        params: { harness: this.harnesses.label(harness) },
+      });
     }
     const active = this.read()[harness];
     const profile =
@@ -379,7 +382,10 @@ export class ActivationService implements IActivationService {
   private requireTarget(targets: AdapterTarget[], key: string): AdapterTarget {
     const target = targets.find((candidate) => candidate.key === key);
     if (!target) {
-      throw new HttpError(500, `adapter produced unknown target ${key}`);
+      throw new HttpError(500, `adapter produced unknown target ${key}`, {
+        code: ERROR_CODES.adapterUnknownTarget,
+        params: { key },
+      });
     }
     return target;
   }

@@ -286,11 +286,12 @@ export type OkResponse = {
 };
 
 export type ErrorResponse = {
-  /** Human-readable prose. Always present so the CLI and older clients keep working. */
-  error: string;
-  /** Stable identifier the web UI translates; absent for not-yet-migrated errors. */
-  code?: ErrorCode;
-  params?: MessageParams;
+  /** Stable, machine-readable identifier for the failure. */
+  code: ErrorCode;
+  /** Interpolation values and other safe structured context for `msg`. */
+  data?: MessageParams;
+  /** Human-readable message, localized from the request's Accept-Language header. */
+  msg: string;
 };
 
 /* ------------------------------------------------------------------ */
@@ -354,6 +355,9 @@ export type ProbeResult = {
   code?: string;
   /** Values the UI interpolates into the translated message for `code`. */
   params?: MessageParams;
+  /** Standard localized API fields for newer clients. */
+  data?: MessageParams;
+  msg?: string;
   /** Server prose for the same failure; kept for the CLI and as UI fallback. */
   message?: string;
 };
@@ -462,6 +466,9 @@ export type ScanHarnessResult = {
   note?: string;
   /** The same explanation as a stable code the web UI can translate. See `SCAN_NOTE_CODES`. */
   noteCode?: string;
+  /** Standard localized API fields for the scan note. */
+  noteData?: MessageParams;
+  noteMsg?: string;
 };
 
 export type ScanResponse = {
@@ -563,6 +570,9 @@ export type DoctorCheck = {
   code?: string;
   /** Values `code` interpolates — paths, modes, counts. Data, never keys. */
   params?: MessageParams;
+  /** Standard localized API fields for newer clients. */
+  data?: MessageParams;
+  msg?: string;
   /** Human-readable message plus machine-readable extras. */
   detail?: unknown;
 };

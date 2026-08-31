@@ -1,5 +1,6 @@
 import { basename, join } from 'node:path';
 import {
+  ERROR_CODES,
   type HarnessId,
   isHarnessId,
   type OperationFile,
@@ -169,10 +170,14 @@ export class JournalService implements IJournalService {
   undo(id: string): OperationReceipt {
     const { dir, receipt } = this.require(id);
     if (receipt.state === 'rolled-back') {
-      throw new HttpError(409, '该操作已经撤销过了');
+      throw new HttpError(409, '该操作已经撤销过了', {
+        code: ERROR_CODES.operationAlreadyUndone,
+      });
     }
     if (receipt.state === 'applying' || receipt.state === 'prepared') {
-      throw new HttpError(409, '该操作尚未完成，请先等待或重启服务让它自动恢复');
+      throw new HttpError(409, '该操作尚未完成，请先等待或重启服务让它自动恢复', {
+        code: ERROR_CODES.operationIncomplete,
+      });
     }
     this.revert(dir, receipt);
     const reverted: OperationReceipt = {
@@ -238,13 +243,19 @@ export class JournalService implements IJournalService {
   private revert(dir: string, receipt: OperationReceipt): void {
     if (receipt.backupId) {
       if (!this.backups.exists(receipt.backupId)) {
-        throw new HttpError(409, `操作 ${receipt.id} 的备份 ${receipt.backupId} 已被轮换删除`);
+        throw new HttpError(409, `操作 ${receipt.id} 的备份 ${receipt.backupId} 已被轮换删除`, {
+          code: ERROR_CODES.operationBackupMissing,
+          params: { id: receipt.id, backupId: receipt.backupId },
+        });
       }
       this.backups.restore(receipt.backupId);
     }
     for (const key of receipt.metadata) {
       if (!METADATA_KEYS.includes(key)) {
-        throw new HttpError(400, `操作记录引用了未知的存储文件 ${key}`);
+        throw new HttpError(400, `操作记录引用了未知的存储文件 ${key}`, {
+          code: ERROR_CODES.operationStorageUnknown,
+          params: { key },
+        });
       }
       // The destination comes from the environment, never from the record.
       const destination = this.environment.files[key];
@@ -254,7 +265,10 @@ export class JournalService implements IJournalService {
       }
       const snapshot = this.files.readRegularOptional(join(dir, `${METADATA_PREFIX}${key}`));
       if (snapshot === undefined) {
-        throw new HttpError(500, `操作 ${receipt.id} 缺少 ${key} 的快照`);
+        throw new HttpError(500, `操作 ${receipt.id} 缺少 ${key} 的快照`, {
+          code: ERROR_CODES.operationSnapshotMissing,
+          params: { id: receipt.id, key },
+        });
       }
       this.files.writeSecure(destination, snapshot);
     }
@@ -286,12 +300,12 @@ export class JournalService implements IJournalService {
 
   private require(id: string): { dir: string; receipt: OperationReceipt } {
     if (id !== basename(id) || id === '.' || id === '..' || id.includes('\\')) {
-      throw new HttpError(400, 'invalid operation id');
+      throw new HttpError(400, 'invalid operation id', { code: ERROR_CODES.operationInvalidId });
     }
     const dir = join(this.environment.journalDir, id);
     const receipt = this.parse(id, this.files.readJson<unknown>(join(dir, RECEIPT), null));
     if (!receipt) {
-      throw new HttpError(404, 'operation not found');
+      throw new HttpError(404, 'operation not found', { code: ERROR_CODES.operationNotFound });
     }
     return { dir, receipt };
   }

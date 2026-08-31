@@ -58,8 +58,8 @@ async function profileStore(context: TestApp): Promise<string> {
 }
 
 async function errorOf(response: Response): Promise<string> {
-  const payload = (await response.json()) as { error?: string };
-  return payload.error ?? '';
+  const payload = (await response.json()) as { data?: { fields?: string } };
+  return payload.data?.fields ?? '';
 }
 
 describe('request validation', () => {
@@ -165,7 +165,7 @@ describe('request validation', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(await errorOf(response)).toContain('endpoint key');
+    expect(await errorOf(response)).toContain('endpoints');
   });
 
   test('a provider endpoint without a baseUrl is refused', async () => {

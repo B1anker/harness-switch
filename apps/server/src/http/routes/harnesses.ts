@@ -1,6 +1,8 @@
-import type { HarnessId, ProbeResponse } from '@seaveyon/harness-switch-shared';
 import {
   createProfileRequestSchema,
+  ERROR_CODES,
+  type HarnessId,
+  type ProbeResponse,
   probeStoredRequestSchema,
   updateProfileRequestSchema,
 } from '@seaveyon/harness-switch-shared';
@@ -62,7 +64,9 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       body.extras?.providerType === 'official' &&
       profiles.list('dsh').some((profile) => profile.extras.providerType === 'official')
     ) {
-      throw new HttpError(409, 'DeepSeek 官方配置已存在，请直接编辑现有官方配置');
+      throw new HttpError(409, 'DeepSeek 官方配置已存在，请直接编辑现有官方配置', {
+        code: ERROR_CODES.officialProfileAlreadyExists,
+      });
     }
     const profile = profiles.upsert(
       harnessId,

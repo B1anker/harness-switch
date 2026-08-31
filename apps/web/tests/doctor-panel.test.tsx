@@ -119,7 +119,7 @@ test('opens the doctor and drift dialogs from the panel', () => {
 
   fireEvent.click(screen.getByRole('button', { name: '查看详情' }));
   expect(screen.getByRole('heading', { name: 'Claude Code 诊断' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: '关闭对话框' }));
 
   fireEvent.click(screen.getByRole('button', { name: '查看差异' }));
   expect(screen.getAllByText(/配置漂移/).length).toBeGreaterThan(0);

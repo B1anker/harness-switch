@@ -1,4 +1,9 @@
-import type { HarnessId, ProfilePublic, ProviderPublic } from '@seaveyon/harness-switch-shared';
+import {
+  ERROR_CODES,
+  type HarnessId,
+  type ProfilePublic,
+  type ProviderPublic,
+} from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import type { AdapterProfile } from './adapters';
@@ -122,13 +127,17 @@ export class ProfileService implements IProfileService {
     store[harness] ||= {};
     const prior = store[harness][sourceName];
     if (isCreate && prior) {
-      throw new HttpError(409, 'profile already exists');
+      throw new HttpError(409, 'profile already exists', {
+        code: ERROR_CODES.profileAlreadyExists,
+      });
     }
     if (!isCreate && !prior) {
-      throw new HttpError(404, 'profile not found');
+      throw new HttpError(404, 'profile not found', { code: ERROR_CODES.profileNotFound });
     }
     if (!isCreate && sourceName !== name && store[harness][name]) {
-      throw new HttpError(409, 'profile already exists');
+      throw new HttpError(409, 'profile already exists', {
+        code: ERROR_CODES.profileAlreadyExists,
+      });
     }
 
     // Resolve the credential: a vault reference wins over an inline apiKey, and an
@@ -148,7 +157,10 @@ export class ProfileService implements IProfileService {
       if (providerEndpoint) {
         const endpoint = entry.endpoints.find((candidate) => candidate.key === providerEndpoint);
         if (!endpoint) {
-          throw new HttpError(400, `endpoint ${providerEndpoint} not found`);
+          throw new HttpError(400, `endpoint ${providerEndpoint} not found`, {
+            code: ERROR_CODES.profileEndpointNotFound,
+            params: { endpoint: providerEndpoint },
+          });
         }
         nextProviderEndpoint = providerEndpoint;
       } else {
@@ -172,7 +184,7 @@ export class ProfileService implements IProfileService {
     }
 
     if (isCreate && !apiKey) {
-      throw new HttpError(400, 'apiKey is required');
+      throw new HttpError(400, 'apiKey is required', { code: ERROR_CODES.profileApiKeyRequired });
     }
 
     const baseUrl = this.resolveBaseUrl(
@@ -212,7 +224,7 @@ export class ProfileService implements IProfileService {
   remove(harness: HarnessId, name: string): void {
     const store = this.read();
     if (!store[harness]?.[name]) {
-      throw new HttpError(404, 'profile not found');
+      throw new HttpError(404, 'profile not found', { code: ERROR_CODES.profileNotFound });
     }
     delete store[harness][name];
     this.files.writeJson(this.environment.files.profiles, store);
@@ -221,7 +233,7 @@ export class ProfileService implements IProfileService {
   decrypt(harness: HarnessId, name: string): DecryptedProfile {
     const stored = this.read()[harness]?.[name];
     if (!stored) {
-      throw new HttpError(404, 'profile not found');
+      throw new HttpError(404, 'profile not found', { code: ERROR_CODES.profileNotFound });
     }
     return {
       name,
@@ -382,13 +394,15 @@ export class ProfileService implements IProfileService {
 
   private assertName(name: string): void {
     if (!name) {
-      throw new HttpError(400, 'name is required');
+      throw new HttpError(400, 'name is required', { code: ERROR_CODES.profileNameRequired });
     }
     if (name.includes('/') || name.includes('\\')) {
-      throw new HttpError(400, 'name cannot contain slashes');
+      throw new HttpError(400, 'name cannot contain slashes', {
+        code: ERROR_CODES.profileNameInvalid,
+      });
     }
     if (name.length > 120) {
-      throw new HttpError(400, 'name is too long');
+      throw new HttpError(400, 'name is too long', { code: ERROR_CODES.profileNameTooLong });
     }
   }
 }

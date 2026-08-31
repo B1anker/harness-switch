@@ -1,8 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
 import type { ErrorResponse } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import { HttpError } from './common/errors';
+import { localizeError, localizeMessage, requestLanguage } from './common/localize';
 import type { InstantiationService } from './di';
 import { createAuthGuard, createOriginGuard, createServiceMiddleware } from './http/middleware';
 import { createAuthRoutes } from './http/routes/auth';
@@ -38,6 +40,21 @@ export function createApp(services: InstantiationService): Hono {
 
   const api = new Hono();
   api.use('*', createOriginGuard());
+  api.use('*', async (c, next) => {
+    await next();
+    const contentType = c.res.headers.get('content-type') ?? '';
+    if (!contentType.includes('application/json') || !c.res.ok) return;
+    const payload = await c.res
+      .clone()
+      .json()
+      .catch(() => undefined);
+    if (payload === undefined) return;
+    const localized = localizeResponsePayload(
+      payload,
+      requestLanguage(c.req.header('Accept-Language')),
+    );
+    c.res = new Response(JSON.stringify(localized), c.res);
+  });
   api.get('/version', async (c) =>
     c.json({ name: 'harness-switch', version: await serverVersion() }),
   );
@@ -99,7 +116,13 @@ export function createApp(services: InstantiationService): Hono {
     });
   }
 
-  app.notFound((c) => c.json({ error: 'not found' }, 404));
+  app.notFound((c) => {
+    const code = ERROR_CODES.requestFailed;
+    return c.json(
+      { code, msg: localizeError(requestLanguage(c.req.header('Accept-Language')), code) },
+      404,
+    );
+  });
   app.onError((error, c) => {
     const request = `${c.req.method} ${new URL(c.req.url).pathname}`;
     if (error instanceof HttpError) {
@@ -108,21 +131,65 @@ export function createApp(services: InstantiationService): Hono {
       if (error.status >= 500) {
         log.error(`${request} failed with ${error.status}: ${error.message}`, error);
       }
-      // `error` stays the prose the CLI prints; `code` lets the web UI localize it.
+      const data = error.params;
       return c.json(
         {
-          error: error.message,
-          ...(error.code ? { code: error.code } : {}),
-          ...(error.params ? { params: error.params } : {}),
+          code: error.code,
+          ...(data ? { data } : {}),
+          msg: localizeError(requestLanguage(c.req.header('Accept-Language')), error.code, data),
         } satisfies ErrorResponse,
         error.status as 400,
       );
     }
     log.error(`unhandled error on ${request}`, error);
-    return c.json({ error: 'internal server error' }, 500);
+    const code = ERROR_CODES.internalServerError;
+    return c.json(
+      {
+        code,
+        msg: localizeError(requestLanguage(c.req.header('Accept-Language')), code),
+      } satisfies ErrorResponse,
+      500,
+    );
   });
 
   return app;
+}
+
+/** Adds the standard { code, data, msg } contract to nested success messages.
+ *
+ * Old `message`/`label`/`params` fields remain during the compatibility window so
+ * existing web and CLI releases keep working. New clients can consistently prefer
+ * `msg` and `data` whenever a server-reported `code` is present.
+ */
+function localizeResponsePayload(value: unknown, language: 'en' | 'zh-CN'): unknown {
+  if (Array.isArray(value)) return value.map((item) => localizeResponsePayload(item, language));
+  if (typeof value !== 'object' || value === null) return value;
+  const record = value as Record<string, unknown>;
+  const next = Object.fromEntries(
+    Object.entries(record).map(([key, child]) => [key, localizeResponsePayload(child, language)]),
+  ) as Record<string, unknown>;
+  const code = typeof record.code === 'string' ? record.code : undefined;
+  const params = isMessageParams(record.params) ? record.params : undefined;
+  if (code && (typeof record.message === 'string' || typeof record.label === 'string')) {
+    next.data = params;
+    next.msg = localizeMessage(language, code, params);
+  }
+  if (typeof record.noteCode === 'string' && typeof record.note === 'string') {
+    next.noteData = params;
+    next.noteMsg = localizeMessage(language, record.noteCode, params);
+  }
+  return next;
+}
+
+function isMessageParams(value: unknown): value is Record<string, string | number | boolean> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every(
+      (item) => typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean',
+    )
+  );
 }
 
 function isPublicAsset(publicDir: string, assetPath: string): boolean {

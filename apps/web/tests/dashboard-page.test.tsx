@@ -61,7 +61,7 @@ test('switches the visible harness with the app tabs', () => {
 
   fireEvent.click(screen.getByRole('button', { name: '配置迁移' }));
   expect(screen.getByRole('heading', { name: '配置迁移' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: '关闭对话框' }));
 
   const claudeTab = screen.getByRole('tab', { name: /Claude Code/ });
   const codexTab = screen.getByRole('tab', { name: /Codex/ });
@@ -82,7 +82,7 @@ test('the header opens the vault dialog', () => {
 
   fireEvent.click(screen.getByRole('button', { name: '凭据库' }));
   expect(screen.getByRole('heading', { name: '凭据库' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: '关闭对话框' }));
 
   const userMenuButton = screen.getByRole('button', { name: '当前本地用户' });
   expect(userMenuButton).toHaveTextContent('root');
@@ -97,7 +97,7 @@ test('the header opens the vault dialog', () => {
   fireEvent.click(screen.getByRole('button', { name: '配置迁移' }));
   fireEvent.click(screen.getByRole('tab', { name: '其他本地用户' }));
   expect(screen.getByText(/复制到 root/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  fireEvent.click(screen.getByRole('button', { name: '关闭对话框' }));
 });
 
 test('an unmanageable user cannot be selected and says why', () => {

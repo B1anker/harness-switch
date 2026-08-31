@@ -250,7 +250,11 @@ describe('probe api', () => {
     relay = startRelay();
     const response = await app.request('/api/probe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: cookie,
+        'Accept-Language': 'en-US',
+      },
       body: JSON.stringify({
         baseUrl: `http://127.0.0.1:${relay.port}`,
         apiKey: 'sk-test',
@@ -269,13 +273,19 @@ describe('probe api', () => {
     relay = startRelay();
     const response = await app.request('/api/probe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: cookie,
+        'Accept-Language': 'en-US',
+      },
       body: JSON.stringify({ baseUrl: `http://127.0.0.1:${relay.port}` }),
     });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { result: ProbeResult };
     expect(body.result.ok).toBe(false);
     expect(body.result.code).toBe(PROBE_CODES.missingApiKey);
+    expect(body.result.msg).toBe('No API key supplied; nothing to test');
+    expect(body.result.data).toBeUndefined();
   });
 
   test('vault probe tests the stored credential against its endpoint', async () => {

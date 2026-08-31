@@ -1,8 +1,9 @@
 import type { HarnessId, MessageParams } from '@seaveyon/harness-switch-shared';
+import { i18n } from '@/lib/i18n';
 
 /**
- * A failed request. `message` is the server's own prose, kept so anything without a
- * translation still reads; `code` is the stable identifier the UI translates instead.
+ * A failed request. `message` is the server-provided localized prose; `code` remains
+ * authoritative so an already-open view updates immediately when its language changes.
  */
 export class ApiError extends Error {
   readonly code?: string;
@@ -11,12 +12,12 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
-    options: { code?: string; params?: MessageParams } = {},
+    options: { code?: string; data?: MessageParams; params?: MessageParams } = {},
   ) {
     super(message);
     this.name = 'ApiError';
     this.code = options.code;
-    this.params = options.params;
+    this.params = options.data ?? options.params;
   }
 }
 
@@ -93,6 +94,7 @@ export function operationUndoPath(id: string): string {
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
+  headers.set('Accept-Language', i18n.language);
   if (options.body && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
@@ -103,9 +105,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(response.status, payload.error ?? '', {
+    throw new ApiError(response.status, payload.msg ?? payload.error ?? '', {
       code: payload.code,
-      params: payload.params,
+      data: payload.data ?? payload.params,
     });
   }
   return payload as T;

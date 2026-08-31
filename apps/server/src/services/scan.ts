@@ -7,7 +7,7 @@ import type {
   ScanImportSelection,
   ScanSource,
 } from '@seaveyon/harness-switch-shared';
-import { SCAN_NOTE_CODES } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, SCAN_NOTE_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import type { CurrentFiles, HarnessAdapter } from './adapters';
@@ -128,7 +128,9 @@ export class ScanService implements IScanService {
         providerId = selection.providerId;
       } else {
         if (!apiKey) {
-          throw new HttpError(400, '这条配置里没有可提取的凭据，请先填写 API key');
+          throw new HttpError(400, '这条配置里没有可提取的凭据，请先填写 API key', {
+            code: ERROR_CODES.scanApiKeyRequired,
+          });
         }
         providerId = this.vault.create({
           name: selection.providerName ?? selection.name,
@@ -140,7 +142,9 @@ export class ScanService implements IScanService {
         created = 1;
       }
     } else if (!apiKey) {
-      throw new HttpError(400, '这条配置里没有可提取的凭据，请先填写 API key');
+      throw new HttpError(400, '这条配置里没有可提取的凭据，请先填写 API key', {
+        code: ERROR_CODES.scanApiKeyRequired,
+      });
     }
 
     this.profiles.upsert(

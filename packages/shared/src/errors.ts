@@ -9,13 +9,31 @@
 export const ERROR_CODES = {
   /* Transport and session */
   requestFailed: 'http.requestFailed',
+  invalidRequest: 'http.invalidRequest',
+  internalServerError: 'http.internalServerError',
   authenticationRequired: 'http.authenticationRequired',
   crossOriginDenied: 'http.crossOriginDenied',
   invalidPassword: 'auth.invalidPassword',
   missingArgument: 'cli.missingArgument',
+  invalidConflictPolicy: 'sync.invalidConflictPolicy',
+
+  /* Files and harnesses */
+  harnessNotFound: 'harness.notFound',
+  fileNotRegular: 'file.notRegular',
+  fileOutsideManagedDirectory: 'file.outsideManagedDirectory',
+  fileOwnershipRequiresRoot: 'file.ownershipRequiresRoot',
+  nativeConfigInvalid: 'adapter.nativeConfigInvalid',
+  adapterUnknownTarget: 'adapter.unknownTarget',
 
   /* Profiles and adapter validation */
   profileActiveDeleteForbidden: 'profile.activeDeleteForbidden',
+  profileAlreadyExists: 'profile.alreadyExists',
+  profileNotFound: 'profile.notFound',
+  profileEndpointNotFound: 'profile.endpointNotFound',
+  profileApiKeyRequired: 'profile.apiKeyRequired',
+  profileNameRequired: 'profile.nameRequired',
+  profileNameInvalid: 'profile.nameInvalid',
+  profileNameTooLong: 'profile.nameTooLong',
   adapterModelRequired: 'adapter.modelRequired',
   adapterApiKeyRequired: 'adapter.apiKeyRequired',
 
@@ -24,10 +42,20 @@ export const ERROR_CODES = {
   noActiveProfile: 'activation.noActiveProfile',
   officialProfileCannotAdopt: 'activation.officialProfileCannotAdopt',
   adoptUnsupported: 'activation.adoptUnsupported',
+  manualOverridesPreventAdopt: 'activation.manualOverridesPreventAdopt',
+  officialProfileAlreadyExists: 'activation.officialProfileAlreadyExists',
 
   /* Provider vault */
   providerInUse: 'provider.inUse',
   providerCredentialUnreadable: 'provider.credentialUnreadable',
+  providerNotFound: 'provider.notFound',
+  providerNameRequired: 'provider.nameRequired',
+  providerApiKeyRequired: 'provider.apiKeyRequired',
+  providerEndpointsInvalid: 'provider.endpointsInvalid',
+  providerEndpointKeyRequired: 'provider.endpointKeyRequired',
+  providerEndpointKeyInvalid: 'provider.endpointKeyInvalid',
+  providerEndpointKeyDuplicate: 'provider.endpointKeyDuplicate',
+  providerEndpointUrlRequired: 'provider.endpointUrlRequired',
 
   /* Codex login cache */
   codexCacheTooLarge: 'codex.loginCacheTooLarge',
@@ -39,6 +67,22 @@ export const ERROR_CODES = {
   transferEnvelopeInvalid: 'transfer.envelopeInvalid',
   syncSourceCacheMissing: 'sync.sourceCodexLoginCacheMissing',
   syncSourceEqualsTarget: 'sync.sourceEqualsTarget',
+  scanApiKeyRequired: 'scan.apiKeyRequired',
+
+  /* Backups and journal */
+  backupTargetInvalid: 'backup.targetInvalid',
+  backupInvalidId: 'backup.invalidId',
+  backupNotFound: 'backup.notFound',
+  backupFileNotOwned: 'backup.fileNotOwned',
+  backupPayloadMissing: 'backup.payloadMissing',
+  backupPayloadNameInvalid: 'backup.payloadNameInvalid',
+  operationAlreadyUndone: 'operation.alreadyUndone',
+  operationIncomplete: 'operation.incomplete',
+  operationBackupMissing: 'operation.backupMissing',
+  operationStorageUnknown: 'operation.storageUnknown',
+  operationSnapshotMissing: 'operation.snapshotMissing',
+  operationInvalidId: 'operation.invalidId',
+  operationNotFound: 'operation.notFound',
 
   /* GitHub sync */
   githubNotConnected: 'github.notConnected',
@@ -73,6 +117,9 @@ export type LocalizedMessage = {
   message: string;
   code?: string;
   params?: MessageParams;
+  /** Standard API response fields, added by the HTTP boundary for newer clients. */
+  data?: MessageParams;
+  msg?: string;
   /**
    * Verbatim prefix rendered before the translated text, e.g. `codex/my-profile`.
    * It carries user data (harness id and profile name), so it is never translated —

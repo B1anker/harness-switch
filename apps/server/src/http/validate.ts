@@ -1,4 +1,4 @@
-import { formatSchemaError } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, formatSchemaError } from '@seaveyon/harness-switch-shared';
 import type { Context } from 'hono';
 import type { ZodType } from 'zod';
 import { HttpError } from '../common/errors';
@@ -12,7 +12,7 @@ import { HttpError } from '../common/errors';
  */
 export async function readJsonBody<T>(c: Context, schema: ZodType<T>): Promise<T> {
   const raw = await c.req.json().catch(() => {
-    throw new HttpError(400, 'invalid json');
+    throw new HttpError(400, 'invalid json', { code: ERROR_CODES.invalidRequest });
   });
   return parseWith(schema, raw);
 }
@@ -21,7 +21,10 @@ export async function readJsonBody<T>(c: Context, schema: ZodType<T>): Promise<T
 export function parseWith<T>(schema: ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw new HttpError(400, formatSchemaError(result.error));
+    throw new HttpError(400, formatSchemaError(result.error), {
+      code: ERROR_CODES.invalidRequest,
+      params: { fields: result.error.issues.map((issue) => issue.path.join('.')).join(', ') },
+    });
   }
   return result.data;
 }

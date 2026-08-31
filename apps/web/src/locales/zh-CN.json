@@ -379,32 +379,60 @@
     "unknown": "未知错误",
     "http": {
       "requestFailed": "请求失败",
+      "invalidRequest": "请求数据无效",
+      "internalServerError": "服务器内部错误",
       "authenticationRequired": "需要登录",
       "crossOriginDenied": "跨域请求被拒绝"
     },
     "auth": {
       "invalidPassword": "密码错误"
     },
+    "github": {
+      "notConnected": "请先连接 GitHub",
+      "authFailed": "GitHub 授权失败，请重新登录",
+      "gistNotFound": "GitHub 中未找到 harness-switch 备份 Gist",
+      "deviceCodeExpired": "设备授权码已过期，请重新获取",
+      "rateLimitExceeded": "GitHub API 请求速率超限，请稍后再试"
+    },
     "cli": {
       "missingArgument": "缺少必要参数"
     },
     "profile": {
-      "activeDeleteForbidden": "该配置正在使用中，请先激活另一个配置再删除"
+      "activeDeleteForbidden": "该配置正在使用中，请先激活另一个配置再删除",
+      "alreadyExists": "同名配置已经存在",
+      "notFound": "未找到配置",
+      "endpointNotFound": "未找到 endpoint {{endpoint}}",
+      "apiKeyRequired": "请填写 API key",
+      "nameRequired": "请填写配置名称",
+      "nameInvalid": "配置名称不能包含斜杠",
+      "nameTooLong": "配置名称过长"
     },
     "adapter": {
       "modelRequired": "{{harness}} 需要填写模型名称",
-      "apiKeyRequired": "{{harness}} 需要填写 API key"
+      "apiKeyRequired": "{{harness}} 需要填写 API key",
+      "nativeConfigInvalid": "{{path}} 不是合法的 {{format}} 配置",
+      "unknownTarget": "适配器产生了未知写入目标 {{key}}"
     },
     "activation": {
       "officialLoginUnsupported": "{{harness}} 不支持官方账号登录模式",
       "noActiveProfile": "该工具未激活任何配置，无可渲染的内容",
       "officialProfileCannotAdopt": "当前处于官方登录状态，没有可回填的配置档案",
-      "adoptUnsupported": "该工具不支持采纳现场配置"
+      "adoptUnsupported": "该工具不支持采纳现场配置",
+      "manualOverridesPreventAdopt": "采纳会丢弃手动覆盖的内容；请先恢复为自动生成",
+      "officialProfileAlreadyExists": "DeepSeek 官方配置已存在，请直接编辑它"
     },
     "provider": {
       "inUse_one": "该凭据正被 {{count}} 个配置引用，请先解除引用",
       "inUse_other": "该凭据正被 {{count}} 个配置引用，请先解除引用",
-      "credentialUnreadable": "无法读取凭据 {{id}} 的密钥"
+      "credentialUnreadable": "无法读取凭据 {{id}} 的密钥",
+      "notFound": "未找到 provider",
+      "nameRequired": "请填写 provider 名称",
+      "apiKeyRequired": "请填写 API key",
+      "endpointsInvalid": "endpoints 必须是数组",
+      "endpointKeyRequired": "请填写 endpoint 标识",
+      "endpointKeyInvalid": "endpoint 标识包含无效字符",
+      "endpointKeyDuplicate": "endpoint {{key}} 重复",
+      "endpointUrlRequired": "请填写 endpoint {{key}} 的 Base URL"
     },
     "codex": {
       "loginCacheTooLarge": "Codex 登录缓存文件过大，已跳过",
@@ -417,7 +445,32 @@
     },
     "sync": {
       "sourceCodexLoginCacheMissing": "源用户没有可用的 Codex 官方登录缓存",
-      "sourceEqualsTarget": "源用户与目标用户相同"
+      "sourceEqualsTarget": "源用户与目标用户相同",
+      "invalidConflictPolicy": "冲突处理策略无效"
+    },
+    "harness": { "notFound": "未找到工具" },
+    "file": {
+      "notRegular": "{{file}} 不是普通文件",
+      "outsideManagedDirectory": "{{file}} 位于可管理目录之外",
+      "ownershipRequiresRoot": "修改 {{path}} 的所有权需要以 root 运行"
+    },
+    "scan": { "apiKeyRequired": "这条配置里没有可提取的凭据，请先填写 API key" },
+    "backup": {
+      "targetInvalid": "{{path}} 不是 {{harness}} 的有效备份目标",
+      "invalidId": "备份 ID 无效",
+      "notFound": "未找到备份",
+      "fileNotOwned": "备份引用了 {{harness}} 不拥有的文件",
+      "payloadMissing": "备份中缺少 {{file}} 的内容",
+      "payloadNameInvalid": "备份内容文件名无效"
+    },
+    "operation": {
+      "alreadyUndone": "该操作已经撤销过了",
+      "incomplete": "该操作尚未完成，请等待或重启服务以自动恢复",
+      "backupMissing": "操作 {{id}} 的备份 {{backupId}} 已被轮换删除",
+      "storageUnknown": "操作引用了未知的存储文件 {{key}}",
+      "snapshotMissing": "操作 {{id}} 缺少 {{key}} 的快照",
+      "invalidId": "操作 ID 无效",
+      "notFound": "未找到操作"
     },
     "user": {
       "notManageable": "用户 {{username}} 不可管理",
@@ -664,6 +717,9 @@
   "common": {
     "cancel": "取消",
     "delete": "删除",
+    "close": "关闭",
+    "closeDialog": "关闭对话框",
+    "apiKey": "API 密钥",
     "listSeparator": "、"
   },
   "preset": {

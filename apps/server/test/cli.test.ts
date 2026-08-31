@@ -19,6 +19,7 @@ let services: ReturnType<typeof createServices>;
 let originalUrl: string | undefined;
 let originalPort: string | undefined;
 let originalFetch: typeof globalThis.fetch;
+let originalUpdateCheck: string | undefined;
 
 beforeEach(() => {
   homeDir = mkdtempSync(join(tmpdir(), 'hsw-cli-'));
@@ -39,7 +40,9 @@ beforeEach(() => {
 
   originalUrl = process.env.HSW_URL;
   originalPort = process.env.PORT;
+  originalUpdateCheck = process.env.HSW_UPDATE_CHECK;
   process.env.HSW_URL = baseUrl;
+  process.env.HSW_UPDATE_CHECK = '0';
   delete process.env.PORT;
 
   // The doctor update check must never hit the real network in tests, but the
@@ -69,6 +72,11 @@ afterEach(() => {
     delete process.env.PORT;
   } else {
     process.env.PORT = originalPort;
+  }
+  if (originalUpdateCheck === undefined) {
+    delete process.env.HSW_UPDATE_CHECK;
+  } else {
+    process.env.HSW_UPDATE_CHECK = originalUpdateCheck;
   }
   globalThis.fetch = originalFetch;
   rmSync(homeDir, { recursive: true, force: true });

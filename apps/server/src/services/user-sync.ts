@@ -110,7 +110,9 @@ export class UserSyncService implements IUserSyncService {
     overwriteHarnesses: HarnessId[] = [],
   ): UserSyncResponse {
     if (conflictPolicy !== 'skip' && conflictPolicy !== 'overwrite') {
-      throw new HttpError(400, 'invalid conflict policy');
+      throw new HttpError(400, 'invalid conflict policy', {
+        code: ERROR_CODES.invalidConflictPolicy,
+      });
     }
     const target = this.environment.currentUser;
     const source = this.requireSource(sourceUsername, target);

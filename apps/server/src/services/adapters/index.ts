@@ -1,4 +1,5 @@
 import type { HarnessId } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import { createDecorator, inject } from '../../di';
 import { IEnvironmentService } from '../environment';
@@ -45,7 +46,7 @@ export class AdapterRegistry implements IAdapterRegistry {
   get(id: HarnessId): HarnessAdapter {
     const adapter = this.adapters.get(id);
     if (!adapter) {
-      throw new HttpError(404, 'unknown harness');
+      throw new HttpError(404, 'unknown harness', { code: ERROR_CODES.harnessNotFound });
     }
     return adapter;
   }

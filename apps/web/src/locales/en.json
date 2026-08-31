@@ -379,32 +379,60 @@
     "unknown": "Unknown error",
     "http": {
       "requestFailed": "Request failed",
+      "invalidRequest": "The request data is invalid",
+      "internalServerError": "Internal server error",
       "authenticationRequired": "Sign-in required",
       "crossOriginDenied": "Cross-origin request denied"
     },
     "auth": {
       "invalidPassword": "Incorrect password"
     },
+    "github": {
+      "notConnected": "Connect GitHub before continuing",
+      "authFailed": "GitHub authorization failed; sign in again",
+      "gistNotFound": "No harness-switch backup Gist was found in GitHub",
+      "deviceCodeExpired": "The device code expired; get a new one",
+      "rateLimitExceeded": "GitHub API rate limit exceeded; try again later"
+    },
     "cli": {
       "missingArgument": "A required argument is missing"
     },
     "profile": {
-      "activeDeleteForbidden": "This profile is in use; activate another one before deleting it"
+      "activeDeleteForbidden": "This profile is in use; activate another one before deleting it",
+      "alreadyExists": "A profile with this name already exists",
+      "notFound": "Profile not found",
+      "endpointNotFound": "Endpoint {{endpoint}} was not found",
+      "apiKeyRequired": "Enter an API key",
+      "nameRequired": "Enter a profile name",
+      "nameInvalid": "A profile name cannot contain slashes",
+      "nameTooLong": "A profile name is too long"
     },
     "adapter": {
       "modelRequired": "{{harness}} requires a model name",
-      "apiKeyRequired": "{{harness}} requires an API key"
+      "apiKeyRequired": "{{harness}} requires an API key",
+      "nativeConfigInvalid": "{{path}} is not valid {{format}} configuration",
+      "unknownTarget": "The adapter produced an unknown target {{key}}"
     },
     "activation": {
       "officialLoginUnsupported": "{{harness}} does not support official account login",
       "noActiveProfile": "This tool has no active profile, so there is nothing to render",
       "officialProfileCannotAdopt": "The official login is active, so there is no profile to adopt into",
-      "adoptUnsupported": "This tool cannot adopt a live configuration"
+      "adoptUnsupported": "This tool cannot adopt a live configuration",
+      "manualOverridesPreventAdopt": "Manual overrides would be lost by adoption; restore generated files first",
+      "officialProfileAlreadyExists": "A DeepSeek official profile already exists; edit it instead"
     },
     "provider": {
       "inUse_one": "This credential is referenced by {{count}} profile; remove the reference first",
       "inUse_other": "This credential is referenced by {{count}} profiles; remove the references first",
-      "credentialUnreadable": "Could not read the key for credential {{id}}"
+      "credentialUnreadable": "Could not read the key for credential {{id}}",
+      "notFound": "Provider not found",
+      "nameRequired": "Enter a provider name",
+      "apiKeyRequired": "Enter an API key",
+      "endpointsInvalid": "Endpoints must be an array",
+      "endpointKeyRequired": "Enter an endpoint id",
+      "endpointKeyInvalid": "An endpoint id contains invalid characters",
+      "endpointKeyDuplicate": "Endpoint {{key}} is duplicated",
+      "endpointUrlRequired": "Enter a base URL for endpoint {{key}}"
     },
     "codex": {
       "loginCacheTooLarge": "The Codex login cache file is too large and was skipped",
@@ -417,7 +445,32 @@
     },
     "sync": {
       "sourceCodexLoginCacheMissing": "The source user has no usable Codex official login cache",
-      "sourceEqualsTarget": "The source and target users are the same"
+      "sourceEqualsTarget": "The source and target users are the same",
+      "invalidConflictPolicy": "The conflict policy is invalid"
+    },
+    "harness": { "notFound": "Harness not found" },
+    "file": {
+      "notRegular": "{{file}} is not a regular file",
+      "outsideManagedDirectory": "{{file}} is outside the managed directories",
+      "ownershipRequiresRoot": "Changing ownership of {{path}} requires running as root"
+    },
+    "scan": { "apiKeyRequired": "No credential could be extracted; enter an API key first" },
+    "backup": {
+      "targetInvalid": "{{path}} is not a valid {{harness}} backup target",
+      "invalidId": "The backup id is invalid",
+      "notFound": "Backup not found",
+      "fileNotOwned": "The backup references a file that {{harness}} does not own",
+      "payloadMissing": "Backup data for {{file}} is missing",
+      "payloadNameInvalid": "The backup payload name is invalid"
+    },
+    "operation": {
+      "alreadyUndone": "This operation has already been undone",
+      "incomplete": "This operation has not finished; wait or restart the server to recover it",
+      "backupMissing": "Backup {{backupId}} for operation {{id}} has been rotated away",
+      "storageUnknown": "The operation refers to unknown storage {{key}}",
+      "snapshotMissing": "Operation {{id}} is missing the {{key}} snapshot",
+      "invalidId": "The operation id is invalid",
+      "notFound": "Operation not found"
     },
     "user": {
       "notManageable": "User {{username}} is not manageable",
@@ -664,6 +717,9 @@
   "common": {
     "cancel": "Cancel",
     "delete": "Delete",
+    "close": "Close",
+    "closeDialog": "Close dialog",
+    "apiKey": "API key",
     "listSeparator": ", "
   },
   "preset": {

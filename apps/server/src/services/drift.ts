@@ -116,6 +116,7 @@ export class DriftService implements IDriftService {
       throw new HttpError(
         409,
         '存在手动 override 的文件，自动采纳会丢弃你的手工配置；请先恢复为自动生成再采纳',
+        { code: ERROR_CODES.manualOverridesPreventAdopt },
       );
     }
 

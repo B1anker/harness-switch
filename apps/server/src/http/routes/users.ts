@@ -66,7 +66,11 @@ export function createUserRoutes(services: InstantiationService): Hono {
   app.post('/:username/select', (c) => {
     const user = users.require(decodeURIComponent(c.req.param('username')));
     const token = getCookie(c, environment.cookieName);
-    if (!token) throw new HttpError(401, 'authentication required');
+    if (!token) {
+      throw new HttpError(401, 'authentication required', {
+        code: ERROR_CODES.authenticationRequired,
+      });
+    }
     // Refuse here rather than letting the session pin to an account whose files this
     // process cannot touch: every later request would fail somewhere deep in a write,
     // and the CLI's `--user` gets the same protection for free. The check is deliberately

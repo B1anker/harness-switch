@@ -328,7 +328,7 @@ function CandidateRow({ candidate, choice, providers, onChange }: CandidateRowPr
               </div>
               {needsKey ? (
                 <div className="space-y-1.5 sm:col-span-2">
-                  <Label htmlFor={`key-${candidate.id}`}>API key</Label>
+                  <Label htmlFor={`key-${candidate.id}`}>{t('common.apiKey')}</Label>
                   <Input
                     id={`key-${candidate.id}`}
                     type="password"

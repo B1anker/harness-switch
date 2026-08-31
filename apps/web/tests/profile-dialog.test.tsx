@@ -173,7 +173,7 @@ test('keeps the title and close action outside the scroll area and puts Provider
   const content = heading.closest('[data-slot="dialog-content"]');
   const scroll = content?.querySelector('[data-slot="profile-dialog-scroll"]');
   const provider = content?.querySelector('[data-slot="provider-reference-fields"]');
-  const close = screen.getByRole('button', { name: 'Close' });
+  const close = screen.getByRole('button', { name: '关闭对话框' });
 
   expect(content).toHaveClass('overflow-hidden');
   expect(content).toHaveClass('sm:max-w-[1120px]');

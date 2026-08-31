@@ -86,7 +86,8 @@ describe('local Unix users', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
       code: ERROR_CODES.userNotSwitchable,
-      params: { username: stranger.username },
+      data: { username: stranger.username },
+      msg: expect.any(String),
     });
     // The refusal must not have moved the session.
     expect((await json(app, '/api/users', firstCookie)).currentUser).toBe(owner.username);

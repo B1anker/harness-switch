@@ -1,4 +1,4 @@
-import type { ErrorCode, MessageParams } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, type ErrorCode, type MessageParams } from '@seaveyon/harness-switch-shared';
 
 export type HttpErrorOptions = {
   /** Stable identifier the web UI translates instead of showing `message`. */
@@ -8,7 +8,7 @@ export type HttpErrorOptions = {
 };
 
 export class HttpError extends Error {
-  readonly code?: ErrorCode;
+  readonly code: ErrorCode;
   readonly params?: MessageParams;
 
   constructor(
@@ -18,7 +18,9 @@ export class HttpError extends Error {
   ) {
     super(message);
     this.name = 'HttpError';
-    this.code = options.code;
+    // A code is mandatory at the HTTP boundary. Older call sites deliberately fall
+    // back to a safe generic code until they gain a more specific one.
+    this.code = options.code ?? ERROR_CODES.requestFailed;
     this.params = options.params;
   }
 }

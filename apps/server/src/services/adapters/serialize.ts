@@ -1,4 +1,5 @@
 import type { ConfigFormat } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { parse as parseTomlText, stringify as stringifyTomlValue } from 'smol-toml';
 import { parseDocument } from 'yaml';
 import { HttpError } from '../../common/errors';
@@ -68,7 +69,10 @@ export function assertParsable(format: ConfigFormat, path: string, content: stri
       }
     }
   } catch (error) {
-    throw new HttpError(400, `${path} is not valid ${format}: ${(error as Error).message}`);
+    throw new HttpError(400, `${path} is not valid ${format}: ${(error as Error).message}`, {
+      code: ERROR_CODES.nativeConfigInvalid,
+      params: { path, format },
+    });
   }
 }
 

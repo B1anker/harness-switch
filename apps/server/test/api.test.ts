@@ -218,6 +218,21 @@ describe('rest api', () => {
     expect(garbage.status).toBe(400);
   });
 
+  test('returns a stable code, data, and an Accept-Language localized message', async () => {
+    const { app } = await createTestApp();
+    const response = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept-Language': 'en-US,en;q=0.9' },
+      body: JSON.stringify({ password: 'not-it' }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      code: 'auth.invalidPassword',
+      msg: 'Incorrect password',
+    });
+  });
+
   test('logging out invalidates the session immediately', async () => {
     const context = await createTestApp();
     expect(

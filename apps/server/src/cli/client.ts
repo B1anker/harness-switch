@@ -5,7 +5,9 @@ import { CliError } from './args';
 
 export type ApiErrorPayload = {
   error?: unknown;
+  msg?: unknown;
   code?: unknown;
+  data?: unknown;
   params?: unknown;
 };
 
@@ -70,14 +72,17 @@ export class CliClient {
     });
     const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
     if (!response.ok) {
+      const params = payload ? messageParams(payload) : undefined;
       throw new CliError(
-        payload && typeof payload.error === 'string'
-          ? payload.error
+        payload && (typeof payload.msg === 'string' || typeof payload.error === 'string')
+          ? typeof payload.msg === 'string'
+            ? payload.msg
+            : (payload.error as string)
           : `请求失败：HTTP ${response.status}`,
         {
           status: response.status,
           ...(payload && typeof payload.code === 'string' ? { code: payload.code } : {}),
-          ...(payload && isMessageParams(payload.params) ? { params: payload.params } : {}),
+          ...(params ? { params } : {}),
         },
       );
     }
@@ -118,15 +123,28 @@ async function responseError(response: Response): Promise<{
 }> {
   try {
     const payload = (await response.json()) as ApiErrorPayload;
+    const params = messageParams(payload);
     return {
-      message: typeof payload.error === 'string' ? payload.error : `HTTP ${response.status}`,
+      message:
+        typeof payload.msg === 'string'
+          ? payload.msg
+          : typeof payload.error === 'string'
+            ? payload.error
+            : `HTTP ${response.status}`,
       status: response.status,
       ...(typeof payload.code === 'string' ? { code: payload.code } : {}),
-      ...(isMessageParams(payload.params) ? { params: payload.params } : {}),
+      ...(params ? { params } : {}),
     };
   } catch {
     return { message: `HTTP ${response.status}`, status: response.status };
   }
+}
+
+function messageParams(
+  payload: ApiErrorPayload,
+): Record<string, string | number | boolean> | undefined {
+  const value = payload.data ?? payload.params;
+  return isMessageParams(value) ? value : undefined;
 }
 
 function isMessageParams(value: unknown): value is Record<string, string | number | boolean> {
