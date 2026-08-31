@@ -1,3 +1,11 @@
+# [0.25.0](https://github.com/B1anker/harness-switch/compare/v0.24.0...v0.25.0) (2026-08-31)
+
+
+### Features
+
+* localize API responses ([f6cb082](https://github.com/B1anker/harness-switch/commit/f6cb082951a98399503c1e95c02733e84c5b4ae2))
+* **web:** refresh brand icon ([a622ef4](https://github.com/B1anker/harness-switch/commit/a622ef4ccc8c1a4012f5fc3ce856be0f55e0462f))
+
 # [0.24.0](https://github.com/B1anker/harness-switch/compare/v0.23.0...v0.24.0) (2026-08-31)
 
 
