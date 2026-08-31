@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
-import type { ErrorResponse } from '@seaveyon/harness-switch-shared';
+import type { ErrorResponse, Language } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import { HttpError } from './common/errors';
@@ -153,7 +153,7 @@ export function createApp(services: InstantiationService): Hono {
  * existing web and CLI releases keep working. New clients can consistently prefer
  * `msg` and `data` whenever a server-reported `code` is present.
  */
-function localizeResponsePayload(value: unknown, language: 'en' | 'zh-CN'): unknown {
+function localizeResponsePayload(value: unknown, language: Language): unknown {
   if (Array.isArray(value)) return value.map((item) => localizeResponsePayload(item, language));
   if (typeof value !== 'object' || value === null) return value;
   const record = value as Record<string, unknown>;

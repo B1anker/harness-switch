@@ -1,15 +1,17 @@
+import {
+  CATALOGS,
+  FALLBACK_LANGUAGE,
+  isLanguage,
+  LANGUAGES,
+  type Language,
+} from '@seaveyon/harness-switch-shared';
 import i18next, { type i18n as I18nInstance } from 'i18next';
 import { type ReactNode, useCallback, useMemo, useSyncExternalStore } from 'react';
 import { I18nextProvider, initReactI18next, useTranslation } from 'react-i18next';
-import en from '@/locales/en.json';
-import zhCN from '@/locales/zh-CN.json';
 
-export type Language = 'zh-CN' | 'en';
-
-export const LANGUAGES: readonly Language[] = ['zh-CN', 'en'];
+export { LANGUAGES, type Language };
 
 const STORAGE_KEY = 'hs-language';
-const FALLBACK: Language = 'zh-CN';
 
 /**
  * Locale used for `Intl` formatting. i18next's language tag stays short so keys
@@ -20,17 +22,13 @@ const LOCALES: Record<Language, string> = {
   en: 'en-US',
 };
 
-function isLanguage(value: unknown): value is Language {
-  return value === 'zh-CN' || value === 'en';
-}
-
 /** Reads the persisted choice. Private-mode browsers throw on access, so this never rejects. */
 function storedLanguage(): Language {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return isLanguage(stored) ? stored : FALLBACK;
+    return isLanguage(stored) ? stored : FALLBACK_LANGUAGE;
   } catch {
-    return FALLBACK;
+    return FALLBACK_LANGUAGE;
   }
 }
 
@@ -38,11 +36,11 @@ export const i18n: I18nInstance = i18next.createInstance();
 
 i18n.use(initReactI18next).init({
   lng: storedLanguage(),
-  fallbackLng: FALLBACK,
-  supportedLngs: LANGUAGES as string[],
+  fallbackLng: FALLBACK_LANGUAGE,
+  supportedLngs: [...LANGUAGES],
   resources: {
-    'zh-CN': { translation: zhCN },
-    en: { translation: en },
+    'zh-CN': { translation: CATALOGS['zh-CN'] },
+    en: { translation: CATALOGS.en },
   },
   // Resources are bundled, so there is nothing to load asynchronously and init
   // completes before the first render.
@@ -74,7 +72,7 @@ function subscribe(onChange: () => void): () => void {
 }
 
 function currentLanguage(): Language {
-  return isLanguage(i18n.language) ? i18n.language : FALLBACK;
+  return isLanguage(i18n.language) ? i18n.language : FALLBACK_LANGUAGE;
 }
 
 /**

@@ -210,9 +210,6 @@ export const gitHubPullRequestSchema = z.object({
   migrateCodexLoginCache: z.boolean().optional(),
 });
 
-/** Neither drift action takes options yet, but both still reject a non-object body. */
-export const emptyRequestSchema = z.object({});
-
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type CreateProfileRequest = z.infer<typeof createProfileRequestSchema>;
 export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;
