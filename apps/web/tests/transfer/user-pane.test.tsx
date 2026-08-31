@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { UserSyncDialog } from '@/components/user-sync-dialog';
+import { UserPane } from '@/components/transfer/user-pane';
 import { useAppStore } from '@/stores/app-store';
 
 const realFetch = globalThis.fetch;
@@ -67,7 +67,7 @@ test('requires a final confirmation before migrating a source Codex login cache'
     });
   }) as typeof globalThis.fetch;
 
-  render(<UserSyncDialog open onOpenChange={() => {}} />);
+  render(<UserPane onDone={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
   expect(await screen.findByText('迁移 Codex 官方登录缓存（auth.json）')).toBeInTheDocument();
 
@@ -122,7 +122,7 @@ test('does not offer migration when the Codex login caches already match', async
     });
   }) as typeof globalThis.fetch;
 
-  render(<UserSyncDialog open onOpenChange={() => {}} />);
+  render(<UserPane onDone={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
   await screen.findByText('配置 0');
   expect(screen.queryByText('迁移 Codex 官方登录缓存（auth.json）')).toBeNull();
@@ -163,7 +163,7 @@ test('lets the user overwrite conflicts for selected harnesses only', async () =
     });
   }) as typeof globalThis.fetch;
 
-  render(<UserSyncDialog open onOpenChange={() => {}} />);
+  render(<UserPane onDone={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
 
   expect(await screen.findByLabelText(/覆盖 Claude Code/)).toBeInTheDocument();
@@ -183,7 +183,7 @@ test('lets the user overwrite conflicts for selected harnesses only', async () =
   });
 });
 
-test('closes on a successful sync and reports the result in the toast', async () => {
+test('finishes on a successful sync and reports the result in the toast', async () => {
   globalThis.fetch = (async (path: string) => {
     const body =
       path === '/api/users/sync/preview'
@@ -212,13 +212,13 @@ test('closes on a successful sync and reports the result in the toast', async ()
     });
   }) as typeof globalThis.fetch;
 
-  const closes: boolean[] = [];
-  render(<UserSyncDialog open onOpenChange={(open) => closes.push(open)} />);
+  let done = 0;
+  render(<UserPane onDone={() => (done += 1)} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
   fireEvent.click(await screen.findByRole('button', { name: '同步到 owner' }));
 
   // Leaving the dialog open made users think the sync had not finished, so they ran it twice.
-  await waitFor(() => expect(closes).toEqual([false]));
+  await waitFor(() => expect(done).toBe(1));
   const notice = useAppStore.getState().notice ?? [];
   expect(notice[0]).toMatchObject({
     key: 'sync.done',
@@ -226,11 +226,11 @@ test('closes on a successful sync and reports the result in the toast', async ()
   });
   expect(notice[1]?.key).toBe('sync.cacheNotMigrated');
   expect(notice[2]?.fallback).toContain('kimi 的凭据缺少密钥');
-  // The result now lives in the toast, so the dialog no longer repeats it inline.
+  // The result now lives in the toast, so the pane no longer repeats it inline.
   expect(screen.queryByText(/同步完成：/)).toBeNull();
 });
 
-test('keeps a failed sync on screen with its reason instead of closing', async () => {
+test('keeps a failed sync on screen with its reason instead of finishing', async () => {
   globalThis.fetch = (async (path: string) =>
     path === '/api/users/sync/preview'
       ? new Response(
@@ -249,12 +249,43 @@ test('keeps a failed sync on screen with its reason instead of closing', async (
           headers: { 'Content-Type': 'application/json' },
         })) as typeof globalThis.fetch;
 
-  const closes: boolean[] = [];
-  render(<UserSyncDialog open onOpenChange={(open) => closes.push(open)} />);
+  let done = 0;
+  render(<UserPane onDone={() => (done += 1)} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
   fireEvent.click(await screen.findByRole('button', { name: '同步到 owner' }));
 
   expect(await screen.findByText('来源用户目录不可读')).toBeInTheDocument();
-  expect(closes).toEqual([]);
+  expect(done).toBe(0);
   expect(useAppStore.getState().notice).toBeNull();
+});
+
+test('says so when there is no other manageable account to copy from', () => {
+  useAppStore.setState({
+    currentUser: 'owner',
+    users: [
+      {
+        username: 'owner',
+        uid: 1000,
+        gid: 1000,
+        homeDir: '/home/owner',
+        current: true,
+        manageable: true,
+      },
+      {
+        username: 'locked',
+        uid: 1002,
+        gid: 1002,
+        homeDir: '/home/locked',
+        current: false,
+        manageable: false,
+      },
+    ],
+  });
+
+  render(<UserPane onDone={() => {}} />);
+
+  // Reading a source needs the same access as managing it, so an unmanageable account is
+  // not a candidate either.
+  expect(screen.getByText('没有其他可管理的本地登录用户。')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '检查可同步内容' })).toBeNull();
 });

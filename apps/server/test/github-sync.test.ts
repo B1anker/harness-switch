@@ -72,7 +72,7 @@ describe('GitHub Sync Service and Routes', () => {
       };
       error.code = 'UNKNOWN_CERTIFICATE_VERIFICATION_ERROR';
       throw error;
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const res = await app.request('/api/github/device/poll', {
       method: 'POST',
@@ -90,7 +90,7 @@ describe('GitHub Sync Service and Routes', () => {
 
     globalThis.fetch = (async () => {
       throw new TypeError('unknown certificate verification error');
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const res = await app.request('/api/github/device/code', {
       method: 'POST',
@@ -125,7 +125,7 @@ describe('GitHub Sync Service and Routes', () => {
         });
       }
       return new Response('Not found', { status: 404 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     const authRes = await app.request('/api/github/token', {
       method: 'POST',
@@ -204,7 +204,7 @@ describe('GitHub Sync Service and Routes', () => {
         });
       }
       return new Response('Not found', { status: 404 });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     // 1. Connect token
     await app.request('/api/github/token', {

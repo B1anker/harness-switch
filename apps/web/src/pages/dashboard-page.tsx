@@ -2,34 +2,28 @@ import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness
 import {
   ArrowRightLeft,
   ChevronDown,
-  Cloud,
-  FileSearch,
   KeyRound,
   Lock,
   LogOut,
   Plus,
-  RefreshCw,
   Server,
   SlidersHorizontal,
   UserRound,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
+import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
 import { DoctorPanel } from '@/components/doctor-panel';
-import { GitHubSyncDialog } from '@/components/github-sync-dialog';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
-import { ImportWizardDialog } from '@/components/import-wizard-dialog';
 import { LanguageToggle } from '@/components/language-toggle';
 import { NoticeToast } from '@/components/notice-toast';
 import { OperationsPanel } from '@/components/operations-panel';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { TransferDialog } from '@/components/transfer-dialog';
 import { Button } from '@/components/ui/button';
 import { UpdateButton } from '@/components/update-button';
-import { UserSyncDialog } from '@/components/user-sync-dialog';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
 import { useI18n, useTranslation } from '@/lib/i18n';
 import { catalogKey, lineText } from '@/lib/messages';
@@ -49,10 +43,7 @@ export function DashboardPage() {
   const backups = useAppStore((state) => state.backups);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
-  const [githubSyncOpen, setGithubSyncOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
-  const [userSyncOpen, setUserSyncOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
@@ -78,21 +69,9 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setUserSyncOpen(true)}>
-              <RefreshCw />
-              <span className="hidden lg:inline">{t('nav.syncUserConfig')}</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-              <FileSearch />
-              <span className="hidden lg:inline">{t('nav.importExisting')}</span>
-            </Button>
             <Button variant="outline" size="sm" onClick={() => setTransferOpen(true)}>
               <ArrowRightLeft />
               <span className="hidden sm:inline">{t('nav.transfer')}</span>
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setGithubSyncOpen(true)}>
-              <Cloud />
-              <span className="hidden sm:inline">{t('nav.githubSync')}</span>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setVaultOpen(true)}>
               <KeyRound />
@@ -127,7 +106,9 @@ export function DashboardPage() {
                 onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
               >
                 <Plus />
-                {t('harness.newProfile')}
+                {selectedHarness.id === 'dsh'
+                  ? t('harness.addCustomProvider')
+                  : t('harness.newProfile')}
               </Button>
             </div>
             <HarnessCard
@@ -164,11 +145,8 @@ export function DashboardPage() {
           onOpenChange={(open) => !open && setEditing(null)}
         />
       ) : null}
-      <TransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
-      <GitHubSyncDialog open={githubSyncOpen} onOpenChange={setGithubSyncOpen} />
+      <ConfigTransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <ProviderVaultDialog open={vaultOpen} onOpenChange={setVaultOpen} />
-      <UserSyncDialog open={userSyncOpen} onOpenChange={setUserSyncOpen} />
-      <ImportWizardDialog open={importOpen} onOpenChange={setImportOpen} />
       <NoticeToast />
     </div>
   );

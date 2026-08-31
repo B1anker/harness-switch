@@ -5,6 +5,7 @@ import {
   updateProfileRequestSchema,
 } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
+import { HttpError } from '../../common/errors';
 import type { InstantiationService } from '../../di';
 import { IActivationService } from '../../services/activation';
 import { IAdapterRegistry } from '../../services/adapters';
@@ -56,6 +57,13 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   app.post('/:harnessId/profiles', async (c) => {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const body = await readJsonBody(c, createProfileRequestSchema);
+    if (
+      harnessId === 'dsh' &&
+      body.extras?.providerType === 'official' &&
+      profiles.list('dsh').some((profile) => profile.extras.providerType === 'official')
+    ) {
+      throw new HttpError(409, 'DeepSeek 官方配置已存在，请直接编辑现有官方配置');
+    }
     const profile = profiles.upsert(
       harnessId,
       {
@@ -71,6 +79,12 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       },
       true,
     );
+    try {
+      activation.syncProfile(harnessId, profile.name);
+    } catch (error) {
+      profiles.remove(harnessId, profile.name);
+      throw error;
+    }
     return c.json(profile, 201);
   });
 
@@ -105,6 +119,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       // Editing the live provider must reach the live files immediately, otherwise the UI
       // would show the new values while the tool keeps using the old ones.
       activation.reconcileProfileUpdate(harnessId, name, profile.name);
+      activation.syncProfile(harnessId, profile.name);
       return c.json(profile);
     } catch (error) {
       if (persisted) {

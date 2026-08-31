@@ -184,6 +184,20 @@ describe('profiles referencing the vault', () => {
     expect(profiles().decrypt('claude', 'a').baseUrl).toBe('https://eu2.acme.example/v1');
   });
 
+  test('repairs a removed endpoint reference to the first remaining endpoint', () => {
+    createProvider();
+    profiles().upsert(
+      'claude',
+      { name: 'a', baseUrl: 'https://x', providerId: 'acme', providerEndpoint: 'eu' },
+      true,
+    );
+    vault().update('acme', {
+      endpoints: [{ key: 'default', baseUrl: 'https://api.acme.example/v2' }],
+    });
+    expect(profiles().list('claude')[0]?.providerEndpoint).toBe('default');
+    expect(profiles().decrypt('claude', 'a').baseUrl).toBe('https://api.acme.example/v2');
+  });
+
   test('explicit empty providerId detaches the profile keeping the cached key', () => {
     createProvider();
     profiles().upsert('claude', { name: 'a', baseUrl: 'https://x', providerId: 'acme' }, true);

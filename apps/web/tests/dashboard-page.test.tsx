@@ -43,10 +43,14 @@ function setDashboardState() {
     drift: [],
     doctor: [],
     doctorUpdatedAvailable: false,
+    scan: [],
+    scanLoading: false,
+    scanError: null,
     loadBackups: async () => {},
     loadProviders: async () => {},
     loadDrift: async () => {},
     loadDoctor: async () => {},
+    loadScan: async () => {},
   });
 }
 
@@ -55,8 +59,8 @@ test('switches the visible harness with the app tabs', () => {
 
   render(<DashboardPage />);
 
-  fireEvent.click(screen.getByRole('button', { name: '导入 / 导出' }));
-  expect(screen.getByRole('heading', { name: '全局配置迁移' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '配置迁移' }));
+  expect(screen.getByRole('heading', { name: '配置迁移' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
   const claudeTab = screen.getByRole('tab', { name: /Claude Code/ });
@@ -87,8 +91,11 @@ test('the header opens the vault dialog', () => {
   expect(screen.getByRole('menuitem', { name: '退出' })).toBeInTheDocument();
   fireEvent.pointerDown(document.body);
   expect(screen.queryByRole('menu')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: '同步用户配置' }));
-  expect(screen.getByRole('heading', { name: '从其他用户同步' })).toBeInTheDocument();
+
+  // Syncing from another local user is no longer its own header button — it is one source
+  // inside the transfer dialog.
+  fireEvent.click(screen.getByRole('button', { name: '配置迁移' }));
+  fireEvent.click(screen.getByRole('tab', { name: '其他本地用户' }));
   expect(screen.getByText(/复制到 root/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 });

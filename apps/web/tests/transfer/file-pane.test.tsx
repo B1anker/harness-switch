@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { TransferDialog } from '@/components/transfer-dialog';
+import { FilePane } from '@/components/transfer/file-pane';
 import { useAppStore } from '@/stores/app-store';
 
 const envelope = {
@@ -27,19 +27,28 @@ afterEach(() => {
   useAppStore.setState({ notice: null });
 });
 
+/** Hands the pane a `.hsw-backup` the same way the file picker would. */
+async function pickEnvelope() {
+  const file = new File(['ignored'], 'portable.hsw-backup', { type: 'application/json' });
+  Object.defineProperty(file, 'text', { value: async () => JSON.stringify(envelope) });
+  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+    target: { files: [file] },
+  });
+  await screen.findByText('portable.hsw-backup');
+}
+
 test('exports all profiles only after the migration password is confirmed', async () => {
   const requests: Array<{ path: string; body: string }> = [];
   globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
     requests.push({ path, body: String(init.body ?? '') });
-    const body =
-      path === '/api/transfer/export/preview' ? { codexLoginCacheAvailable: false } : envelope;
-    return new Response(JSON.stringify(body), {
+    return new Response(JSON.stringify(envelope), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }) as typeof globalThis.fetch;
 
-  render(<TransferDialog open onOpenChange={() => {}} />);
+  render(<FilePane onDone={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: '导出所有配置' }));
   const download = screen.getByRole('button', { name: /下载加密导出包/ });
   expect(download).toBeDisabled();
 
@@ -67,42 +76,37 @@ test('automatically migrates Codex login cache on import without separate checkb
   globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
     requests.push({ path, body: String(init.body ?? '') });
     const body =
-      path === '/api/transfer/export/preview'
-        ? { codexLoginCacheAvailable: false }
-        : path === '/api/transfer/preview'
-          ? {
-              exportedAt: '2026-08-18T00:00:00.000Z',
-              profileCount: 0,
-              harnesses: [],
-              conflicts: [],
-              activeCount: 0,
-              conflictPolicy: 'skip',
-              restoreActive: true,
-              codexActivationAuthEffect: 'none',
-              codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
-            }
-          : {
-              ok: true,
-              imported: 0,
-              overwritten: 0,
-              skipped: 0,
-              activeRestored: 0,
-              codexLoginCacheMigrated: true,
-              warnings: [],
-            };
+      path === '/api/transfer/preview'
+        ? {
+            exportedAt: '2026-08-18T00:00:00.000Z',
+            profileCount: 0,
+            providerCount: 0,
+            harnesses: [],
+            conflicts: [],
+            activeCount: 0,
+            conflictPolicy: 'skip',
+            restoreActive: true,
+            codexActivationAuthEffect: 'none',
+            codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
+          }
+        : {
+            ok: true,
+            imported: 0,
+            overwritten: 0,
+            skipped: 0,
+            providersCopied: 0,
+            activeRestored: 0,
+            codexLoginCacheMigrated: true,
+            warnings: [],
+          };
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }) as typeof globalThis.fetch;
 
-  render(<TransferDialog open onOpenChange={() => {}} />);
-  const file = new File(['ignored'], 'portable.hsw-backup', { type: 'application/json' });
-  Object.defineProperty(file, 'text', { value: async () => JSON.stringify(envelope) });
-  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-    target: { files: [file] },
-  });
-  await screen.findByText('portable.hsw-backup');
+  render(<FilePane onDone={() => {}} />);
+  await pickEnvelope();
   fireEvent.change(screen.getByLabelText('迁移密码', { selector: '#import-passphrase' }), {
     target: { value: 'portable-secret' },
   });
@@ -128,42 +132,37 @@ test('re-checks activation effects before importing and requires final acknowled
       restoreActive?: boolean;
     };
     const body =
-      path === '/api/transfer/export/preview'
-        ? { codexLoginCacheAvailable: false }
-        : path === '/api/transfer/preview'
-          ? {
-              exportedAt: '2026-08-18T00:00:00.000Z',
-              profileCount: 1,
-              harnesses: [{ harness: 'codex', profiles: 1 }],
-              conflicts: [],
-              activeCount: 1,
-              conflictPolicy: request.conflictPolicy ?? 'skip',
-              restoreActive: request.restoreActive === true,
-              codexActivationAuthEffect: request.restoreActive === true ? 'openai-api-key' : 'none',
-              codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
-            }
-          : {
-              ok: true,
-              imported: 1,
-              overwritten: 0,
-              skipped: 0,
-              activeRestored: 0,
-              codexLoginCacheMigrated: false,
-              warnings: [],
-            };
+      path === '/api/transfer/preview'
+        ? {
+            exportedAt: '2026-08-18T00:00:00.000Z',
+            profileCount: 1,
+            providerCount: 0,
+            harnesses: [{ harness: 'codex', profiles: 1 }],
+            conflicts: [],
+            activeCount: 1,
+            conflictPolicy: request.conflictPolicy ?? 'skip',
+            restoreActive: request.restoreActive === true,
+            codexActivationAuthEffect: request.restoreActive === true ? 'openai-api-key' : 'none',
+            codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
+          }
+        : {
+            ok: true,
+            imported: 1,
+            overwritten: 0,
+            skipped: 0,
+            providersCopied: 0,
+            activeRestored: 0,
+            codexLoginCacheMigrated: false,
+            warnings: [],
+          };
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }) as typeof globalThis.fetch;
 
-  render(<TransferDialog open onOpenChange={() => {}} />);
-  const file = new File(['ignored'], 'portable.hsw-backup', { type: 'application/json' });
-  Object.defineProperty(file, 'text', { value: async () => JSON.stringify(envelope) });
-  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-    target: { files: [file] },
-  });
-  await screen.findByText('portable.hsw-backup');
+  render(<FilePane onDone={() => {}} />);
+  await pickEnvelope();
   fireEvent.change(screen.getByLabelText('迁移密码', { selector: '#import-passphrase' }), {
     target: { value: 'portable-secret' },
   });
@@ -190,46 +189,41 @@ test('re-checks activation effects before importing and requires final acknowled
   expect(JSON.parse(importRequest?.body ?? '{}')).toMatchObject({ restoreActive: false });
 });
 
-test('closes on a successful import and reports the result in the toast', async () => {
+test('reports the result in the toast and lets the dialog get out of the way', async () => {
   globalThis.fetch = (async (path: string) => {
     const body =
-      path === '/api/transfer/export/preview'
-        ? { codexLoginCacheAvailable: false }
-        : path === '/api/transfer/preview'
-          ? {
-              exportedAt: '2026-08-18T00:00:00.000Z',
-              profileCount: 2,
-              harnesses: [{ harness: 'claude', profiles: 2 }],
-              conflicts: [],
-              activeCount: 0,
-              conflictPolicy: 'skip',
-              restoreActive: true,
-              codexActivationAuthEffect: 'none',
-              codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
-            }
-          : {
-              ok: true,
-              imported: 2,
-              overwritten: 0,
-              skipped: 1,
-              activeRestored: 0,
-              codexLoginCacheMigrated: false,
-              warnings: [],
-            };
+      path === '/api/transfer/preview'
+        ? {
+            exportedAt: '2026-08-18T00:00:00.000Z',
+            profileCount: 2,
+            providerCount: 0,
+            harnesses: [{ harness: 'claude', profiles: 2 }],
+            conflicts: [],
+            activeCount: 0,
+            conflictPolicy: 'skip',
+            restoreActive: true,
+            codexActivationAuthEffect: 'none',
+            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
+          }
+        : {
+            ok: true,
+            imported: 2,
+            overwritten: 0,
+            skipped: 1,
+            providersCopied: 0,
+            activeRestored: 0,
+            codexLoginCacheMigrated: false,
+            warnings: [],
+          };
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   }) as typeof globalThis.fetch;
 
-  const closes: boolean[] = [];
-  render(<TransferDialog open onOpenChange={(open) => closes.push(open)} />);
-  const file = new File(['ignored'], 'portable.hsw-backup', { type: 'application/json' });
-  Object.defineProperty(file, 'text', { value: async () => JSON.stringify(envelope) });
-  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
-    target: { files: [file] },
-  });
-  await screen.findByText('portable.hsw-backup');
+  let done = 0;
+  render(<FilePane onDone={() => (done += 1)} />);
+  await pickEnvelope();
   fireEvent.change(screen.getByLabelText('迁移密码', { selector: '#import-passphrase' }), {
     target: { value: 'portable-secret' },
   });
@@ -239,10 +233,22 @@ test('closes on a successful import and reports the result in the toast', async 
 
   // Import is the end of this flow, so the dialog gets out of the way instead of
   // leaving a finished form that looks like it still needs attention.
-  await waitFor(() => expect(closes).toEqual([false]));
+  await waitFor(() => expect(done).toBe(1));
   const notice = useAppStore.getState().notice ?? [];
   expect(notice[0]?.key).toBe('transfer.importedSummary');
   expect(String(notice[0]?.params?.parts)).toContain('新增 2 项');
   expect(String(notice[0]?.params?.parts)).toContain('跳过 1 项');
   expect(screen.queryByText(/导入完成：/)).toBeNull();
+});
+
+test('rejects a file that is not a harness-switch export', async () => {
+  render(<FilePane onDone={() => {}} />);
+  const file = new File(['{}'], 'notes.json', { type: 'application/json' });
+  Object.defineProperty(file, 'text', { value: async () => '{"format":"something-else"}' });
+  fireEvent.change(document.querySelector('input[type="file"]') as HTMLInputElement, {
+    target: { files: [file] },
+  });
+
+  expect(await screen.findByText('不是有效的 harness-switch 导出文件')).toBeInTheDocument();
+  expect(screen.queryByText('notes.json')).toBeNull();
 });

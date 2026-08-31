@@ -144,3 +144,42 @@ test('warns that an additive harness also loses its provider entry', () => {
   fireEvent.click(screen.getByRole('button', { name: '删除 openrouter-main' }));
   expect(screen.getByText(/provider 条目也会被一并摘掉/)).toBeInTheDocument();
 });
+
+test('allows deleting a non-default duplicate DSH official record', () => {
+  const calls = stubStoreActions(['activateProfile', 'deleteProfile']);
+  render(
+    <HarnessCard
+      harness={harnessFixture({
+        id: 'dsh',
+        label: 'DeepSeek Harness',
+        mode: 'additive',
+        active: {
+          name: 'official',
+          baseUrl: 'https://api.deepseek.com',
+          model: 'deepseek-v4-flash',
+        },
+        profiles: [
+          profileFixture({
+            harness: 'dsh',
+            name: 'official',
+            extras: { providerType: 'official' },
+          }),
+          profileFixture({
+            harness: 'dsh',
+            name: 'deepseek-official',
+            extras: { providerType: 'official' },
+          }),
+        ],
+      })}
+      onAdd={() => {}}
+      onEdit={() => {}}
+    />,
+  );
+
+  expect(screen.getAllByText('DeepSeek 官方')).toHaveLength(2);
+  const duplicateDelete = screen.getByRole('button', { name: '删除 deepseek-official' });
+  expect((duplicateDelete as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(duplicateDelete);
+  fireEvent.click(screen.getByRole('button', { name: '删除' }));
+  expect(calls.deleteProfile).toEqual([['dsh', 'deepseek-official']]);
+});
