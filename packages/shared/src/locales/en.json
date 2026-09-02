@@ -199,12 +199,19 @@
   },
   "activate": {
     "title": "Activate profile?",
+    "officialTitle": "Return to official login?",
     "body": "This switches {{harness}} to \"{{profile}}\" and writes its native configuration files{{changed}}. Target local user: {{user}}. A backup is taken first.",
+    "officialBody": "This returns {{harness}} to its official login and writes its native configuration files{{changed}}. Target local user: {{user}}. A backup is taken first.",
     "changedFiles_one": ", of which {{count}} file will change",
     "changedFiles_other": ", of which {{count}} files will change",
     "loadFailed": "Could not read the content to be written: {{reason}}",
     "loading": "Loading the content to be written…",
-    "confirm": "Confirm activation"
+    "confirm": "Confirm activation",
+    "executing": "Writing…",
+    "failed": "Writing failed: {{reason}}. The configuration was not switched; fix the issue and retry.",
+    "retry": "Retry activation",
+    "retryPreview": "Reload preview",
+    "succeeded": "Switch complete. A backup and reversible operation receipt were created."
   },
   "env": {
     "title": "Environment file compatibility",

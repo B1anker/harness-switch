@@ -69,9 +69,6 @@ export class LiveWriteService implements ILiveWriteService {
 
   transaction<T>(plan: OperationPlan, operation: () => T): T {
     const { harness, profile, writes } = plan;
-    if (writes.length === 0) {
-      return operation();
-    }
     for (const write of writes) {
       this.files.assertManaged(write.path);
       assertParsable(write.format, write.path, write.content);
@@ -82,7 +79,10 @@ export class LiveWriteService implements ILiveWriteService {
       path: write.path,
       content: this.files.readOptional(write.path),
     }));
-    const backupId = this.backups.create(harness, profile, snapshots);
+    // Metadata-only operations (for example an import without an auth.json cache)
+    // still need a durable receipt. They do not need a native-file backup, but the
+    // journal snapshots their metadata so startup recovery can put it back.
+    const backupId = writes.length === 0 ? null : this.backups.create(harness, profile, snapshots);
 
     // Opened before the first write so a crash between here and the commit leaves a
     // record the next start can act on. The in-process catch below only covers a thrown

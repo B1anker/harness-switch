@@ -29,6 +29,10 @@ export function profilePath(harnessId: HarnessId | string, name: string): string
   return `${profilesCollectionPath(harnessId)}/${encodeURIComponent(name)}`;
 }
 
+export function officialPreviewPath(harnessId: HarnessId | string): string {
+  return `/api/harnesses/${harnessId}/official/preview`;
+}
+
 export function backupsPath(id?: string): string {
   return id ? `/api/backups/${encodeURIComponent(id)}` : '/api/backups';
 }

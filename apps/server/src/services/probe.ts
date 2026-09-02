@@ -127,8 +127,8 @@ export class ProbeService implements IProbeService {
       });
     }
 
-    const text = await response.text();
-    if (text.length > MAX_BODY_BYTES) {
+    const text = await readBody(response);
+    if (text === null) {
       return failure(PROBE_CODES.invalidResponse, '响应体过大，不是模型目录', shared);
     }
 
@@ -138,6 +138,37 @@ export class ProbeService implements IProbeService {
     }
     return { ok: true, ...shared, models };
   }
+}
+
+/**
+ * `Response.text()` buffers the entire body before returning. Catalogs should be tiny,
+ * so enforce the advertised limit while reading instead of after memory was consumed.
+ */
+async function readBody(response: Response): Promise<string | null> {
+  const declaredLength = response.headers.get('content-length');
+  if (declaredLength && Number(declaredLength) > MAX_BODY_BYTES) {
+    return null;
+  }
+  if (!response.body) return '';
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        await reader.cancel('catalog body too large');
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))));
 }
 
 function joinUrl(base: URL, suffix: string): URL {

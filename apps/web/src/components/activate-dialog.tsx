@@ -1,5 +1,5 @@
 import type { HarnessSummary, PreviewTarget, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useState } from 'react';
 import { ConfigDiffs, changeKind } from '@/components/config-diff';
 import {
   AlertDialog,
@@ -17,7 +17,8 @@ import { useAppStore } from '@/stores/app-store';
 
 type ActivateDialogProps = {
   harness: HarnessSummary;
-  profile: ProfilePublic;
+  profile?: ProfilePublic;
+  official?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -26,13 +27,26 @@ type ActivateDialogProps = {
  * Confirmation step before activating a profile: fetches the exact content
  * that would be written and shows the diff against the live files.
  */
-export function ActivateDialog({ harness, profile, open, onOpenChange }: ActivateDialogProps) {
+export function ActivateDialog({
+  harness,
+  profile,
+  official = false,
+  open,
+  onOpenChange,
+}: ActivateDialogProps) {
   const { t } = useTranslation();
   const previewProfile = useAppStore((state) => state.previewProfile);
+  const previewOfficial = useAppStore((state) => state.previewOfficial);
   const activateProfile = useAppStore((state) => state.activateProfile);
+  const activateOfficial = useAppStore((state) => state.activateOfficial);
   const currentUser = useAppStore((state) => state.currentUser);
+  const profileName = official ? t('harness.official') : profile?.name;
   const [targets, setTargets] = useState<PreviewTarget[] | null>(null);
-  const [error, setError] = useState<MessageLine | null>(null);
+  const [previewError, setPreviewError] = useState<MessageLine | null>(null);
+  const [activationError, setActivationError] = useState<MessageLine | null>(null);
+  const [executing, setExecuting] = useState(false);
+  const [succeeded, setSucceeded] = useState(false);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
 
   useEffect(() => {
     if (!open) {
@@ -40,18 +54,42 @@ export function ActivateDialog({ harness, profile, open, onOpenChange }: Activat
     }
     let cancelled = false;
     setTargets(null);
-    setError(null);
-    void previewProfile(harness.id, profile.name)
+    setPreviewError(null);
+    setActivationError(null);
+    setExecuting(false);
+    setSucceeded(false);
+    const preview = official
+      ? previewOfficial(harness.id)
+      : previewProfile(harness.id, profileName ?? '');
+    void preview
       .then((result) => {
         if (!cancelled) setTargets(result);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(errorLine(err));
+        if (!cancelled) setPreviewError(errorLine(err));
       });
     return () => {
       cancelled = true;
     };
-  }, [open, harness.id, profile.name, previewProfile]);
+  }, [open, harness.id, official, previewAttempt, previewOfficial, previewProfile, profileName]);
+
+  async function activate(event: MouseEvent<HTMLButtonElement>) {
+    // AlertDialogAction closes by default; keep the diff visible until the write has
+    // completed, then turn the dialog into a durable success receipt or retry state.
+    event.preventDefault();
+    if (!targets || executing || succeeded) return;
+    setExecuting(true);
+    setActivationError(null);
+    try {
+      if (official) await activateOfficial(harness.id);
+      else await activateProfile(harness.id, profileName ?? '');
+      setSucceeded(true);
+    } catch (error) {
+      setActivationError(errorLine(error));
+    } finally {
+      setExecuting(false);
+    }
+  }
 
   const files =
     targets?.map((target) => ({
@@ -66,19 +104,21 @@ export function ActivateDialog({ harness, profile, open, onOpenChange }: Activat
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl">
         <AlertDialogHeader>
-          <AlertDialogTitle>{t('activate.title')}</AlertDialogTitle>
+          <AlertDialogTitle>
+            {official ? t('activate.officialTitle') : t('activate.title')}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            {t('activate.body', {
+            {t(official ? 'activate.officialBody' : 'activate.body', {
               harness: harness.label,
-              profile: profile.name,
+              profile: profileName ?? '',
               changed: changedCount > 0 ? t('activate.changedFiles', { count: changedCount }) : '',
               user: currentUser || t('notice.currentUser'),
             })}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {error ? (
+        {previewError ? (
           <p className="text-sm text-destructive">
-            {t('activate.loadFailed', { reason: lineText(t, error) })}
+            {t('activate.loadFailed', { reason: lineText(t, previewError) })}
           </p>
         ) : targets === null ? (
           <p className="py-6 text-center text-sm text-muted-foreground">{t('activate.loading')}</p>
@@ -87,16 +127,40 @@ export function ActivateDialog({ harness, profile, open, onOpenChange }: Activat
             <ConfigDiffs files={files} />
           </div>
         )}
+        {activationError ? (
+          <p className="text-sm text-destructive">
+            {t('activate.failed', { reason: lineText(t, activationError) })}
+          </p>
+        ) : null}
+        {succeeded ? <p className="text-sm text-primary">{t('activate.succeeded')}</p> : null}
         <AlertDialogFooter>
-          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={() => {
-              void activateProfile(harness.id, profile.name);
-              onOpenChange(false);
-            }}
-          >
-            {t('activate.confirm')}
-          </AlertDialogAction>
+          {succeeded ? (
+            <AlertDialogAction onClick={() => onOpenChange(false)}>
+              {t('common.close')}
+            </AlertDialogAction>
+          ) : (
+            <>
+              <AlertDialogCancel disabled={executing}>{t('common.cancel')}</AlertDialogCancel>
+              {previewError ? (
+                <AlertDialogAction
+                  onClick={(event) => {
+                    event.preventDefault();
+                    setPreviewAttempt((attempt) => attempt + 1);
+                  }}
+                >
+                  {t('activate.retryPreview')}
+                </AlertDialogAction>
+              ) : (
+                <AlertDialogAction disabled={targets === null || executing} onClick={activate}>
+                  {executing
+                    ? t('activate.executing')
+                    : activationError
+                      ? t('activate.retry')
+                      : t('activate.confirm')}
+                </AlertDialogAction>
+              )}
+            </>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

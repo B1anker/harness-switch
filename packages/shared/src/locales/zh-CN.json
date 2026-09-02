@@ -199,12 +199,19 @@
   },
   "activate": {
     "title": "激活配置？",
+    "officialTitle": "切回官方登录？",
     "body": "将把 {{harness}} 切换到「{{profile}}」并写入原生配置文件{{changed}}。目标本地用户：{{user}}。写入前会自动备份。",
+    "officialBody": "将把 {{harness}} 切回官方登录并写入原生配置文件{{changed}}。目标本地用户：{{user}}。写入前会自动备份。",
     "changedFiles_one": "，其中 {{count}} 个文件将变更",
     "changedFiles_other": "，其中 {{count}} 个文件将变更",
     "loadFailed": "无法读取将要写入的内容：{{reason}}",
     "loading": "正在读取将要写入的内容…",
-    "confirm": "确认激活"
+    "confirm": "确认激活",
+    "executing": "正在写入…",
+    "failed": "写入失败：{{reason}}。配置未切换，请修正后重试。",
+    "retry": "重试激活",
+    "retryPreview": "重新读取预览",
+    "succeeded": "切换完成，已创建备份和可撤销的操作收据。"
   },
   "env": {
     "title": "环境变量文件兼容性",

@@ -45,6 +45,7 @@ import {
   driftAdoptPath,
   driftPath,
   driftReapplyPath,
+  officialPreviewPath,
   operationsPath,
   operationUndoPath,
   probePath,
@@ -110,6 +111,7 @@ type AppState = {
   activateProfile: (harnessId: HarnessId, name: string) => Promise<void>;
   activateOfficial: (harnessId: HarnessId) => Promise<void>;
   previewProfile: (harnessId: HarnessId, name: string) => Promise<PreviewTarget[]>;
+  previewOfficial: (harnessId: HarnessId) => Promise<PreviewTarget[]>;
   loadBackups: () => Promise<void>;
   loadBackupDetail: (id: string) => Promise<BackupDetail>;
   restoreBackup: (id: string) => Promise<void>;
@@ -335,6 +337,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   previewProfile: async (harnessId, name) => {
     const result = await api<PreviewResponse>(`${profilePath(harnessId, name)}/preview`);
+    return result.targets;
+  },
+
+  previewOfficial: async (harnessId) => {
+    const result = await api<PreviewResponse>(officialPreviewPath(harnessId));
     return result.targets;
   },
 

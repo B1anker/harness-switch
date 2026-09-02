@@ -64,13 +64,12 @@ test('activating opens the diff confirmation before switching', () => {
   expect(screen.getByRole('button', { name: '确认激活' })).toBeInTheDocument();
 });
 
-test('offers a built-in official login and asks the store to restore it', () => {
-  const calls = stubStoreActions(['activateOfficial']);
+test('offers a built-in official login with preview and confirmation', () => {
   render(<HarnessCard harness={harnessFixture()} onAdd={() => {}} onEdit={() => {}} />);
 
   fireEvent.click(screen.getByRole('button', { name: '切回官方' }));
 
-  expect(calls.activateOfficial).toEqual([['claude']]);
+  expect(screen.getByRole('heading', { name: '切回官方登录？' })).toBeInTheDocument();
   expect(screen.getByText(/Claude Code 自身的 Anthropic 账号登录/)).toBeInTheDocument();
 });
 

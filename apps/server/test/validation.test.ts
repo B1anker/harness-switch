@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app';
@@ -84,6 +84,26 @@ describe('request validation', () => {
     expect(response.status).toBe(400);
     expect(await errorOf(response)).toContain('extras.authVar');
     expect(await profileStore(context)).toBe('');
+  });
+
+  test('rejects an empty login password before authentication', async () => {
+    const { app } = await createTestApp();
+    const response = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: '   ' }),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  test('refuses to use an empty password file', async () => {
+    homeDir = await mkdtemp(join(tmpdir(), 'hsw-empty-password-'));
+    process.env.HSW_HOME_DIR = homeDir;
+    process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
+    const services = createServices();
+    services.get(IEnvironmentService).ensureDataDir();
+    await writeFile(join(process.env.HSW_DATA_DIR, 'web_password'), '  \n');
+    expect(() => services.get(IAuthService).ensurePassword()).toThrow(/password file is empty/);
   });
 
   test('an override that is not file content is refused', async () => {
