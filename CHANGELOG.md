@@ -1,3 +1,20 @@
+# [0.26.0](https://github.com/B1anker/harness-switch/compare/v0.25.0...v0.26.0) (2026-09-02)
+
+
+### Bug Fixes
+
+* **vault:** add the missing provider reveal endpoint ([2a0e4b1](https://github.com/B1anker/harness-switch/commit/2a0e4b124c6321b8e7cb531a3c36974c35439a1b))
+
+
+### Features
+
+* **di:** complete static arguments, lazy services, and cycle paths ([eb1d794](https://github.com/B1anker/harness-switch/commit/eb1d794627a2f63c73b641d8da2161f098494be3))
+
+
+### Performance Improvements
+
+* **web:** ship 3 Shiki grammars instead of 250, cutting the tarball to 1.1MB ([f6368b6](https://github.com/B1anker/harness-switch/commit/f6368b6b67f2973cd149e5ffcf2ef82e3f30c933))
+
 # [0.25.0](https://github.com/B1anker/harness-switch/compare/v0.24.0...v0.25.0) (2026-08-31)
 
 
