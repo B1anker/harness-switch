@@ -1,11 +1,8 @@
-import type { MessageParams } from '@seaveyon/harness-switch-shared';
-import en from '../../../web/src/locales/en.json';
-import zhCN from '../../../web/src/locales/zh-CN.json';
-
-type ApiLanguage = 'en' | 'zh-CN';
+import type { Language, MessageParams } from '@seaveyon/harness-switch-shared';
+import { CATALOGS } from '@seaveyon/harness-switch-shared';
 
 /** Picks one of the API's supported languages from the standard request header. */
-export function requestLanguage(acceptLanguage: string | undefined): ApiLanguage {
+export function requestLanguage(acceptLanguage: string | undefined): Language {
   return acceptLanguage?.toLowerCase().startsWith('en') ? 'en' : 'zh-CN';
 }
 
@@ -14,8 +11,8 @@ export function requestLanguage(acceptLanguage: string | undefined): ApiLanguage
  * The API also resolves its response prose so CLI and non-browser clients receive
  * a useful message in their requested language.
  */
-export function localizeMessage(language: ApiLanguage, code: string, data?: MessageParams): string {
-  const catalog = language === 'en' ? en : zhCN;
+export function localizeMessage(language: Language, code: string, data?: MessageParams): string {
+  const catalog = CATALOGS[language];
   const value =
     getPath(catalog, `error.${code}`) ??
     (typeof data?.count === 'number'

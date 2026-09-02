@@ -32,6 +32,21 @@ export function createProviderRoutes(services: InstantiationService): Hono {
 
   app.get('/:id', (c) => c.json(vault.get(decodeURIComponent(c.req.param('id')))));
 
+  /**
+   * Returns the stored credential in plaintext for the vault editor's reveal toggle.
+   *
+   * Every other read masks the key, so this is the one place it leaves the server. It
+   * stays behind the same session guard as the rest of `/api/providers`, and the
+   * response is marked no-store so the browser keeps no copy on disk.
+   */
+  app.get('/:id/reveal', (c) => {
+    const id = decodeURIComponent(c.req.param('id'));
+    // Resolve through `get` first so an unknown id is a 404 before anything decrypts.
+    vault.get(id);
+    c.header('Cache-Control', 'no-store');
+    return c.json({ apiKey: vault.decrypt(id) });
+  });
+
   app.post('/', async (c) => {
     const body = await readJsonBody(c, createProviderRequestSchema);
     return c.json(

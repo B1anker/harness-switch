@@ -63,8 +63,36 @@ describe('providers api', () => {
   test('requires authentication', async () => {
     const { app } = await createTestApp();
     expect((await app.request('/api/providers')).status).toBe(401);
+    expect((await app.request('/api/providers/acme/reveal')).status).toBe(401);
     expect((await app.request('/api/doctor')).status).toBe(401);
     expect((await app.request('/api/drift')).status).toBe(401);
+  });
+
+  test('reveal returns the plaintext key the list withholds', async () => {
+    const { app, cookie } = await createTestApp();
+    const created = await app.request('/api/providers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({
+        name: 'acme',
+        apiKey: 'sk-reveal-me',
+        endpoints: [{ key: 'default', baseUrl: 'https://api.acme.example/v1' }],
+      }),
+    });
+    expect(created.status).toBe(201);
+
+    const revealed = await app.request('/api/providers/acme/reveal', {
+      headers: { Cookie: cookie },
+    });
+    expect(revealed.status).toBe(200);
+    expect(revealed.headers.get('cache-control')).toBe('no-store');
+    expect(await revealed.json()).toEqual({ apiKey: 'sk-reveal-me' });
+
+    // An unknown id is a 404 rather than an empty key, so the UI can tell the
+    // difference between "no such entry" and "entry with no credential".
+    expect(
+      (await app.request('/api/providers/ghost/reveal', { headers: { Cookie: cookie } })).status,
+    ).toBe(404);
   });
 
   test('creates, lists and updates a provider without leaking the key', async () => {

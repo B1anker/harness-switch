@@ -1,6 +1,11 @@
 import type { ServiceIdentifier } from './decorator';
 import type { SyncDescriptor } from './descriptors';
 
+/**
+ * The registry the container resolves from. An entry is either a ready instance or a
+ * {@link SyncDescriptor} the container constructs on first use and then replaces with
+ * the resulting singleton.
+ */
 export class ServiceCollection {
   private readonly entries = new Map<ServiceIdentifier<unknown>, unknown>();
 
@@ -10,6 +15,7 @@ export class ServiceCollection {
     }
   }
 
+  /** Registers an entry, returning whatever it replaced. */
   set<T>(
     id: ServiceIdentifier<T>,
     instanceOrDescriptor: T | SyncDescriptor<T>,
@@ -30,6 +36,7 @@ export class ServiceCollection {
     return this.entries.get(id as ServiceIdentifier<unknown>) as T | SyncDescriptor<T> | undefined;
   }
 
+  /** Every registered entry, for diagnostics that report on the container. */
   forEach(callback: (id: ServiceIdentifier<unknown>, value: unknown) => void): void {
     for (const [id, value] of this.entries) {
       callback(id, value);

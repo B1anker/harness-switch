@@ -21,6 +21,13 @@ export {
   type HarnessId,
   isHarnessId,
 } from './harnesses';
+export {
+  CATALOGS,
+  FALLBACK_LANGUAGE,
+  isLanguage,
+  LANGUAGES,
+  type Language,
+} from './locales';
 export type {
   CreateProfileRequest,
   CreateProviderRequest,
@@ -43,10 +50,8 @@ export type {
   UserSyncRequest,
 } from './schemas';
 export {
-  conflictPolicySchema,
   createProfileRequestSchema,
   createProviderRequestSchema,
-  emptyRequestSchema,
   extrasSchema,
   formatSchemaError,
   gitHubDeviceCodeRequestSchema,
@@ -55,7 +60,6 @@ export {
   gitHubPullRequestSchema,
   gitHubPushRequestSchema,
   gitHubTokenAuthRequestSchema,
-  harnessIdSchema,
   loginRequestSchema,
   overridesSchema,
   probeRequestSchema,
@@ -63,7 +67,6 @@ export {
   providerEndpointRequestSchema,
   scanImportRequestSchema,
   scanImportSelectionSchema,
-  transferEnvelopeSchema,
   transferExportRequestSchema,
   transferImportRequestSchema,
   updateProfileRequestSchema,

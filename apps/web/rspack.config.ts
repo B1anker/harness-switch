@@ -29,6 +29,16 @@ export default defineConfig({
     extensions: ['.tsx', '.ts', '.jsx', '.js'],
     alias: {
       '@': path.resolve(rootDir, 'src'),
+      // `@pierre/diffs` reaches for Shiki's full language bundle and Pierre's full theme
+      // catalogue, both of which register a dynamic import per entry. That made the built
+      // output 326 chunks / 13MB, almost all of it grammars and themes for languages this
+      // app never renders. These two stand-ins narrow the sets to what the config diff
+      // viewer actually asks for; see the files themselves for the contract they keep.
+      shiki$: path.resolve(rootDir, 'src/shiki/bundle.ts'),
+      '@pierre/theming/themes$': path.resolve(rootDir, 'src/shiki/themes.ts'),
+      // Same idea for the 608KB inlined Oniguruma binary, which only the
+      // `preferredHighlighter: 'shiki-wasm'` branch loads.
+      'shiki/wasm': path.resolve(rootDir, 'src/shiki/wasm-stub.ts'),
     },
   },
   module: {
