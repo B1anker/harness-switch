@@ -1,3 +1,10 @@
+# [0.30.0](https://github.com/B1anker/harness-switch/compare/v0.29.0...v0.30.0) (2026-09-03)
+
+
+### Features
+
+* **probe:** send one real completion, not just a catalog read ([b569e73](https://github.com/B1anker/harness-switch/commit/b569e7309232f437dcc1b755bbb028e3b1fc5d0e))
+
 # [0.29.0](https://github.com/B1anker/harness-switch/compare/v0.28.0...v0.29.0) (2026-09-03)
 
 
