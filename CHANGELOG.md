@@ -1,3 +1,15 @@
+# [0.29.0](https://github.com/B1anker/harness-switch/compare/v0.28.0...v0.29.0) (2026-09-03)
+
+
+### Bug Fixes
+
+* preserve native DeepSeek official configuration ([85afc7d](https://github.com/B1anker/harness-switch/commit/85afc7dd7f4a2e501418dfe201dd81848a70ead2))
+
+
+### Features
+
+* copy profiles and surface DeepSeek API config ([9e69dec](https://github.com/B1anker/harness-switch/commit/9e69decae1cf40b950c6f5a098a2f8d34bf85a24))
+
 # [0.28.0](https://github.com/B1anker/harness-switch/compare/v0.27.0...v0.28.0) (2026-09-03)
 
 
