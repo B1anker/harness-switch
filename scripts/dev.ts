@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 const web = Bun.spawn(['bun', 'run', '--filter', '@seaveyon/harness-switch-web', 'dev'], {
   stdout: 'inherit',
   stderr: 'inherit',
@@ -7,6 +9,9 @@ const server = Bun.spawn(['bun', 'run', '--filter', '@seaveyon/harness-switch', 
   stdout: 'inherit',
   stderr: 'inherit',
   stdin: 'inherit',
+  // The first web compilation is asynchronous; pin the API to its eventual output
+  // directory rather than resolving a fallback before index.html exists.
+  env: { ...process.env, HSW_PUBLIC_DIR: join(import.meta.dir, '..', 'apps', 'server', 'public') },
 });
 
 function shutdown() {

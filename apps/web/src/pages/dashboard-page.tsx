@@ -33,6 +33,7 @@ import { useAppStore } from '@/stores/app-store';
 type Editing = {
   harnessId: HarnessId;
   profile: ProfilePublic | null;
+  copySource?: ProfilePublic;
 };
 
 export function DashboardPage() {
@@ -113,6 +114,9 @@ export function DashboardPage() {
               harness={selectedHarness}
               onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
               onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
+              onCopy={(copySource) =>
+                setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
+              }
             />
             <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
@@ -137,9 +141,10 @@ export function DashboardPage() {
       </div>
       {editing && editingHarness ? (
         <ProfileDialog
-          key={`${editing.harnessId}-${editing.profile?.name ?? 'new'}`}
+          key={`${editing.harnessId}-${editing.profile?.name ?? editing.copySource?.name ?? 'new'}`}
           harness={editingHarness}
           profile={editing.profile}
+          copySource={editing.copySource}
           onOpenChange={(open) => !open && setEditing(null)}
         />
       ) : null}

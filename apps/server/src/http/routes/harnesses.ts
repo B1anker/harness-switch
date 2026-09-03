@@ -32,6 +32,11 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
 
   function summary(id: HarnessId) {
     const adapter = adapters.get(id);
+    const targets = adapter.targets();
+    const current = Object.fromEntries(
+      targets.map((target) => [target.key, files.readOptional(target.path)]),
+    );
+    const officialAvailable = adapter.officialAvailable?.(current);
     return {
       id,
       label: harnesses.label(id),
@@ -40,11 +45,12 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       profiles: profiles.list(id),
       fields: adapter.fields,
       modelRequired: adapter.modelRequired,
-      targets: adapter.targets(),
+      targets,
       envVars: adapter.envVarNames,
       envNote: adapter.envNote,
       envNoteCode: adapter.envNoteCode,
       supportsOfficialAuth: adapter.renderOfficial !== undefined,
+      ...(officialAvailable !== undefined ? { officialAvailable } : {}),
     };
   }
 
@@ -73,6 +79,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       harnessId,
       {
         name: body.name,
+        copySourceName: body.copySourceName,
         baseUrl: body.baseUrl,
         apiKey: body.apiKey,
         model: body.model,

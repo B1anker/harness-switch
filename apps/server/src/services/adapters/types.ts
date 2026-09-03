@@ -69,6 +69,9 @@ export interface HarnessAdapter {
    */
   renderOfficial?(profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles;
 
+  /** Whether an already-native official configuration is available to switch back to. */
+  officialAvailable?(current: CurrentFiles): boolean;
+
   /**
    * Additive mode only: drop this profile's provider entry from the live files, used
    * when the profile is deleted so no orphan provider is left behind.

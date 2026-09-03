@@ -748,6 +748,39 @@ describe('dsh adapter', () => {
     expect(settings['llm-deepseek'].models).toHaveLength(2);
     expect(parseYaml(rendered.credentials).refs.DEEPSEEK_API_KEY).toBe('sk-new');
   });
+
+  test('re-selects a detected DeepSeek official API key without copying it into a profile', () => {
+    const adapter = new DshAdapter(environment);
+    const rendered = adapter.renderOfficial!(undefined, {
+      settings: [
+        'llm-deepseek:',
+        '  apiKeyEnv: DEEPSEEK_API_KEY',
+        '  models:',
+        '    - id: deepseek-v4-flash',
+        'agent-default-model:',
+        '  provider: relay',
+        '  model: old-model',
+        '',
+      ].join('\n'),
+      credentials: 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n',
+    });
+
+    const settings = parseYaml(rendered.settings);
+    expect(settings['agent-default-model']).toEqual({
+      provider: 'deepseek-official',
+      model: 'deepseek-v4-flash',
+    });
+    expect(rendered.credentials).toBeUndefined();
+    expect(
+      adapter.officialAvailable!({
+        settings: rendered.settings,
+        credentials: 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n',
+      }),
+    ).toBe(true);
+    expect(
+      adapter.officialAvailable!({ settings: rendered.settings, credentials: 'version: 1\n' }),
+    ).toBe(false);
+  });
 });
 
 describe('provider ids', () => {

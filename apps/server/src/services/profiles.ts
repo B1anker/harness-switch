@@ -42,6 +42,8 @@ export type ProfileStore = Record<string, Record<string, StoredProfile>>;
 
 export type ProfileInput = {
   name: string;
+  /** Existing profile whose values and credential seed a newly created profile. */
+  copySourceName?: string;
   /** Existing key used to locate a profile while renaming it. */
   sourceName?: string;
   baseUrl?: string;
@@ -121,17 +123,23 @@ export class ProfileService implements IProfileService {
     this.harnesses.require(harness);
     const name = input.name.trim();
     const sourceName = isCreate ? name : input.sourceName?.trim() || name;
+    const copySourceName = isCreate ? input.copySourceName?.trim() : undefined;
     this.assertName(name);
     this.assertName(sourceName);
+    if (copySourceName) this.assertName(copySourceName);
     const store = this.read();
     store[harness] ||= {};
     const prior = store[harness][sourceName];
+    const copySource = copySourceName ? store[harness][copySourceName] : undefined;
     if (isCreate && prior) {
       throw new HttpError(409, 'profile already exists', {
         code: ERROR_CODES.profileAlreadyExists,
       });
     }
     if (!isCreate && !prior) {
+      throw new HttpError(404, 'profile not found', { code: ERROR_CODES.profileNotFound });
+    }
+    if (isCreate && copySourceName && !copySource) {
       throw new HttpError(404, 'profile not found', { code: ERROR_CODES.profileNotFound });
     }
     if (!isCreate && sourceName !== name && store[harness][name]) {
@@ -148,8 +156,9 @@ export class ProfileService implements IProfileService {
     const hasInlineKey = input.apiKey !== undefined && input.apiKey.trim() !== '';
     const inlineKey = (input.apiKey ?? '').trim();
 
-    let nextProviderId = prior?.provider_id;
-    let nextProviderEndpoint = prior?.provider_endpoint;
+    const inherited = prior ?? copySource;
+    let nextProviderId = inherited?.provider_id;
+    let nextProviderEndpoint = inherited?.provider_endpoint;
     let apiKey = '';
 
     if (hasProvider && providerId) {
@@ -172,15 +181,13 @@ export class ProfileService implements IProfileService {
       // Explicit detach: keep the last cached credential as the profile's own key.
       nextProviderId = undefined;
       nextProviderEndpoint = undefined;
-      apiKey = hasInlineKey ? inlineKey : prior ? this.crypto.decrypt(prior.api_key) : '';
+      apiKey = hasInlineKey ? inlineKey : inherited ? this.resolveKey(inherited) : '';
     } else if (hasInlineKey) {
       nextProviderId = undefined;
       nextProviderEndpoint = undefined;
       apiKey = inlineKey;
-    } else if (prior) {
-      apiKey = prior.provider_id
-        ? this.vault.decrypt(prior.provider_id)
-        : this.crypto.decrypt(prior.api_key);
+    } else if (inherited) {
+      apiKey = this.resolveKey(inherited);
     }
 
     if (isCreate && !apiKey) {
@@ -188,7 +195,7 @@ export class ProfileService implements IProfileService {
     }
 
     const baseUrl = this.resolveBaseUrl(
-      (input.baseUrl ?? prior?.base_url ?? '').trim(),
+      (input.baseUrl ?? inherited?.base_url ?? '').trim(),
       providerId || nextProviderId,
       providerEndpoint || nextProviderEndpoint,
     );
@@ -196,9 +203,11 @@ export class ProfileService implements IProfileService {
     const next: StoredProfile = {
       base_url: baseUrl,
       api_key: this.crypto.encrypt(apiKey),
-      model: (input.model ?? prior?.model ?? '').trim(),
-      notes: input.notes ?? prior?.notes ?? '',
-      extras: input.extras ?? prior?.extras ?? {},
+      model: (input.model ?? inherited?.model ?? '').trim(),
+      notes: input.notes ?? inherited?.notes ?? '',
+      extras: input.extras ?? inherited?.extras ?? {},
+      // Raw overrides may contain the source profile's identifier, so a copy starts
+      // from the form fields and lets the user take over raw files after saving.
       overrides: input.overrides ?? prior?.overrides ?? {},
       provider_id: nextProviderId,
       provider_endpoint: nextProviderEndpoint,

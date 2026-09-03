@@ -93,6 +93,26 @@ describe('profile storage', () => {
     expect(profiles.get('claude', 'renamed')?.notes).toBe('kept');
   });
 
+  test('copies a profile without exposing or re-entering its credential', () => {
+    const profiles = services.get(IProfileService);
+    create('main', { extras: { authVar: 'ANTHROPIC_API_KEY' }, overrides: { settings: '{}' } });
+
+    const copy = profiles.upsert(
+      'claude',
+      { name: 'main-copy', copySourceName: 'main', model: 'glm-4.6' },
+      true,
+    );
+
+    expect(copy.name).toBe('main-copy');
+    expect(profiles.decrypt('claude', 'main-copy')).toMatchObject({
+      apiKey: 'sk-original',
+      baseUrl: 'https://api.example.com/v1',
+      model: 'glm-4.6',
+      extras: { authVar: 'ANTHROPIC_API_KEY' },
+      overrides: {},
+    });
+  });
+
   test('reports the usual conflicts instead of overwriting silently', () => {
     const profiles = services.get(IProfileService);
     create('main');

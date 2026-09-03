@@ -41,6 +41,40 @@ test('renders the harness specific fields the server described', () => {
   expect(screen.getByText(/settings\.json/)).toBeInTheDocument();
 });
 
+test('explains that a DeepSeek official profile accepts an official API key', () => {
+  setup();
+  render(
+    <ProfileDialog
+      harness={harnessFixture({
+        id: 'dsh',
+        label: 'DeepSeek Harness',
+        modelRequired: true,
+        fields: [
+          {
+            key: 'providerType',
+            label: '提供方类型',
+            kind: 'select',
+            defaultValue: 'custom',
+            options: [
+              { value: 'custom', label: '自定义提供方' },
+              { value: 'official', label: 'DeepSeek 官方 API' },
+            ],
+          },
+        ],
+      })}
+      profile={profileFixture({
+        harness: 'dsh',
+        name: 'deepseek-official',
+        extras: { providerType: 'official' },
+      })}
+      onOpenChange={() => {}}
+    />,
+  );
+
+  expect(screen.getByLabelText('API Key')).toBeInTheDocument();
+  expect(screen.getByText(/DeepSeek 开放平台 API Key/)).toBeInTheDocument();
+});
+
 test('selecting an option updates the controlled extra field', async () => {
   const recorded = setup();
   render(<ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />);
@@ -154,6 +188,61 @@ test('creating submits the core fields together with the field defaults', async 
       },
     },
   ]);
+});
+
+test('copying opens an editable create form and preserves the credential server-side', async () => {
+  const recorded = setup();
+  const source = profileFixture({
+    name: 'production',
+    notes: 'source note',
+    extras: { authVar: 'ANTHROPIC_API_KEY' },
+  });
+  render(
+    <ProfileDialog
+      harness={harnessFixture({ profiles: [source] })}
+      profile={null}
+      copySource={source}
+      onOpenChange={() => {}}
+    />,
+  );
+
+  expect(
+    screen.getByRole('heading', { name: '复制 Claude Code / production' }),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText('配置名称')).toHaveValue('production-copy');
+  expect(screen.getByLabelText('API Base URL')).toHaveValue('https://api.example.com/v1');
+  fill('备注（可选）', 'copied and adjusted');
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  await waitFor(() => expect(recorded.created).toHaveLength(1));
+  expect(recorded.created[0]?.[1]).toMatchObject({
+    name: 'production-copy',
+    copySourceName: 'production',
+    notes: 'copied and adjusted',
+  });
+  const copiedInput = recorded.created[0]?.[1] as Record<string, unknown> | undefined;
+  expect(copiedInput?.apiKey).toBeUndefined();
+});
+
+test('marks a duplicate profile name invalid before submitting', () => {
+  const recorded = setup();
+  const existing = profileFixture({ name: 'existing' });
+  render(
+    <ProfileDialog
+      harness={harnessFixture({ profiles: [existing] })}
+      profile={null}
+      onOpenChange={() => {}}
+    />,
+  );
+
+  fill('配置名称', 'existing');
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-test');
+  fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
+
+  expect(screen.getByLabelText('配置名称')).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByText('同名配置已经存在')).toBeInTheDocument();
+  expect(recorded.created).toEqual([]);
 });
 
 test('a preset fills the base url and the model in one click', () => {

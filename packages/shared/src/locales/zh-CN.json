@@ -169,7 +169,7 @@
           "label": "提供方类型",
           "option": {
             "custom": "自定义提供方",
-            "official": "DeepSeek 官方"
+            "official": "DeepSeek 官方 API"
           }
         },
         "providerId": {
@@ -216,6 +216,7 @@
     "providers": "提供方",
     "profileCount_one": "{{count}} 个自定义配置",
     "profileCount_other": "{{count}} 个自定义配置",
+    "copy": "复制 {{name}}",
     "noProfiles": "还没有配置档案",
     "manualOverride": "手动接管",
     "edit": "编辑 {{name}}",
@@ -230,6 +231,7 @@
     "officialHintClaude": "使用 Claude Code 自身的 Anthropic 账号登录",
     "officialHintCodex": "使用 Codex 自身的 ChatGPT / OpenAI 账号登录",
     "officialHintKimi": "使用 Kimi Code 自身的 Kimi 账号登录（/login 写入的 OAuth 凭据）",
+    "officialHintDsh": "检测并切换到 DeepSeek Harness 已有的 DeepSeek 官方 API Key 配置。",
     "application": "应用",
     "writeMode": "写入模式",
     "modeReplace": "替换当前配置",
@@ -238,6 +240,7 @@
   "profile": {
     "editTitle": "编辑 {{harness}} / {{profile}}",
     "createTitle": "新增 {{harness}} 配置",
+    "copyTitle": "复制 {{harness}} / {{profile}}",
     "intro": "保存后会写入 {{targets}}。",
     "additiveNote": "该工具的配置文件按 provider 共存，切换只会移动当前指针，不会删除你手写的其他 provider。",
     "useSharedProvider": "使用共享 Provider（凭据库）",
@@ -261,6 +264,7 @@
     "apiKeyKeep": "留空表示保持不变",
     "apiKeyRequiredPlaceholder": "必填",
     "apiKeySharedHint": "已引用共享 Provider，密钥在「凭据库」中统一轮换。",
+    "dshOfficialApiKeyHint": "填写 DeepSeek 开放平台 API Key；它会安全写入 DSH 的 .credentials.yaml，并以 DEEPSEEK_API_KEY 被 settings.yaml 引用。",
     "fallbackModel": "回退模型（ANTHROPIC_MODEL）",
     "model": "模型",
     "fallbackModelPlaceholder": "可选；各档未匹配时使用，例如 glm-5",
@@ -292,6 +296,7 @@
       "nameRequired": "请输入配置名称",
       "nameSlash": "配置名称不能包含 / 或 \\",
       "nameTooLong": "配置名称最多 {{max}} 个字符",
+      "nameDuplicate": "同名配置已经存在",
       "baseUrlRequired": "请输入 API Base URL",
       "apiKeyRequired": "请输入 API Key",
       "modelRequired": "请输入模型名称",
@@ -579,6 +584,7 @@
     "activation": {
       "officialLoginUnsupported": "{{harness}} 不支持官方账号登录模式",
       "officialLoginMissing": "未检测到 {{harness}} 的官方登录条目，请先在终端完成一次官方登录",
+      "officialApiKeyMissing": "未检测到 {{harness}} 的 DeepSeek 官方 API Key 配置",
       "noActiveProfile": "该工具未激活任何配置，无可渲染的内容",
       "officialProfileCannotAdopt": "当前处于官方登录状态，没有可回填的配置档案",
       "adoptUnsupported": "该工具不支持采纳现场配置",

@@ -216,6 +216,51 @@ export class DshAdapter implements HarnessAdapter {
     return rendered;
   }
 
+  /**
+   * Re-select a DeepSeek official API route that DSH already owns. The API key never
+   * enters harness-switch's profile store: verify its credential reference, retain
+   * both native entries, and only move DSH's default-model pointer.
+   */
+  renderOfficial(_profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles {
+    const settings = tryParseYamlDocument(current[SETTINGS]);
+    const credentials = tryParseYamlDocument(current[CREDENTIALS]);
+    const route = settings ? toPlain(settings.getIn(['llm-deepseek'])) : undefined;
+    const credentialRef =
+      typeof route?.apiKeyEnv === 'string' && route.apiKeyEnv
+        ? route.apiKeyEnv
+        : 'DEEPSEEK_API_KEY';
+    const apiKey =
+      credentials?.getIn(['refs', credentialRef]) ?? credentials?.getIn([credentialRef]);
+    if (!settings || !route || typeof apiKey !== 'string' || !apiKey.trim()) {
+      throw new HttpError(400, '未检测到 DeepSeek 官方 API Key 配置', {
+        code: ERROR_CODES.officialApiKeyMissing,
+        params: { harness: 'DeepSeek Harness' },
+      });
+    }
+
+    const models = Array.isArray(route.models) ? route.models : [];
+    const firstModel = toPlain(models[0]);
+    const model = typeof firstModel?.id === 'string' ? firstModel.id : '';
+    settings.setIn(['agent-default-model', 'provider'], 'deepseek-official');
+    if (model) settings.setIn(['agent-default-model', 'model'], model);
+    else settings.deleteIn(['agent-default-model', 'model']);
+    settings.deleteIn(['agent-default-model', 'reasoningEffort']);
+    return { [SETTINGS]: settings.toString() };
+  }
+
+  officialAvailable(current: CurrentFiles): boolean {
+    const settings = tryParseYamlDocument(current[SETTINGS]);
+    const credentials = tryParseYamlDocument(current[CREDENTIALS]);
+    const route = settings ? toPlain(settings.getIn(['llm-deepseek'])) : undefined;
+    const credentialRef =
+      typeof route?.apiKeyEnv === 'string' && route.apiKeyEnv
+        ? route.apiKeyEnv
+        : 'DEEPSEEK_API_KEY';
+    const apiKey =
+      credentials?.getIn(['refs', credentialRef]) ?? credentials?.getIn([credentialRef]);
+    return route !== undefined && typeof apiKey === 'string' && apiKey.trim() !== '';
+  }
+
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     const official = this.isOfficial(profile);
     const providerId = official ? 'deepseek-official' : this.providerId(profile);

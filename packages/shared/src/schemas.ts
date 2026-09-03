@@ -47,6 +47,8 @@ export const loginRequestSchema = z.object({
 
 export const createProfileRequestSchema = z.object({
   name: entityName,
+  /** Existing profile to copy server-side, including its protected credential. */
+  copySourceName: entityName.optional(),
   baseUrl: optionalText(MAX_URL).optional(),
   apiKey: optionalText(MAX_KEY).optional(),
   model: optionalText(MAX_NAME).optional(),

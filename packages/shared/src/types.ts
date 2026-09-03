@@ -113,6 +113,8 @@ export type HarnessSummary = {
   envNoteCode?: string;
   /** Whether this harness can safely return to its built-in account login. */
   supportsOfficialAuth?: boolean;
+  /** Set when an existing native official configuration was detected for this harness. */
+  officialAvailable?: boolean;
 };
 
 export type HarnessesResponse = {

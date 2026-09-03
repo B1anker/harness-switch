@@ -38,6 +38,8 @@ type ProfileDialogProps = {
   harness: HarnessSummary;
   /** null creates a new profile; otherwise the profile being edited. */
   profile: ProfilePublic | null;
+  /** An existing profile used to prefill a new, independently editable profile. */
+  copySource?: ProfilePublic | null;
   onOpenChange: (open: boolean) => void;
 };
 
@@ -68,7 +70,12 @@ const CLAUDE_MODEL_FIELD_KEYS = new Set<string>([
   CLAUDE_SUBAGENT_ROW.oneMKey,
 ]);
 
-export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogProps) {
+export function ProfileDialog({
+  harness,
+  profile,
+  copySource = null,
+  onOpenChange,
+}: ProfileDialogProps) {
   const { t } = useTranslation();
   const createProfile = useAppStore((state) => state.createProfile);
   const updateProfile = useAppStore((state) => state.updateProfile);
@@ -79,15 +86,19 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
   const probeProfile = useAppStore((state) => state.probeProfile);
 
   const isEdit = profile !== null;
-  const [name, setName] = useState(profile?.name ?? '');
-  const [baseUrl, setBaseUrl] = useState(profile?.baseUrl ?? '');
+  const isCopy = copySource !== null;
+  const seed = profile ?? copySource;
+  const [name, setName] = useState(
+    profile?.name ?? (copySource ? nextCopyName(copySource.name, harness.profiles) : ''),
+  );
+  const [baseUrl, setBaseUrl] = useState(seed?.baseUrl ?? '');
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState(profile?.model ?? '');
-  const [notes, setNotes] = useState(profile?.notes ?? '');
-  const [extras, setExtras] = useState(() => initialExtras(harness.fields, profile));
+  const [model, setModel] = useState(seed?.model ?? '');
+  const [notes, setNotes] = useState(seed?.notes ?? '');
+  const [extras, setExtras] = useState(() => initialExtras(harness.fields, seed));
   const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const [providerId, setProviderId] = useState(profile?.providerId ?? '');
-  const [providerEndpoint, setProviderEndpoint] = useState(profile?.providerEndpoint ?? '');
+  const [providerId, setProviderId] = useState(seed?.providerId ?? '');
+  const [providerEndpoint, setProviderEndpoint] = useState(seed?.providerEndpoint ?? '');
   const [advanced, setAdvanced] = useState(false);
   const [targets, setTargets] = useState<PreviewTarget[] | null>(null);
   const [error, setError] = useState<MessageLine | null>(null);
@@ -229,8 +240,12 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
       next.name = { key: 'profile.error.nameSlash' };
     else if (trimmedName.length > NAME_MAX_LENGTH)
       next.name = { key: 'profile.error.nameTooLong', params: { max: NAME_MAX_LENGTH } };
+    else if (
+      harness.profiles.some((item) => item.name === trimmedName && item.name !== profile?.name)
+    )
+      next.name = { key: 'profile.error.nameDuplicate' };
     if (!effectiveBaseUrl().trim()) next.baseUrl = { key: 'profile.error.baseUrlRequired' };
-    if (!isEdit && selectedProvider === null && !apiKey.trim())
+    if (!isEdit && !isCopy && selectedProvider === null && !apiKey.trim())
       next.apiKey = { key: 'profile.error.apiKeyRequired' };
     if (harness.modelRequired && !model.trim()) next.model = { key: 'profile.error.modelRequired' };
     if (providerMissing) next.providerId = { key: 'profile.error.providerGone' };
@@ -270,9 +285,10 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
         model: isDshOfficial ? model || 'deepseek-v4-flash' : model,
         notes,
         extras,
+        ...(isCopy ? { copySourceName: copySource.name } : {}),
         ...(providerId
           ? { providerId, ...(providerEndpoint ? { providerEndpoint } : {}) }
-          : isEdit
+          : isEdit || isCopy
             ? { providerId: '' }
             : {}),
         ...(selectedProvider ? {} : { apiKey: apiKey || undefined }),
@@ -298,7 +314,9 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             <DialogTitle>
               {isEdit
                 ? t('profile.editTitle', { harness: harness.label, profile: profile.name })
-                : t('profile.createTitle', { harness: harness.label })}
+                : isCopy
+                  ? t('profile.copyTitle', { harness: harness.label, profile: copySource.name })
+                  : t('profile.createTitle', { harness: harness.label })}
             </DialogTitle>
             <DialogDescription>
               {t('profile.intro', {
@@ -537,6 +555,11 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
                 ) : null}
                 {selectedProvider ? (
                   <p className="text-xs text-muted-foreground">{t('profile.apiKeySharedHint')}</p>
+                ) : null}
+                {isDshOfficial ? (
+                  <p className="text-xs text-muted-foreground">
+                    {t('profile.dshOfficialApiKeyHint')}
+                  </p>
                 ) : null}
               </div>
 
@@ -1099,4 +1122,14 @@ function initialExtras(fields: FieldSpec[], profile: ProfilePublic | null): Reco
     values[field.key] = profile?.extras[field.key] ?? field.defaultValue ?? '';
   }
   return values;
+}
+
+/** Pick a usable default without claiming it is reserved until the server saves it. */
+function nextCopyName(sourceName: string, profiles: ProfilePublic[]): string {
+  const names = new Set(profiles.map((profile) => profile.name));
+  const base = `${sourceName}-copy`;
+  if (!names.has(base)) return base;
+  let suffix = 2;
+  while (names.has(`${base}-${suffix}`)) suffix++;
+  return `${base}-${suffix}`;
 }
