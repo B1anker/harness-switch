@@ -8,8 +8,7 @@ import { ApiError } from '@/lib/api';
  *
  * The store and the toast both need this. Zustand actions run outside React, so
  * they cannot call `t` — they record the key and let the component that renders
- * the message resolve it, which is also what makes an open toast follow a
- * language switch.
+ * the message resolve it.
  */
 export type MessageLine = {
   /** Catalog key, resolved when the message is rendered. */

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from '@rstest/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ActivateDialog } from '@/components/activate-dialog';
 import { useAppStore } from '@/stores/app-store';
 import { harnessFixture, profileFixture } from './fixtures';
@@ -74,7 +74,7 @@ test('shows the diff against live files before activating', async () => {
   expect(screen.getByText('/home/test/.claude/settings.json')).toBeInTheDocument();
 });
 
-test('confirm posts the activation and closes', async () => {
+test('confirm closes the dialog once the write completes', async () => {
   const requests: string[] = [];
   globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
     requests.push(`${init.method ?? 'GET'} ${path}`);
@@ -108,7 +108,29 @@ test('confirm posts the activation and closes', async () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   expect(requests).toContain('POST /api/harnesses/claude/profiles/openrouter-main/activate');
-  expect(closed).toBe(true);
+  await waitFor(() => expect(closed).toBe(true));
+  expect(useAppStore.getState().notice?.[0]?.key).toBe('notice.switchDone');
+});
+
+test('keeps the preview open and offers retry when activation fails', async () => {
+  globalThis.fetch = (async (path: string) => {
+    if (path.includes('/preview')) return json({ targets: previewTargets });
+    return json({ code: 'http.requestFailed', msg: 'disk full' }, 500);
+  }) as unknown as typeof fetch;
+
+  render(
+    <ActivateDialog
+      harness={harnessFixture()}
+      profile={profileFixture({ name: 'openrouter-main' })}
+      open
+      onOpenChange={() => {}}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole('button', { name: '确认激活' }));
+  expect(await screen.findByText(/写入失败/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '重试激活' })).toBeInTheDocument();
+  expect(screen.getByText('/home/test/.claude/settings.json')).toBeInTheDocument();
 });
 
 test('cancel does not activate', async () => {

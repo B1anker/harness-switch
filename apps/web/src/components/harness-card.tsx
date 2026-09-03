@@ -28,11 +28,10 @@ type HarnessCardProps = {
 
 export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCardProps) {
   const { t } = useTranslation();
-  const activateOfficial = useAppStore((state) => state.activateOfficial);
-  const activateProfile = useAppStore((state) => state.activateProfile);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [activating, setActivating] = useState<ProfilePublic | null>(null);
+  const [activatingOfficial, setActivatingOfficial] = useState(false);
   const dshOfficialCount = harness.profiles.filter(
     (profile) => profile.extras.providerType === 'official',
   ).length;
@@ -115,7 +114,9 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {harness.id === 'claude'
                       ? t('harness.officialHintClaude')
-                      : t('harness.officialHintCodex')}
+                      : harness.id === 'kimi'
+                        ? t('harness.officialHintKimi')
+                        : t('harness.officialHintCodex')}
                   </p>
                 </div>
               </div>
@@ -123,7 +124,7 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                 size="sm"
                 variant={harness.active?.official ? 'secondary' : 'outline'}
                 disabled={harness.active?.official}
-                onClick={() => void activateOfficial(harness.id)}
+                onClick={() => setActivatingOfficial(true)}
               >
                 {harness.active?.official
                   ? t('harness.officialActive')
@@ -193,11 +194,7 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                     <Button
                       size="sm"
                       variant={active ? 'secondary' : 'outline'}
-                      onClick={() =>
-                        harness.id === 'dsh'
-                          ? void activateProfile(harness.id, profile.name)
-                          : setActivating(profile)
-                      }
+                      onClick={() => setActivating(profile)}
                       disabled={active}
                     >
                       {!active ? <Play /> : null}
@@ -246,6 +243,14 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
           profile={activating}
           open
           onOpenChange={(open) => !open && setActivating(null)}
+        />
+      ) : null}
+      {activatingOfficial ? (
+        <ActivateDialog
+          harness={harness}
+          official
+          open
+          onOpenChange={(open) => !open && setActivatingOfficial(false)}
         />
       ) : null}
       <AlertDialog

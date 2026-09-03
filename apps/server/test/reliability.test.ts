@@ -16,6 +16,7 @@ import { createServices } from '../src/bootstrap';
 import { IBackupService } from '../src/services/backup';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
+import { IJournalService } from '../src/services/journal';
 import {
   ILiveWriteService,
   type OperationPlan,
@@ -73,6 +74,32 @@ function onlyBackupDir(): string {
 }
 
 describe('live write', () => {
+  test('journals metadata-only transactions so they remain undoable after a crash', () => {
+    const live = services.get(ILiveWriteService);
+    const journal = services.get(IJournalService);
+    const profiles = join(homeDir, '.harness-switch', 'profiles.json');
+    seed(profiles, '{"before":true}\n');
+
+    live.transaction(
+      {
+        kind: 'import',
+        harness: 'codex',
+        profile: 'metadata-only import',
+        writes: [],
+        metadata: ['profiles'],
+      },
+      () => seed(profiles, '{"after":true}\n'),
+    );
+
+    const receipt = journal.list()[0];
+    expect(receipt?.state).toBe('committed');
+    expect(receipt?.backupId).toBeNull();
+    expect(receipt?.metadata).toEqual(['profiles']);
+
+    journal.undo(receipt?.id ?? '');
+    expect(readFileSync(profiles, 'utf8')).toBe('{"before":true}\n');
+  });
+
   test('rejects unparsable content before writing anything', () => {
     const live = services.get(ILiveWriteService);
     seed(codexConfig, 'model = "keep"\n');

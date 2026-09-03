@@ -23,7 +23,7 @@ It writes the tools’ native configuration files directly. It is not a proxy, n
 | Area | Support |
 |---|---|
 | Operating systems | macOS, Windows, Linux |
-| Runtime | Node.js >= 18.17 or Bun >= 1.2 |
+| Runtime | Node.js >= 22 or Bun >= 1.2 |
 | Browser access | Open `http://127.0.0.1:8787` on the same machine by default |
 | Remote access | Optional SSH tunnel or a properly secured reverse proxy |
 | Multiple local users | Unix-like hosts; Windows manages the account that starts the service |
@@ -93,7 +93,7 @@ Notes on individual harnesses:
 
 - **Claude Code** defaults to `ANTHROPIC_AUTH_TOKEN`, which is what most third-party relays require. Switch the profile to `ANTHROPIC_API_KEY` for the official API.
 - **Codex** defaults to putting the token in `config.toml` as `experimental_bearer_token`. The alternative that writes `auth.json` will overwrite your ChatGPT login cache, so it is opt-in; the previous `auth.json` is captured in a backup first either way.
-- **Kimi Code** (`~/.kimi-code`) is a different product from Kimi CLI (`~/.kimi`), even though both provide a `kimi` command. This project targets Kimi Code, which does not read credentials from the shell at all.
+- **Kimi Code** (`~/.kimi-code`) is a different product from Kimi CLI (`~/.kimi`), even though both provide a `kimi` command. This project targets Kimi Code, which does not read credentials from the shell at all. Its config holds many providers plus one pointer, so switching back to official login only moves `default_model` to the managed provider that `/login` provisioned — every third-party entry stays on disk for the next switch, and the OAuth cache under `credentials/` is never touched. If `config.toml` holds no managed entry (you never completed `/login`), the switch is refused with a hint to log in once in a terminal.
 - **Pi** (`@earendil-works/pi-coding-agent`) registers a custom provider in `models.json` and points `settings.json` at it via `defaultProvider` / `defaultModel`. The API key must live in that provider entry (or `auth.json`); otherwise Pi shows "No models available" and asks for `/login`. A `--model` flag still overrides the default at runtime.
 - **DeepSeek Harness** registers a custom `llm-pi-ai` provider, stores the API key in its separate credentials document, and updates `agent-default-model`. Existing sessions keep their selected route; newly created sessions use the activated profile.
 
@@ -157,7 +157,7 @@ Use **Import / Export** in the top bar to create one `.hsw-backup` file containi
 
 On the destination machine, select the bundle and enter the migration password. The UI shows profile counts, credential counts, and same-name profile conflicts before it writes anything. Import keeps destination profiles by default; overwriting is an explicit choice. Provider Vault entries are always restored as isolated copies and never replace a destination credential; an ID conflict gets a new imported ID, and imported profiles reference that copy. Restoring the exported activation state is optional.
 
-A Codex official-login cache (`$CODEX_HOME/auth.json`) is **excluded by default**. When a valid cache is available, you may explicitly include it in the encrypted bundle. Import offers the separate migration choice only when the bundled and destination JSON values differ. This carries a reusable Codex/ChatGPT login session: share such a bundle only with a trusted recipient, and expect upstream expiry or revocation to still require a fresh `codex login`. An existing destination cache is backed up before replacement; copied caches are written as the destination user with mode `0600`.
+A Codex official-login cache (`$CODEX_HOME/auth.json`) may be present in a migration bundle. Import offers the separate migration choice only when the bundled and destination JSON values differ. This carries a reusable Codex/ChatGPT login session: share such a bundle only with a trusted recipient, and expect upstream expiry or revocation to still require a fresh `codex login`. An existing destination cache is backed up before replacement; copied caches are written as the destination user with mode `0600`.
 
 Keep the migration password separately from the bundle. It cannot be recovered from the export file.
 
@@ -207,7 +207,7 @@ The account menu at the right of the dashboard header switches between local log
 
 “Sync user config” performs a one-time copy of another user's profiles and referenced Provider Vault credentials into the selected user. Secrets are decrypted only on the server and re-encrypted with the destination user's local key. Active state, backups and native config files are not copied. Same-name profiles are skipped by default and can be explicitly overwritten.
 
-A source user's Codex official-login cache (`auth.json`) is the sole optional exception. The migration choice appears only when the source and destination JSON values differ; it remains unchecked by default and requires an irreversible confirmation that identifies both users. Choose it only when the destination user is allowed to use that login session. The previous destination cache is backed up, and the replacement is destination-owned with mode `0600`; source ownership and permissions are never copied.
+A source user's Codex official-login cache (`auth.json`) is the sole optional exception. The migration choice appears only when the source and destination JSON values differ and requires an irreversible confirmation that identifies both users. Choose it only when the destination user is allowed to use that login session. The previous destination cache is backed up, and the replacement is destination-owned with mode `0600`; source ownership and permissions are never copied.
 
 Cross-user writes require access to the destination home. Managing both `root` and regular users therefore normally requires running harness-switch as root; newly created files and directories are assigned to the destination UID/GID. The Web password then grants control over every exposed user's configs, so keep the loopback bind and SSH tunnel. Use `HSW_USERS=root,alice` to restrict the manageable accounts.
 

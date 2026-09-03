@@ -42,7 +42,7 @@ export const overridesSchema = z.record(mapKey, optionalText(MAX_OVERRIDE));
 export const conflictPolicySchema = z.enum(['skip', 'overwrite']);
 
 export const loginRequestSchema = z.object({
-  password: optionalText(MAX_KEY),
+  password: z.string().trim().min(1, 'password 不能为空').max(MAX_KEY),
 });
 
 export const createProfileRequestSchema = z.object({

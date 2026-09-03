@@ -530,12 +530,88 @@ describe('rest api', () => {
     expect(claude.active?.official).toBe(true);
     expect(claude.active?.name).toBe('官方登录');
     expect(claude.supportsOfficialAuth).toBe(true);
+  });
 
-    const kimi = await context.app.request('/api/harnesses/kimi/official/activate', {
+  test('returns Kimi Code to its managed official login', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'kimi', {
+      name: 'relay',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-test',
+      model: 'kimi-k2',
+    });
+    await activate(context, 'kimi', 'relay');
+
+    const configPath = join(homeDir, '.kimi-code', 'config.toml');
+    // Simulate the provider and models that `/login` had provisioned before the switch.
+    await writeFile(
+      configPath,
+      [
+        await readFile(configPath, 'utf8'),
+        '[providers."managed:kimi-code"]',
+        'type = "kimi"',
+        'base_url = "https://api.kimi.com/coding/v1"',
+        'api_key = ""',
+        '',
+        '[providers."managed:kimi-code".oauth]',
+        'storage = "file"',
+        'key = "kimi-code"',
+        '',
+        '[models."kimi-code/k3-256k"]',
+        'provider = "managed:kimi-code"',
+        'model = "k3"',
+        'max_context_size = 262144',
+        '',
+        '[models."kimi-code/kimi-for-coding"]',
+        'provider = "managed:kimi-code"',
+        'model = "kimi-for-coding"',
+        'max_context_size = 262144',
+        '',
+      ].join('\n'),
+    );
+
+    const response = await context.app.request('/api/harnesses/kimi/official/activate', {
       method: 'POST',
       headers: { Cookie: context.cookie },
     });
-    expect(kimi.status).toBe(400);
+    expect(response.status).toBe(200);
+
+    // Additive config keeps the third-party provider; only the pointer moves back.
+    const config = await readFile(configPath, 'utf8');
+    expect(config).toContain('[providers.relay]');
+    expect(config).toContain('[providers."managed:kimi-code"]');
+    expect(config).toContain('default_model = "kimi-code/k3-256k"');
+
+    const kimi = await summary(context, 'kimi');
+    expect(kimi.active?.official).toBe(true);
+    expect(kimi.supportsOfficialAuth).toBe(true);
+
+    // And a profile activation can reuse the entry that stayed on disk.
+    await activate(context, 'kimi', 'relay');
+    expect(await readFile(configPath, 'utf8')).toContain('default_model = "relay"');
+  });
+
+  test('refuses to switch Kimi Code to an official login it never completed', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'kimi', {
+      name: 'relay',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-test',
+      model: 'kimi-k2',
+    });
+    await activate(context, 'kimi', 'relay');
+
+    const response = await context.app.request('/api/harnesses/kimi/official/activate', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { code: string };
+    expect(payload.code).toBe('activation.officialLoginMissing');
+
+    const configPath = join(homeDir, '.kimi-code', 'config.toml');
+    expect(await readFile(configPath, 'utf8')).toContain('default_model = "relay"');
+    expect((await summary(context, 'kimi')).active?.official).toBe(false);
   });
 
   test('re-activating Codex official login heals a drifted model_provider', async () => {

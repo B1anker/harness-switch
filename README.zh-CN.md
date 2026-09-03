@@ -23,7 +23,7 @@
 | 项目 | 支持 |
 |---|---|
 | 操作系统 | macOS、Windows、Linux |
-| 运行时 | Node.js >= 18.17 或 Bun >= 1.2 |
+| 运行时 | Node.js >= 22 或 Bun >= 1.2 |
 | 浏览器访问 | 默认在同一台机器打开 `http://127.0.0.1:8787` |
 | 远程访问 | 可选 SSH 隧道，或自行配置安全的反向代理 |
 | 本地多用户 | Unix-like 主机；Windows 管理启动服务的账号 |
@@ -93,7 +93,7 @@ Web 界面支持简体中文和英语。可以通过登录页或 Dashboard 顶�
 
 - **Claude Code** 默认使用 `ANTHROPIC_AUTH_TOKEN`，这是大多数第三方中转服务的要求。若使用官方 API，请把配置切换为 `ANTHROPIC_API_KEY`。
 - **Codex** 默认把 token 以 `experimental_bearer_token` 的形式写入 `config.toml`。另一种写 `auth.json` 的方式会覆盖你的 ChatGPT 登录缓存，因此需要显式选择；无论选哪种，原有的 `auth.json` 都会先被备份。
-- **Kimi Code**（`~/.kimi-code`）与 Kimi CLI（`~/.kimi`）是两个不同的产品，尽管两者都提供 `kimi` 命令。本项目针对的是 Kimi Code，它完全不从 shell 读取凭据。
+- **Kimi Code**（`~/.kimi-code`）与 Kimi CLI（`~/.kimi`）是两个不同的产品，尽管两者都提供 `kimi` 命令。本项目针对的是 Kimi Code，它完全不从 shell 读取凭据。它的配置是"多 provider 共存 + 一个指针"，因此切回官方登录只会把 `default_model` 指回 `/login` 写入的托管 provider——所有第三方条目都原样保留，供下次切换直接复用；`credentials/` 下的 OAuth 缓存也不会被改动。如果 `config.toml` 里没有托管条目（即从未完成过 `/login`），切换会被拒绝并提示先在终端登录一次。
 - **Pi**（`@earendil-works/pi-coding-agent`）会在 `models.json` 中注册一个自定义 provider，并通过 `defaultProvider` / `defaultModel` 让 `settings.json` 指向它。API Key 必须位于该 provider 条目中（或 `auth.json`），否则 Pi 会显示 "No models available" 并要求 `/login`。运行时的 `--model` 参数仍可覆盖默认模型。
 - **DeepSeek Harness** 会注册一个自定义的 `llm-pi-ai` provider，把 API Key 存入它单独的凭据文档，并更新 `agent-default-model`。已有会话会保持各自选定的路由，新建会话则使用已激活的配置。
 
@@ -157,7 +157,7 @@ PREPARED → APPLYING → METADATA_COMMITTED → COMMITTED
 
 在目标机器上选择该文件并输入迁移密码。界面会在写入任何内容之前展示配置、凭据数量和同名配置冲突。导入默认保留目标机器上的配置；覆盖需要显式选择。Provider Vault 条目始终以独立副本恢复，绝不覆盖目标机器已有凭据；若 ID 冲突，系统会生成新的导入 ID，并让被导入的配置引用该副本。是否恢复导出时的激活状态是可选的。
 
-Codex 官方登录缓存（`$CODEX_HOME/auth.json`）默认不包含在导出包内。即使导出包包含该缓存，也只有在包内与目标机器的 JSON 内容确实不同时，导入界面才会提示迁移并要求二次确认；内容一致时不会重复提示或写入。
+Codex 官方登录缓存（`$CODEX_HOME/auth.json`）可能包含在导出包内。只有在包内与目标机器的 JSON 内容确实不同时，导入界面才会提示迁移并要求二次确认；内容一致时不会重复提示或写入。
 
 请将迁移密码与备份包分开保管。它无法从导出文件中还原。
 
@@ -207,7 +207,7 @@ Dashboard 顶栏右侧的账户菜单可以在 `root`、`alice` 等本地登录�
 
 “同步用户配置”可以把另一个用户的配置和它引用的 Provider Vault 凭据一次性复制到当前用户。同步时密钥只在服务端解密，并使用目标用户的本地密钥重新加密；激活状态、备份和原生配置文件不会复制。同名配置默认跳过，也可以显式选择覆盖。
 
-来源用户的 Codex 官方登录缓存（`auth.json`）是唯一可选的例外。只有源、目标 JSON 内容确实不同时才会显示迁移选项；迁移默认不勾选，并需要再次确认。覆盖前会备份目标缓存，新文件归目标用户所有且权限为 `0600`。
+来源用户的 Codex 官方登录缓存（`auth.json`）是唯一可选的例外。只有源、目标 JSON 内容确实不同时才会显示迁移选项，并需要再次确认。覆盖前会备份目标缓存，新文件归目标用户所有且权限为 `0600`。
 
 跨用户写入必须具备目标 Home 的权限。要同时管理 `root` 和普通用户，通常需要以 root 运行 harness-switch；新建文件和目录会设置为目标用户的 UID/GID。此时 Web 密码等同于管理所有已开放用户配置的权限，因此务必保持回环监听并使用 SSH 隧道。可用 `HSW_USERS=root,alice` 限制界面中允许管理的账号。
 

@@ -39,6 +39,7 @@ export interface IActivationService {
   activateOfficial(harness: HarnessId): ActivationResult;
   syncProfile(harness: HarnessId, name: string): void;
   preview(harness: HarnessId, name: string): PreviewTarget[];
+  previewOfficial(harness: HarnessId): PreviewTarget[];
   /**
    * The exact writes the current ACTIVE state would produce (named profile or official
    * login), overrides included. Renders only; nothing is written to disk.
@@ -215,6 +216,21 @@ export class ActivationService implements IActivationService {
         content: override ?? content,
         overridden: override !== undefined,
         currentContent: current[key] ?? null,
+      };
+    });
+  }
+
+  previewOfficial(harness: HarnessId): PreviewTarget[] {
+    return this.expectedOfficialWrites(harness).map((write) => {
+      const target = this.requireTarget(this.adapters.get(harness).targets(), write.key);
+      return {
+        key: write.key,
+        label: target.label,
+        path: write.path,
+        format: write.format,
+        content: write.content,
+        overridden: false,
+        currentContent: this.files.readOptional(write.path) ?? null,
       };
     });
   }

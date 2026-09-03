@@ -57,7 +57,11 @@ export class AuthService implements IAuthService {
       this.files.writeSecure(file, `${password}\n`);
       this.log.info(`Initial web password: ${password}`);
     }
-    return this.files.readText(file).trim();
+    const password = this.files.readText(file).trim();
+    if (!password) {
+      throw new Error(`web password file is empty: ${file}`);
+    }
+    return password;
   }
 
   login(password: string): string | null {

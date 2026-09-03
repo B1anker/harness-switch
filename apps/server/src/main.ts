@@ -13,6 +13,16 @@ import { IJournalService } from './services/journal';
 import { ILogService } from './services/log';
 import { serverVersion } from './version';
 
+/** JSON APIs and encrypted migration bundles are deliberately bounded per request. */
+const MAX_HTTP_BODY_BYTES = 16 * 1024 * 1024;
+
+class BodyTooLargeError extends Error {
+  constructor(readonly kind: 'request' | 'response') {
+    super(`${kind} body exceeds ${MAX_HTTP_BODY_BYTES} bytes`);
+    this.name = 'BodyTooLargeError';
+  }
+}
+
 async function runServer(): Promise<void> {
   const services = createServices();
   const environment = services.get(IEnvironmentService);
@@ -60,24 +70,81 @@ async function handleNodeRequest(
         ...(body ? { body, duplex: 'half' as const } : {}),
       }),
     );
+    // Do not let a buggy route or a malicious upstream make the server buffer an
+    // unbounded Fetch response before it reaches Node's ServerResponse.
+    const resultBody = await readResponseBody(result, MAX_HTTP_BODY_BYTES);
     response.statusCode = result.status;
     const cookies = result.headers.getSetCookie?.() ?? [];
     for (const [name, value] of result.headers) {
       if (name !== 'set-cookie') response.setHeader(name, value);
     }
     if (cookies.length > 0) response.setHeader('set-cookie', cookies);
-    response.end(Buffer.from(await result.arrayBuffer()));
-  } catch {
-    response.statusCode = 500;
-    response.end('internal server error');
+    response.end(resultBody);
+  } catch (error) {
+    if (response.headersSent) {
+      response.destroy();
+      return;
+    }
+    response.statusCode =
+      error instanceof BodyTooLargeError && error.kind === 'request' ? 413 : 500;
+    response.end(
+      error instanceof BodyTooLargeError && error.kind === 'request'
+        ? 'request body too large'
+        : 'internal server error',
+    );
   }
 }
 
 async function readBody(request: IncomingMessage): Promise<Buffer | undefined> {
+  const declaredLength = request.headers['content-length'];
+  const contentLength = declaredLength ? Number(declaredLength) : undefined;
+  if (
+    contentLength !== undefined &&
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_HTTP_BODY_BYTES
+  ) {
+    request.resume();
+    throw new BodyTooLargeError('request');
+  }
   const chunks: Buffer[] = [];
-  for await (const chunk of request)
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.byteLength;
+    if (size > MAX_HTTP_BODY_BYTES) {
+      request.resume();
+      throw new BodyTooLargeError('request');
+    }
+    chunks.push(buffer);
+  }
   return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
+}
+
+async function readResponseBody(response: Response, limit: number): Promise<Buffer> {
+  const declaredLength = response.headers.get('content-length');
+  if (declaredLength && Number(declaredLength) > limit) {
+    throw new BodyTooLargeError('response');
+  }
+  if (!response.body) return Buffer.alloc(0);
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        await reader.cancel('response body too large');
+        throw new BodyTooLargeError('response');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
 }
 
 const [command, ...rest] = process.argv.slice(2);

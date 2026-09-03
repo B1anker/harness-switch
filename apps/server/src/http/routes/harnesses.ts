@@ -156,6 +156,11 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
     return c.json({ targets: activation.preview(harnessId, name) });
   });
 
+  app.get('/:harnessId/official/preview', (c) => {
+    const harnessId = harnesses.require(c.req.param('harnessId'));
+    return c.json({ targets: activation.previewOfficial(harnessId) });
+  });
+
   app.post('/:harnessId/profiles/:name/probe', async (c) => {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const name = decodeURIComponent(c.req.param('name'));

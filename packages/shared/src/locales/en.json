@@ -68,6 +68,7 @@
     "officialSwitch": "Back to official",
     "officialHintClaude": "Use Claude Code's own Anthropic account login",
     "officialHintCodex": "Use Codex's own ChatGPT / OpenAI account login",
+    "officialHintKimi": "Use Kimi Code's own Kimi account login (the OAuth credential written by /login)",
     "application": "Application",
     "writeMode": "Write mode",
     "modeReplace": "Replace current configuration",
@@ -199,12 +200,18 @@
   },
   "activate": {
     "title": "Activate profile?",
+    "officialTitle": "Return to official login?",
     "body": "This switches {{harness}} to \"{{profile}}\" and writes its native configuration files{{changed}}. Target local user: {{user}}. A backup is taken first.",
+    "officialBody": "This returns {{harness}} to its official login and writes its native configuration files{{changed}}. Target local user: {{user}}. A backup is taken first.",
     "changedFiles_one": ", of which {{count}} file will change",
     "changedFiles_other": ", of which {{count}} files will change",
     "loadFailed": "Could not read the content to be written: {{reason}}",
     "loading": "Loading the content to be written…",
-    "confirm": "Confirm activation"
+    "confirm": "Confirm activation",
+    "executing": "Writing…",
+    "failed": "Writing failed: {{reason}}. The configuration was not switched; fix the issue and retry.",
+    "retry": "Retry activation",
+    "retryPreview": "Reload preview"
   },
   "env": {
     "title": "Environment file compatibility",
@@ -327,12 +334,7 @@
     }
   },
   "notice": {
-    "title": "Written to disk",
-    "close": "Close",
-    "activated": "{{harness}} switched to \"{{profile}}\" (user: {{user}}); its native configuration files have been written.",
-    "activatedHint": "Claude Code picks this up immediately; Codex, Kimi Code and Pi need a restart.",
-    "officialRestored": "{{harness}} switched back to its official login (user: {{user}}); the third-party API route was removed from the native configuration.",
-    "officialHint": "If you have not logged in yet, start the tool in a terminal and complete its official login once.",
+    "switchDone": "Switch complete",
     "warningPrefix": "Note: {{message}}",
     "currentUser": "the current user",
     "transferImported": "Import finished.",
@@ -415,6 +417,7 @@
     },
     "activation": {
       "officialLoginUnsupported": "{{harness}} does not support official account login",
+      "officialLoginMissing": "No official login entry was found for {{harness}}; complete its official login in a terminal once first",
       "noActiveProfile": "This tool has no active profile, so there is nothing to render",
       "officialProfileCannotAdopt": "The official login is active, so there is no profile to adopt into",
       "adoptUnsupported": "This tool cannot adopt a live configuration",

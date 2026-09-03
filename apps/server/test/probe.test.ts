@@ -170,6 +170,21 @@ describe('probe service', () => {
     }
   });
 
+  test('rejects an oversized catalog from Content-Length before reading it', async () => {
+    const oversized = new Response(JSON.stringify({ data: [{ id: 'too-large' }] }), {
+      headers: { 'content-length': String(4 * 1024 * 1024 + 1) },
+    });
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => oversized) as unknown as typeof fetch;
+    try {
+      const result = await probe.probe({ baseUrl: 'https://api.example.com/v1', apiKey: 'sk' });
+      expect(result.ok).toBe(false);
+      expect(result.code).toBe(PROBE_CODES.invalidResponse);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test('a refused connection reports networkError with latency recorded', async () => {
     // Stop the relay before probing it: nothing listens on the freed port anymore.
     const relay = startRelay();
