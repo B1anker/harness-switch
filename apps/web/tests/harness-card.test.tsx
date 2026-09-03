@@ -73,6 +73,65 @@ test('offers a built-in official login with preview and confirmation', () => {
   expect(screen.getByText(/Claude Code 自身的 Anthropic 账号登录/)).toBeInTheDocument();
 });
 
+test('only shows the DSH official API switch after detecting its native credential', () => {
+  render(
+    <HarnessCard
+      harness={harnessFixture({
+        id: 'dsh',
+        label: 'DeepSeek Harness',
+        official: undefined,
+      })}
+      onAdd={() => {}}
+      onEdit={() => {}}
+    />,
+  );
+
+  expect(screen.queryByText('DeepSeek 官方')).toBeNull();
+});
+
+test('merges a saved DSH official API profile with the detected native entry', () => {
+  render(
+    <HarnessCard
+      harness={harnessFixture({
+        id: 'dsh',
+        label: 'DeepSeek Harness',
+        official: {
+          kind: 'native-api',
+          available: true,
+          active: false,
+          titleCode: 'harness.deepseekOfficial',
+          hintCode: 'harness.officialHintDsh',
+          linkedProfileName: 'deepseek-official',
+        },
+        // A legacy named activation is not the native official state; the pinned
+        // action must remain available so it can restore that state.
+        active: {
+          name: 'deepseek-official',
+          baseUrl: 'https://api.deepseek.com',
+          model: 'deepseek-v4-flash',
+        },
+        profiles: [
+          profileFixture({
+            harness: 'dsh',
+            name: 'deepseek-official',
+            extras: { providerType: 'official' },
+          }),
+        ],
+      })}
+      onAdd={() => {}}
+      onEdit={() => {}}
+    />,
+  );
+
+  expect(screen.getAllByText('DeepSeek 官方')).toHaveLength(1);
+  expect(screen.getByRole('button', { name: '切回官方' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '编辑 deepseek-official' })).toBeInTheDocument();
+  expect(screen.queryByText('https://api.example.com/v1')).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: '切回官方' }));
+  expect(screen.getByRole('heading', { name: '切回官方登录？' })).toBeInTheDocument();
+});
+
 test('editing hands the whole profile back, so the form can prefill', () => {
   stubStoreActions(['activateProfile']);
   const edited: ProfilePublic[] = [];
@@ -87,6 +146,21 @@ test('editing hands the whole profile back, so the form can prefill', () => {
   fireEvent.click(screen.getByRole('button', { name: '编辑 openrouter-main' }));
   expect(edited[0]?.name).toBe('openrouter-main');
   expect(edited[0]?.model).toBe('claude-sonnet-4-5');
+});
+
+test('copying hands the profile to the editable copy flow', () => {
+  const copied: ProfilePublic[] = [];
+  render(
+    <HarnessCard
+      harness={harnessFixture({ profiles: [profileFixture()] })}
+      onAdd={() => {}}
+      onEdit={() => {}}
+      onCopy={(profile) => copied.push(profile)}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: '复制 openrouter-main' }));
+  expect(copied[0]?.name).toBe('openrouter-main');
 });
 
 test('the active profile cannot be deleted, and says why', () => {
@@ -152,6 +226,7 @@ test('allows deleting a non-default duplicate DSH official record', () => {
         id: 'dsh',
         label: 'DeepSeek Harness',
         mode: 'additive',
+        official: undefined,
         active: {
           name: 'official',
           baseUrl: 'https://api.deepseek.com',
@@ -175,10 +250,76 @@ test('allows deleting a non-default duplicate DSH official record', () => {
     />,
   );
 
-  expect(screen.getAllByText('DeepSeek 官方')).toHaveLength(2);
   const duplicateDelete = screen.getByRole('button', { name: '删除 deepseek-official' });
   expect((duplicateDelete as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(duplicateDelete);
   fireEvent.click(screen.getByRole('button', { name: '删除' }));
   expect(calls.deleteProfile).toEqual([['dsh', 'deepseek-official']]);
+});
+
+test('explains that deleting the last unmanaged DSH official profile clears its native route', () => {
+  render(
+    <HarnessCard
+      harness={harnessFixture({
+        id: 'dsh',
+        label: 'DeepSeek Harness',
+        mode: 'additive',
+        official: undefined,
+        profiles: [
+          profileFixture({
+            harness: 'dsh',
+            name: 'official',
+            extras: { providerType: 'official' },
+          }),
+        ],
+      })}
+      onAdd={() => {}}
+      onEdit={() => {}}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: '删除 official' }));
+  expect(screen.getByText(/DeepSeek 原生路由和凭据引用也会被一并移除/)).toBeInTheDocument();
+});
+
+test('keeps legacy duplicate DSH official records manageable after pinning the primary one', () => {
+  const calls = stubStoreActions(['activateProfile', 'deleteProfile']);
+  render(
+    <HarnessCard
+      harness={harnessFixture({
+        id: 'dsh',
+        label: 'DeepSeek Harness',
+        mode: 'additive',
+        official: {
+          kind: 'native-api',
+          available: true,
+          active: false,
+          titleCode: 'harness.deepseekOfficial',
+          hintCode: 'harness.officialHintDsh',
+          linkedProfileName: 'official',
+        },
+        profiles: [
+          profileFixture({
+            harness: 'dsh',
+            name: 'official',
+            extras: { providerType: 'official' },
+          }),
+          profileFixture({
+            harness: 'dsh',
+            name: 'legacy-official',
+            extras: { providerType: 'official' },
+          }),
+        ],
+      })}
+      onAdd={() => {}}
+      onEdit={() => {}}
+    />,
+  );
+
+  expect(
+    (screen.getByRole('button', { name: '删除 legacy-official' }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: '删除 legacy-official' }));
+  fireEvent.click(screen.getByRole('button', { name: '删除' }));
+  expect(calls.deleteProfile).toEqual([['dsh', 'legacy-official']]);
 });

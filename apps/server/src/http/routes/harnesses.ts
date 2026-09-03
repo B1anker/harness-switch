@@ -32,19 +32,39 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
 
   function summary(id: HarnessId) {
     const adapter = adapters.get(id);
+    const targets = adapter.targets();
+    const current = adapter.officialNeedsCurrent
+      ? Object.fromEntries(targets.map((target) => [target.key, files.readOptional(target.path)]))
+      : {};
+    const capability = adapter.official?.(current);
+    const profileList = profiles.list(id);
+    const linkedProfile = capability?.matchesProfile
+      ? profileList.find(capability.matchesProfile)
+      : undefined;
     return {
       id,
       label: harnesses.label(id),
       mode: adapter.mode,
       active: activation.getActive(id),
-      profiles: profiles.list(id),
+      profiles: profileList,
       fields: adapter.fields,
       modelRequired: adapter.modelRequired,
-      targets: adapter.targets(),
+      targets,
       envVars: adapter.envVarNames,
       envNote: adapter.envNote,
       envNoteCode: adapter.envNoteCode,
-      supportsOfficialAuth: adapter.renderOfficial !== undefined,
+      ...(capability
+        ? {
+            official: {
+              kind: capability.kind,
+              available: capability.available,
+              active: activation.getActive(id)?.official === true,
+              titleCode: capability.titleCode,
+              hintCode: capability.hintCode,
+              ...(linkedProfile ? { linkedProfileName: linkedProfile.name } : {}),
+            },
+          }
+        : {}),
     };
   }
 
@@ -60,9 +80,14 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   app.post('/:harnessId/profiles', async (c) => {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const body = await readJsonBody(c, createProfileRequestSchema);
+    // A server-side copy may inherit its `providerType` when the request leaves
+    // `extras` absent. Check the eventual type, not just the untrusted payload.
+    const copiedProviderType = body.copySourceName
+      ? profiles.get(harnessId, body.copySourceName)?.extras.providerType
+      : undefined;
     if (
       harnessId === 'dsh' &&
-      body.extras?.providerType === 'official' &&
+      (body.extras?.providerType ?? copiedProviderType) === 'official' &&
       profiles.list('dsh').some((profile) => profile.extras.providerType === 'official')
     ) {
       throw new HttpError(409, 'DeepSeek 官方配置已存在，请直接编辑现有官方配置', {
@@ -73,6 +98,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       harnessId,
       {
         name: body.name,
+        copySourceName: body.copySourceName,
         baseUrl: body.baseUrl,
         apiKey: body.apiKey,
         model: body.model,

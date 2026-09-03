@@ -19,6 +19,7 @@ import type {
   AdapterTarget,
   CurrentFiles,
   HarnessAdapter,
+  OfficialCapability,
   RenderedFiles,
 } from './types';
 
@@ -40,6 +41,15 @@ export class KimiAdapter implements HarnessAdapter {
   readonly envVarNames: string[] = [];
   readonly envNote = 'Kimi Code 不从 shell 读取凭据，env.sh 对它无效。';
   readonly envNoteCode = 'harness.field.kimi.envNote';
+
+  official(_current: CurrentFiles): OfficialCapability {
+    return {
+      kind: 'account-login',
+      available: true,
+      titleCode: 'harness.official',
+      hintCode: 'harness.officialHintKimi',
+    };
+  }
 
   readonly fields: FieldSpec[] = [
     {

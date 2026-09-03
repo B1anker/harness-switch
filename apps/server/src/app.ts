@@ -89,24 +89,25 @@ export function createApp(services: InstantiationService): Hono {
   app.route('/api', api);
 
   const publicDir = environment.publicDir;
-  if (existsSync(publicDir)) {
-    app.get('*', async (c, next) => {
-      if (c.req.path.startsWith('/api') || c.req.path === '/healthz') {
-        return next();
-      }
-      const assetPath = resolve(publicDir, c.req.path.replace(/^\//, ''));
-      if (c.req.path !== '/' && isPublicAsset(publicDir, assetPath) && existsSync(assetPath)) {
-        c.header('Content-Type', contentType(assetPath));
-        return c.body(readFileSync(assetPath));
-      }
-      const index = join(publicDir, 'index.html');
-      if (existsSync(index)) {
-        c.header('Cache-Control', 'no-store');
-        return c.html(readFileSync(index, 'utf8'));
-      }
-      return c.text('frontend not built', 503);
-    });
-  }
+  // The dev server writes this directory after the API process starts. Register the
+  // route even when it is absent now, so a later first build becomes visible without
+  // restarting the API process.
+  app.get('*', async (c, next) => {
+    if (c.req.path.startsWith('/api') || c.req.path === '/healthz') {
+      return next();
+    }
+    const assetPath = resolve(publicDir, c.req.path.replace(/^\//, ''));
+    if (c.req.path !== '/' && isPublicAsset(publicDir, assetPath) && existsSync(assetPath)) {
+      c.header('Content-Type', contentType(assetPath));
+      return c.body(readFileSync(assetPath));
+    }
+    const index = join(publicDir, 'index.html');
+    if (existsSync(index)) {
+      c.header('Cache-Control', 'no-store');
+      return c.html(readFileSync(index, 'utf8'));
+    }
+    return c.text('frontend not built', 503);
+  });
 
   app.notFound((c) => {
     const code = ERROR_CODES.requestFailed;

@@ -87,6 +87,17 @@ export type ProfilePublic = {
   updatedAt: string;
 };
 
+/** A harness's first-class route back to its native official configuration. */
+export type OfficialEntry = {
+  kind: 'account-login' | 'native-api';
+  available: boolean;
+  active: boolean;
+  titleCode: string;
+  hintCode: string;
+  /** A saved profile representing the same official route, when editable. */
+  linkedProfileName?: string;
+};
+
 export type ActivePublic = {
   name: string;
   baseUrl: string;
@@ -111,8 +122,8 @@ export type HarnessSummary = {
   envNote?: string;
   /** Catalog key for {@link HarnessSummary.envNote}. See {@link FieldSpec.labelCode}. */
   envNoteCode?: string;
-  /** Whether this harness can safely return to its built-in account login. */
-  supportsOfficialAuth?: boolean;
+  /** First-class native official route, if this harness supports one. */
+  official?: OfficialEntry;
 };
 
 export type HarnessesResponse = {

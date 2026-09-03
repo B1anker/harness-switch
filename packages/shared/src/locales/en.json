@@ -169,7 +169,7 @@
           "label": "Provider type",
           "option": {
             "custom": "Custom provider",
-            "official": "DeepSeek official"
+            "official": "DeepSeek official API"
           }
         },
         "providerId": {
@@ -216,6 +216,7 @@
     "providers": "Providers",
     "profileCount_one": "{{count}} custom profile",
     "profileCount_other": "{{count}} custom profiles",
+    "copy": "Copy {{name}}",
     "noProfiles": "No profiles yet",
     "manualOverride": "Manual override",
     "edit": "Edit {{name}}",
@@ -224,12 +225,14 @@
     "deleteTitle": "Delete profile?",
     "deleteBody": "This deletes {{harness}} / {{profile}}. {{extra}}This cannot be undone.",
     "deleteAdditiveExtra": "Its provider entry in the configuration file is removed as well. ",
+    "deleteDshOfficialExtra": "Its native DeepSeek route and credential reference are removed as well. ",
     "official": "Official login",
     "officialActive": "In use",
     "officialSwitch": "Back to official",
     "officialHintClaude": "Use Claude Code's own Anthropic account login",
     "officialHintCodex": "Use Codex's own ChatGPT / OpenAI account login",
     "officialHintKimi": "Use Kimi Code's own Kimi account login (the OAuth credential written by /login)",
+    "officialHintDsh": "Detect and switch to DeepSeek Harness's existing official DeepSeek API key configuration",
     "application": "Application",
     "writeMode": "Write mode",
     "modeReplace": "Replace current configuration",
@@ -238,6 +241,7 @@
   "profile": {
     "editTitle": "Edit {{harness}} / {{profile}}",
     "createTitle": "New {{harness}} profile",
+    "copyTitle": "Copy {{harness}} / {{profile}}",
     "intro": "Saving writes to {{targets}}.",
     "additiveNote": "This tool's config file keeps providers side by side, so switching only moves the current pointer — the other providers you wrote by hand are left alone.",
     "useSharedProvider": "Use a shared provider (vault)",
@@ -261,6 +265,7 @@
     "apiKeyKeep": "Leave empty to keep the current key",
     "apiKeyRequiredPlaceholder": "Required",
     "apiKeySharedHint": "This profile references a shared provider; rotate the key in the vault instead.",
+    "dshOfficialApiKeyHint": "Enter a DeepSeek Platform API key. It is securely written to DSH's .credentials.yaml and referenced as DEEPSEEK_API_KEY from settings.yaml.",
     "fallbackModel": "Fallback model (ANTHROPIC_MODEL)",
     "model": "Model",
     "fallbackModelPlaceholder": "Optional; used when no tier matches, e.g. glm-5",
@@ -292,6 +297,7 @@
       "nameRequired": "Enter a profile name",
       "nameSlash": "A profile name cannot contain / or \\",
       "nameTooLong": "A profile name is at most {{max}} characters",
+      "nameDuplicate": "A profile with this name already exists",
       "baseUrlRequired": "Enter an API base URL",
       "apiKeyRequired": "Enter an API key",
       "modelRequired": "Enter a model name",
@@ -579,6 +585,7 @@
     "activation": {
       "officialLoginUnsupported": "{{harness}} does not support official account login",
       "officialLoginMissing": "No official login entry was found for {{harness}}; complete its official login in a terminal once first",
+      "officialApiKeyMissing": "No official DeepSeek API key configuration was found for {{harness}}",
       "noActiveProfile": "This tool has no active profile, so there is nothing to render",
       "officialProfileCannotAdopt": "The official login is active, so there is no profile to adopt into",
       "adoptUnsupported": "This tool cannot adopt a live configuration",

@@ -16,6 +16,7 @@ import type {
   AdapterTarget,
   CurrentFiles,
   HarnessAdapter,
+  OfficialCapability,
   RenderedFiles,
 } from './types';
 
@@ -37,6 +38,7 @@ export class DshAdapter implements HarnessAdapter {
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 安全写入 DSH 的 .credentials.yaml，并由 settings.yaml 引用。';
   readonly envNoteCode = 'harness.field.dsh.envNote';
+  readonly officialNeedsCurrent = true;
 
   readonly fields: FieldSpec[] = [
     {
@@ -214,6 +216,54 @@ export class DshAdapter implements HarnessAdapter {
     else settings.setIn(['agent-default-model'], currentDefault);
     rendered[SETTINGS] = settings.toString();
     return rendered;
+  }
+
+  /**
+   * Re-select a DeepSeek official API route that DSH already owns. The API key never
+   * enters harness-switch's profile store: verify its credential reference, retain
+   * both native entries, and only move DSH's default-model pointer.
+   */
+  renderOfficial(_profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles {
+    const official = this.readOfficialRoute(current);
+    if (!official) {
+      throw new HttpError(400, '未检测到 DeepSeek 官方 API Key 配置', {
+        code: ERROR_CODES.officialApiKeyMissing,
+        params: { harness: 'DeepSeek Harness' },
+      });
+    }
+
+    // This route and its selected model belong to DSH. Switching back must not
+    // replace the user's native choice with the first configured model.
+    official.settings.setIn(['agent-default-model', 'provider'], 'deepseek-official');
+    return { [SETTINGS]: official.settings.toString() };
+  }
+
+  official(current: CurrentFiles): OfficialCapability | undefined {
+    const official = this.readOfficialRoute(current);
+    if (!official) return undefined;
+    return {
+      kind: 'native-api',
+      available: true,
+      titleCode: 'harness.deepseekOfficial',
+      hintCode: 'harness.officialHintDsh',
+      matchesProfile: (profile) => profile.extras.providerType === 'official',
+    };
+  }
+
+  private readOfficialRoute(current: CurrentFiles) {
+    const settings = tryParseYamlDocument(current[SETTINGS]);
+    const credentials = tryParseYamlDocument(current[CREDENTIALS]);
+    const route = settings ? toPlain(settings.getIn(['llm-deepseek'])) : undefined;
+    const credentialRef =
+      typeof route?.apiKeyEnv === 'string' && route.apiKeyEnv
+        ? route.apiKeyEnv
+        : 'DEEPSEEK_API_KEY';
+    const apiKey =
+      credentials?.getIn(['refs', credentialRef]) ?? credentials?.getIn([credentialRef]);
+    if (!settings || route === undefined || typeof apiKey !== 'string' || !apiKey.trim()) {
+      return undefined;
+    }
+    return { settings, route, credentialRef, apiKey };
   }
 
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {

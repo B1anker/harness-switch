@@ -503,6 +503,53 @@ describe('rest api', () => {
     expect(env).toContain("export ANTHROPIC_AUTH_TOKEN='sk-test'");
   });
 
+  test('copies a profile through the API without sending its credential back to the client', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'claude', {
+      name: 'source',
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk-source',
+      model: 'source-model',
+    });
+
+    const response = await createProfile(context, 'claude', {
+      name: 'source-copy',
+      copySourceName: 'source',
+      model: 'adjusted-model',
+    });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({
+      name: 'source-copy',
+      baseUrl: 'https://api.example.com/v1',
+      model: 'adjusted-model',
+    });
+    expect(JSON.stringify(await summary(context, 'claude'))).not.toContain('sk-source');
+    await activate(context, 'claude', 'source-copy');
+    expect(await readFile(claudeSettings(), 'utf8')).toContain('sk-source');
+  });
+
+  test('refuses copying a DSH official profile into a second official profile', async () => {
+    const context = await createTestApp();
+    expect(
+      (
+        await createProfile(context, 'dsh', {
+          name: 'official',
+          baseUrl: 'https://api.deepseek.com',
+          apiKey: 'sk-official',
+          model: 'deepseek-v4-flash',
+          extras: { providerType: 'official' },
+        })
+      ).status,
+    ).toBe(201);
+
+    const response = await createProfile(context, 'dsh', {
+      name: 'official-copy',
+      copySourceName: 'official',
+    });
+    expect(response.status).toBe(409);
+  });
+
   test('returns Claude to its built-in official login', async () => {
     const context = await createTestApp();
     await createProfile(context, 'claude', {
@@ -529,7 +576,7 @@ describe('rest api', () => {
     const claude = await summary(context, 'claude');
     expect(claude.active?.official).toBe(true);
     expect(claude.active?.name).toBe('官方登录');
-    expect(claude.supportsOfficialAuth).toBe(true);
+    expect(claude.official).toMatchObject({ kind: 'account-login', available: true, active: true });
   });
 
   test('returns Kimi Code to its managed official login', async () => {
@@ -584,11 +631,53 @@ describe('rest api', () => {
 
     const kimi = await summary(context, 'kimi');
     expect(kimi.active?.official).toBe(true);
-    expect(kimi.supportsOfficialAuth).toBe(true);
+    expect(kimi.official).toMatchObject({ kind: 'account-login', available: true, active: true });
 
     // And a profile activation can reuse the entry that stayed on disk.
     await activate(context, 'kimi', 'relay');
     expect(await readFile(configPath, 'utf8')).toContain('default_model = "relay"');
+  });
+
+  test('switches DSH to a detected native DeepSeek official API key', async () => {
+    const context = await createTestApp();
+    expect((await summary(context, 'dsh')).official).toBeUndefined();
+    const settingsPath = join(homeDir, '.dsh', 'settings.yaml');
+    const credentialsPath = join(homeDir, '.dsh', '.credentials.yaml');
+    await mkdir(join(homeDir, '.dsh'), { recursive: true });
+    await writeFile(
+      settingsPath,
+      [
+        'llm-deepseek:',
+        '  apiKeyEnv: DEEPSEEK_API_KEY',
+        '  baseURL: https://api.deepseek.com',
+        '  models:',
+        '    - id: deepseek-v4-flash',
+        'agent-default-model:',
+        '  provider: relay',
+        '  model: relay-model',
+        '',
+      ].join('\n'),
+    );
+    await writeFile(credentialsPath, 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n');
+
+    const response = await context.app.request('/api/harnesses/dsh/official/activate', {
+      method: 'POST',
+      headers: { Cookie: context.cookie },
+    });
+    expect(response.status).toBe(200);
+
+    const settings = await readFile(settingsPath, 'utf8');
+    expect(settings).toContain('provider: deepseek-official');
+    expect(settings).toContain('model: relay-model');
+    expect(await readFile(credentialsPath, 'utf8')).toBe(
+      'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n',
+    );
+    expect((await summary(context, 'dsh')).official).toMatchObject({
+      kind: 'native-api',
+      available: true,
+      active: true,
+    });
+    expect((await summary(context, 'dsh')).active?.official).toBe(true);
   });
 
   test('refuses to switch Kimi Code to an official login it never completed', async () => {

@@ -2,6 +2,7 @@ import type {
   FieldSpec,
   HarnessId,
   HarnessMode,
+  ProfilePublic,
   TargetSpec,
 } from '@seaveyon/harness-switch-shared';
 import type { DetectedProfile } from './detect';
@@ -27,6 +28,15 @@ export type CurrentFiles = Record<string, string | undefined>;
 
 /** Rendered content per target key. */
 export type RenderedFiles = Record<string, string>;
+
+/** Adapter-only metadata used by the API to project a public OfficialEntry. */
+export type OfficialCapability = {
+  kind: 'account-login' | 'native-api';
+  available: boolean;
+  titleCode: string;
+  hintCode: string;
+  matchesProfile?: (profile: ProfilePublic) => boolean;
+};
 
 export interface HarnessAdapter {
   readonly id: HarnessId;
@@ -68,6 +78,11 @@ export interface HarnessAdapter {
    * account login. Only implemented by harnesses with a native official login flow.
    */
   renderOfficial?(profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles;
+
+  /** Describe the native official route without leaking its storage details to the UI. */
+  official?(current: CurrentFiles): OfficialCapability | undefined;
+  /** Set only when official-route detection needs to inspect native config files. */
+  readonly officialNeedsCurrent?: boolean;
 
   /**
    * Additive mode only: drop this profile's provider entry from the live files, used

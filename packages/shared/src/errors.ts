@@ -40,6 +40,7 @@ export const ERROR_CODES = {
   /* Activation and drift */
   officialLoginUnsupported: 'activation.officialLoginUnsupported',
   officialLoginMissing: 'activation.officialLoginMissing',
+  officialApiKeyMissing: 'activation.officialApiKeyMissing',
   noActiveProfile: 'activation.noActiveProfile',
   officialProfileCannotAdopt: 'activation.officialProfileCannotAdopt',
   adoptUnsupported: 'activation.adoptUnsupported',

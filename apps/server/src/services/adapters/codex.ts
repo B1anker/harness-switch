@@ -24,6 +24,7 @@ import type {
   AdapterTarget,
   CurrentFiles,
   HarnessAdapter,
+  OfficialCapability,
   RenderedFiles,
 } from './types';
 
@@ -59,6 +60,15 @@ export class CodexAdapter implements HarnessAdapter {
   readonly envVarNames = [DEFAULT_ENV_KEY];
   readonly envNote = '仅「环境变量」认证模式需要 env.sh，其余模式的凭据自包含在 config.toml 里。';
   readonly envNoteCode = 'harness.field.codex.envNote';
+
+  official(_current: CurrentFiles): OfficialCapability {
+    return {
+      kind: 'account-login',
+      available: true,
+      titleCode: 'harness.official',
+      hintCode: 'harness.officialHintCodex',
+    };
+  }
 
   readonly fields: FieldSpec[] = [
     {

@@ -104,7 +104,13 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
       },
     ],
     envVars: ['ANTHROPIC_BASE_URL'],
-    supportsOfficialAuth: true,
+    official: {
+      kind: 'account-login',
+      available: true,
+      active: false,
+      titleCode: 'harness.official',
+      hintCode: 'harness.officialHintClaude',
+    },
     ...overrides,
   };
 }
