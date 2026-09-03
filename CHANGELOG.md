@@ -1,3 +1,10 @@
+# [0.28.0](https://github.com/B1anker/harness-switch/compare/v0.27.0...v0.28.0) (2026-09-03)
+
+
+### Features
+
+* **i18n:** render harness form fields in the reader's language ([1df7daf](https://github.com/B1anker/harness-switch/commit/1df7daf0839f366775236b4de77ad3badbaa7e43))
+
 # [0.27.0](https://github.com/B1anker/harness-switch/compare/v0.26.0...v0.27.0) (2026-09-03)
 
 
