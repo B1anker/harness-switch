@@ -4,10 +4,10 @@ import type { IEnvironmentService } from '../environment';
 import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
-  type JsonObject,
   parseJsonObject,
   readString,
   stringifyJson,
+  tryParseJsonObject,
 } from './serialize';
 import type {
   AdapterProfile,
@@ -289,7 +289,7 @@ export class ClaudeAdapter implements HarnessAdapter {
   }
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
-    const settings = safeParse(current[SETTINGS]);
+    const settings = tryParseJsonObject(current[SETTINGS]) ?? {};
     const env = settings.env;
     const authVar = this.authVar(profile);
     const apiKey = readString(env, authVar);
@@ -323,7 +323,7 @@ export class ClaudeAdapter implements HarnessAdapter {
    * chose, and backfill needs that seeded before it can find the key.
    */
   detect(current: CurrentFiles): DetectedProfile[] {
-    const env = safeParse(current[SETTINGS]).env;
+    const env = (tryParseJsonObject(current[SETTINGS]) ?? {}).env;
     const authVar = AUTH_VARS.find((name) => readString(env, name)) ?? AUTH_VARS[0];
     const seed = seedProfile({ authVar });
     return compact([toCandidate('claude', seed, this.backfill(seed, current), true)]);
@@ -342,14 +342,6 @@ function withOneM(value: string, enabled: string | undefined): string {
 
 function withoutOneM(value: string): string {
   return value.endsWith(ONE_M_SUFFIX) ? value.slice(0, -ONE_M_SUFFIX.length) : value;
-}
-
-function safeParse(text: string | undefined): JsonObject {
-  try {
-    return parseJsonObject(text);
-  } catch {
-    return {};
-  }
 }
 
 function parseEnvLines(raw: string | undefined): Array<[string, string]> {

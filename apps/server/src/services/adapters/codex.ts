@@ -1,16 +1,23 @@
 import { join } from 'node:path';
 import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import type { IEnvironmentService } from '../environment';
-import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
+import {
+  providerId as baseProviderId,
+  compact,
+  type DetectedProfile,
+  seedProfile,
+  toCandidate,
+} from './detect';
 import {
   ensureObject,
   isPlainObject,
   parseJsonObject,
   parseTomlObject,
   readString,
-  slugify,
   stringifyJson,
   stringifyToml,
+  tryParseJsonObject,
+  tryParseTomlObject,
 } from './serialize';
 import type {
   AdapterProfile,
@@ -185,10 +192,8 @@ export class CodexAdapter implements HarnessAdapter {
   }
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
-    let config: Record<string, unknown> = {};
-    try {
-      config = parseTomlObject(current[CONFIG]);
-    } catch {
+    const config = tryParseTomlObject(current[CONFIG]);
+    if (!config) {
       return {};
     }
     const providers = config.model_providers;
@@ -198,7 +203,7 @@ export class CodexAdapter implements HarnessAdapter {
       mode === 'bearer_token'
         ? readString(provider, 'experimental_bearer_token')
         : mode === 'openai_auth'
-          ? readString(safeJson(current[AUTH]), DEFAULT_ENV_KEY)
+          ? readString(tryParseJsonObject(current[AUTH]) ?? {}, DEFAULT_ENV_KEY)
           : '';
     return {
       baseUrl: readString(provider, 'base_url') || profile.baseUrl,
@@ -214,10 +219,8 @@ export class CodexAdapter implements HarnessAdapter {
    * in the shell environment, not in a file this can read.
    */
   detect(current: CurrentFiles): DetectedProfile[] {
-    let config: Record<string, unknown>;
-    try {
-      config = parseTomlObject(current[CONFIG]);
-    } catch {
+    const config = tryParseTomlObject(current[CONFIG]);
+    if (!config) {
       return [];
     }
     const providers = config.model_providers;
@@ -258,15 +261,7 @@ export class CodexAdapter implements HarnessAdapter {
   }
 
   private providerId(profile: AdapterProfile): string {
-    const slug = slugify(profile.extras.providerId || profile.name, 'provider');
+    const slug = baseProviderId(profile);
     return RESERVED_PROVIDER_IDS.has(slug) ? `${slug}-hsw` : slug;
-  }
-}
-
-function safeJson(text: string | undefined): Record<string, unknown> {
-  try {
-    return parseJsonObject(text);
-  } catch {
-    return {};
   }
 }

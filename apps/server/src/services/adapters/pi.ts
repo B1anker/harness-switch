@@ -3,15 +3,17 @@ import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
-import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
+import { compact, type DetectedProfile, providerId, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
   isPlainObject,
   type JsonObject,
+  numeric,
   parseJsonObject,
   readString,
-  slugify,
   stringifyJson,
+  tryParseJsonObject,
+  valueString,
 } from './serialize';
 import type {
   AdapterProfile,
@@ -136,14 +138,14 @@ export class PiAdapter implements HarnessAdapter {
 
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     this.validate(profile);
-    const id = this.providerId(profile);
+    const id = providerId(profile);
     const models = parseJsonObject(current[MODELS]);
     const provider = ensureObject(ensureObject(models, 'providers'), id);
     const model: JsonObject = {
       id: profile.model,
       name: profile.model,
-      contextWindow: this.numeric(profile.extras.contextWindow, DEFAULT_CONTEXT),
-      maxTokens: this.numeric(profile.extras.maxTokens, DEFAULT_MAX_TOKENS),
+      contextWindow: numeric(profile.extras.contextWindow, DEFAULT_CONTEXT),
+      maxTokens: numeric(profile.extras.maxTokens, DEFAULT_MAX_TOKENS),
     };
     if (profile.extras.reasoning === 'true') {
       model.reasoning = true;
@@ -166,78 +168,74 @@ export class PiAdapter implements HarnessAdapter {
   }
 
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
-    const id = this.providerId(profile);
+    const id = providerId(profile);
     const rendered: RenderedFiles = {};
 
     if (current[MODELS] !== undefined) {
-      try {
-        const models = parseJsonObject(current[MODELS]);
+      const models = tryParseJsonObject(current[MODELS]);
+      if (models) {
         const providers = models.providers;
         if (isPlainObject(providers)) {
           delete providers[id];
         }
         rendered[MODELS] = stringifyJson(models);
-      } catch {
-        // A models.json we cannot parse is left untouched rather than clobbered.
       }
+      // A models.json we cannot parse is left untouched rather than clobbered.
     }
 
     if (current[SETTINGS] !== undefined) {
-      try {
-        const settings = parseJsonObject(current[SETTINGS]);
+      const settings = tryParseJsonObject(current[SETTINGS]);
+      if (settings) {
         if (settings.defaultProvider === id) {
           delete settings.defaultProvider;
           delete settings.defaultModel;
         }
         rendered[SETTINGS] = stringifyJson(settings);
-      } catch {
-        // Same reasoning as above.
       }
+      // Same reasoning as above.
     }
 
     return rendered;
   }
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
-    try {
-      const models = parseJsonObject(current[MODELS]);
-      const id = this.providerId(profile);
-      const providers = models.providers;
-      const provider = isPlainObject(providers) ? providers[id] : undefined;
-      if (!isPlainObject(provider)) {
-        return {};
-      }
-      const firstModel = Array.isArray(provider.models)
-        ? provider.models.find((entry) => isPlainObject(entry))
-        : undefined;
-      const apiKey = readString(provider, 'apiKey');
-      return {
-        baseUrl: readString(provider, 'baseUrl') || profile.baseUrl,
-        apiKey: apiKey || profile.apiKey,
-        model: readString(firstModel, 'id') || profile.model,
-        extras: {
-          ...profile.extras,
-          api: readString(provider, 'api') || profile.extras.api || '',
-          contextWindow: valueString(firstModel?.contextWindow, profile.extras.contextWindow),
-          maxTokens: valueString(firstModel?.maxTokens, profile.extras.maxTokens),
-          reasoning: firstModel?.reasoning === true ? 'true' : profile.extras.reasoning || 'false',
-        },
-      };
-    } catch {
+    const models = tryParseJsonObject(current[MODELS]);
+    if (!models) {
       return {};
     }
+    const id = providerId(profile);
+    const providers = models.providers;
+    const provider = isPlainObject(providers) ? providers[id] : undefined;
+    if (!isPlainObject(provider)) {
+      return {};
+    }
+    const firstModel = Array.isArray(provider.models)
+      ? provider.models.find((entry) => isPlainObject(entry))
+      : undefined;
+    const apiKey = readString(provider, 'apiKey');
+    return {
+      baseUrl: readString(provider, 'baseUrl') || profile.baseUrl,
+      apiKey: apiKey || profile.apiKey,
+      model: readString(firstModel, 'id') || profile.model,
+      extras: {
+        ...profile.extras,
+        api: readString(provider, 'api') || profile.extras.api || '',
+        contextWindow: valueString(firstModel?.contextWindow, profile.extras.contextWindow),
+        maxTokens: valueString(firstModel?.maxTokens, profile.extras.maxTokens),
+        reasoning: firstModel?.reasoning === true ? 'true' : profile.extras.reasoning || 'false',
+      },
+    };
   }
 
   /** One candidate per `providers` entry in models.json; settings.json names the active one. */
   detect(current: CurrentFiles): DetectedProfile[] {
-    let providers: unknown;
-    let selected = '';
-    try {
-      providers = parseJsonObject(current[MODELS]).providers;
-      selected = readString(parseJsonObject(current[SETTINGS]), 'defaultProvider');
-    } catch {
+    const models = tryParseJsonObject(current[MODELS]);
+    const settings = tryParseJsonObject(current[SETTINGS]);
+    if (!models || !settings) {
       return [];
     }
+    const providers = models.providers;
+    const selected = readString(settings, 'defaultProvider');
     if (!isPlainObject(providers)) {
       return [];
     }
@@ -254,17 +252,4 @@ export class PiAdapter implements HarnessAdapter {
       }),
     );
   }
-
-  private providerId(profile: AdapterProfile): string {
-    return slugify(profile.extras.providerId || profile.name, 'provider');
-  }
-
-  private numeric(raw: string | undefined, fallback: number): number {
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
-  }
-}
-
-function valueString(value: unknown, fallback: string | undefined): string {
-  return typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback || '';
 }
