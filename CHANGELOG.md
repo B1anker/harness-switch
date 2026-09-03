@@ -1,3 +1,17 @@
+# [0.27.0](https://github.com/B1anker/harness-switch/compare/v0.26.0...v0.27.0) (2026-09-03)
+
+
+### Bug Fixes
+
+* harden activation and request handling ([56a3a07](https://github.com/B1anker/harness-switch/commit/56a3a07ea75c4590a19860b7547dcc138157a2e3))
+* **web:** keep the harness nav pinned while the page scrolls ([6a6959f](https://github.com/B1anker/harness-switch/commit/6a6959f48dcc91f0f70a86c34d331b469405670e))
+
+
+### Features
+
+* support switching Kimi Code back to its official login ([06e9daa](https://github.com/B1anker/harness-switch/commit/06e9daa6acb9d3751cfa871ef9847ab274445467))
+* **web:** toast activation results with sonner instead of an in-dialog receipt ([1c76586](https://github.com/B1anker/harness-switch/commit/1c76586423f3e20424a0493edcd7b47d095c0693))
+
 # [0.26.0](https://github.com/B1anker/harness-switch/compare/v0.25.0...v0.26.0) (2026-09-02)
 
 
