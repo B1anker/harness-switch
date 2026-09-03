@@ -128,3 +128,21 @@ export function lineText(t: TFunction, line: MessageLine): string {
 export function errorText(t: TFunction, error: unknown): string {
   return lineText(t, errorLine(error));
 }
+
+/**
+ * Renders one piece of adapter-supplied form prose — a field label, its help text, a
+ * select option — in the reader's language.
+ *
+ * The server sends both its own wording and, where the wording is prose rather than a
+ * file name or a protocol id, the catalog key naming the same string. This prefers the
+ * key and falls back to the wording, so an adapter that has not been given a key yet
+ * still renders, just untranslated.
+ */
+export function specText(
+  t: TFunction,
+  code: string | undefined,
+  fallback: string,
+  params?: MessageParams,
+): string {
+  return code ? lineText(t, { key: code, params, fallback }) : fallback;
+}

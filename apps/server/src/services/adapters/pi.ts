@@ -42,18 +42,23 @@ export class PiAdapter implements HarnessAdapter {
   readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 直接写入 models.json，无需环境变量；运行时仍可用 --model 覆盖。';
+  readonly envNoteCode = 'harness.field.pi.envNote';
 
   readonly fields: FieldSpec[] = [
     {
       key: 'providerId',
       label: 'Provider ID（可选）',
+      labelCode: 'harness.field.providerId.label',
       kind: 'text',
       placeholder: '默认取配置名称',
+      placeholderCode: 'harness.field.providerId.placeholder',
       help: '模型引用格式为 provider/model。',
+      helpCode: 'harness.field.pi.providerId.help',
     },
     {
       key: 'api',
       label: '协议',
+      labelCode: 'harness.field.pi.api.label',
       kind: 'select',
       defaultValue: 'openai-completions',
       options: [
@@ -65,35 +70,41 @@ export class PiAdapter implements HarnessAdapter {
     {
       key: 'authHeader',
       label: 'Authorization 头',
+      labelCode: 'harness.field.pi.authHeader.label',
       kind: 'select',
       defaultValue: 'true',
       help: '以 Authorization: Bearer <key> 发送。',
+      helpCode: 'harness.field.pi.authHeader.help',
       options: [
-        { value: 'true', label: '开启' },
-        { value: 'false', label: '关闭' },
+        { value: 'true', label: '开启', labelCode: 'harness.field.toggle.on' },
+        { value: 'false', label: '关闭', labelCode: 'harness.field.toggle.off' },
       ],
     },
     {
       key: 'contextWindow',
       label: '上下文长度',
+      labelCode: 'harness.field.contextLength.label',
       kind: 'text',
       defaultValue: String(DEFAULT_CONTEXT),
     },
     {
       key: 'maxTokens',
       label: '最大输出 tokens',
+      labelCode: 'harness.field.maxTokens.label',
       kind: 'text',
       defaultValue: String(DEFAULT_MAX_TOKENS),
     },
     {
       key: 'reasoning',
       label: '推理能力',
+      labelCode: 'harness.field.pi.reasoning.label',
       kind: 'select',
       defaultValue: 'false',
       help: '对应 models.json 的 reasoning。GPT / Claude 思考模型需要开启。',
+      helpCode: 'harness.field.pi.reasoning.help',
       options: [
-        { value: 'false', label: '关闭' },
-        { value: 'true', label: '开启' },
+        { value: 'false', label: '关闭', labelCode: 'harness.field.toggle.off' },
+        { value: 'true', label: '开启', labelCode: 'harness.field.toggle.on' },
       ],
     },
   ];

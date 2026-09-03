@@ -2,6 +2,7 @@ import { expect, test } from '@rstest/core';
 import type { PreviewTarget } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProfileDialog } from '@/components/profile-dialog';
+import { i18n } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 import { harnessFixture, profileFixture, stubStoreActions } from './fixtures';
 
@@ -417,6 +418,63 @@ test('handing a file back clears its override', async () => {
   // An empty map is what tells the server to go back to generating the file.
   expect(payload.overrides).toEqual({});
 });
+
+/**
+ * The adapters describe every harness-specific field in Chinese, so a form that renders
+ * `field.label` verbatim stays Chinese no matter what language the reader picked. Scanning
+ * for CJK is what catches that: it fails on any field whose catalog key is missing, wrong,
+ * or never wired through, which no label-by-label assertion would.
+ */
+test('renders every server-described field in English once the language is English', async () => {
+  setup();
+  await i18n.changeLanguage('en');
+  try {
+    const { container } = render(
+      <ProfileDialog harness={harnessFixture()} profile={null} onOpenChange={() => {}} />,
+    );
+
+    expect(screen.getByLabelText('Sonnet model mapping')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Declare 1M support for Sonnet' })).toBeVisible();
+    expect(
+      screen.getByRole('checkbox', { name: 'Declare 1M support for subagents' }),
+    ).toBeVisible();
+    expect(chineseIn(container)).toEqual([]);
+
+    // Options only exist in the DOM while the listbox is open, and they carry prose too.
+    // Radix marks the rest of the form aria-hidden while it is, so this goes last.
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Credential variable' }), {
+      button: 0,
+      pointerType: 'mouse',
+    });
+    expect(
+      screen.getByRole('option', { name: 'ANTHROPIC_AUTH_TOKEN (third-party relay)' }),
+    ).toBeInTheDocument();
+    expect(chineseIn(document.body)).toEqual([]);
+  } finally {
+    // Every other test in this file queries by Chinese label, and the instance is shared.
+    await i18n.changeLanguage('zh-CN');
+  }
+});
+
+/** Every string under `root` that still holds a Chinese character, text or attribute. */
+function chineseIn(root: ParentNode): string[] {
+  const found: string[] = [];
+  const cjk = /[　-〿㐀-䶿一-鿿＀-￯]/;
+  for (const element of root.querySelectorAll('*')) {
+    for (const attribute of ['placeholder', 'aria-label', 'title']) {
+      const value = element.getAttribute(attribute);
+      if (value && cjk.test(value)) {
+        found.push(`${element.tagName.toLowerCase()}[${attribute}]: ${value}`);
+      }
+    }
+    // Only leaf text, so one untranslated label is reported once instead of at every
+    // ancestor that happens to contain it.
+    if (element.children.length === 0 && element.textContent && cjk.test(element.textContent)) {
+      found.push(`${element.tagName.toLowerCase()}: ${element.textContent}`);
+    }
+  }
+  return found;
+}
 
 test('shows the reason a save failed instead of closing silently', async () => {
   useAppStore.setState({

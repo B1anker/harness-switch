@@ -32,6 +32,167 @@
     "switchHarness": "切换 Harness"
   },
   "harness": {
+    "field": {
+      "toggle": {
+        "on": "开启",
+        "off": "关闭"
+      },
+      "providerId": {
+        "label": "Provider ID（可选）",
+        "placeholder": "默认取配置名称"
+      },
+      "contextLength": {
+        "label": "上下文长度"
+      },
+      "maxTokens": {
+        "label": "最大输出 tokens"
+      },
+      "claude": {
+        "authVar": {
+          "label": "凭据变量",
+          "help": "第三方中转通常要求 ANTHROPIC_AUTH_TOKEN；官方 API key 用 ANTHROPIC_API_KEY。",
+          "option": {
+            "authToken": "ANTHROPIC_AUTH_TOKEN（第三方中转）",
+            "official": "ANTHROPIC_API_KEY（官方）"
+          }
+        },
+        "haikuModel": {
+          "label": "Haiku 模型映射"
+        },
+        "sonnetModel": {
+          "label": "Sonnet 模型映射"
+        },
+        "opusModel": {
+          "label": "Opus 模型映射"
+        },
+        "fableModel": {
+          "label": "Fable 模型映射（可选）",
+          "help": "写入 ANTHROPIC_DEFAULT_FABLE_MODEL；用于支持 Fable 档位的新版 Claude Code。"
+        },
+        "subagentModel": {
+          "label": "子代理模型（可选）",
+          "help": "写入 CLAUDE_CODE_SUBAGENT_MODEL，可让子代理使用更快或成本更低的模型。"
+        },
+        "haikuModelName": {
+          "label": "Haiku 显示名称（选填）"
+        },
+        "sonnetModelName": {
+          "label": "Sonnet 显示名称（选填）"
+        },
+        "opusModelName": {
+          "label": "Opus 显示名称（选填）"
+        },
+        "fableModelName": {
+          "label": "Fable 显示名称（选填）"
+        },
+        "modelMapping": {
+          "help": "写入 {{envVar}}。"
+        },
+        "modelName": {
+          "help": "写入 {{envVar}}；留空时 Claude Code 默认显示对应模型 ID。",
+          "placeholder": "留空则使用 {{role}} 模型 ID"
+        },
+        "example": {
+          "placeholder": "例如：{{value}}"
+        },
+        "extraEnv": {
+          "label": "追加环境变量（可选）",
+          "help": "每行一个 KEY=VALUE，会合并进 settings.json 的 env。"
+        },
+        "oneM": {
+          "subagentLabel": "子代理 声明支持 1M",
+          "label": "{{role}} 声明支持 1M",
+          "help": "在模型 ID 末尾追加 [1m]，向 Claude Code 声明 1M 上下文；Claude Code 请求上游前会去掉该后缀。仅在该模型确实支持 1M 时开启。"
+        }
+      },
+      "codex": {
+        "envNote": "仅「环境变量」认证模式需要 env.sh，其余模式的凭据自包含在 config.toml 里。",
+        "authMode": {
+          "label": "认证方式",
+          "help": "auth.json 就是 Codex 的登录缓存，覆盖它会丢失 ChatGPT 登录态，所以默认不碰它。",
+          "option": {
+            "bearerToken": "写入 config.toml（推荐，保留官方登录）",
+            "envKey": "环境变量（需要 source env.sh）",
+            "openaiAuth": "写入 auth.json（会覆盖 ChatGPT 登录缓存）"
+          }
+        },
+        "providerId": {
+          "help": "openai / ollama / lmstudio / amazon-bedrock 等是 Codex 保留字，会自动改名。"
+        },
+        "envKeyName": {
+          "label": "环境变量名",
+          "help": "仅「环境变量」模式生效。"
+        },
+        "reasoningEffort": {
+          "label": "推理强度（可选）",
+          "option": {
+            "unset": "不设置"
+          }
+        },
+        "target": {
+          "auth": "auth.json（仅 auth.json 模式）"
+        }
+      },
+      "kimi": {
+        "envNote": "Kimi Code 不从 shell 读取凭据，env.sh 对它无效。",
+        "providerType": {
+          "label": "Provider 类型",
+          "help": "决定 Kimi Code 使用哪套协议实现。",
+          "option": {
+            "kimi": "kimi（Moonshot / Kimi Code）"
+          }
+        },
+        "maxContextSize": {
+          "help": "Kimi Code 要求 models 条目必须声明 max_context_size。"
+        }
+      },
+      "pi": {
+        "envNote": "API key 直接写入 models.json，无需环境变量；运行时仍可用 --model 覆盖。",
+        "providerId": {
+          "help": "模型引用格式为 provider/model。"
+        },
+        "api": {
+          "label": "协议"
+        },
+        "authHeader": {
+          "label": "Authorization 头",
+          "help": "以 Authorization: Bearer <key> 发送。"
+        },
+        "reasoning": {
+          "label": "推理能力",
+          "help": "对应 models.json 的 reasoning。GPT / Claude 思考模型需要开启。"
+        }
+      },
+      "dsh": {
+        "envNote": "API key 安全写入 DSH 的 .credentials.yaml，并由 settings.yaml 引用。",
+        "providerType": {
+          "label": "提供方类型",
+          "option": {
+            "custom": "自定义提供方",
+            "official": "DeepSeek 官方"
+          }
+        },
+        "providerId": {
+          "help": "DSH 的模型路由标识；必须以小写字母开头。"
+        },
+        "models": {
+          "label": "模型目录（可选）",
+          "placeholder": "每行一个模型 ID；留空时只注册上方的默认模型",
+          "help": "一个提供方可注册多个模型；上方“模型”作为新会话的默认模型。"
+        },
+        "api": {
+          "label": "API 协议"
+        },
+        "reasoningEfforts": {
+          "label": "支持的思考程度",
+          "help": "DSH 只会显示这里声明且上游模型实际支持的档位。",
+          "option": {
+            "unset": "不声明（提供方默认）",
+            "none": "模型不支持思考程度"
+          }
+        }
+      }
+    },
     "subtitle": "管理配置档案并安全写入该工具的原生配置文件。",
     "newProfile": "新增配置",
     "addCustomProvider": "添加自定义提供方",

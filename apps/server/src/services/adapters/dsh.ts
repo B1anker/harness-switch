@@ -36,36 +36,53 @@ export class DshAdapter implements HarnessAdapter {
   readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 安全写入 DSH 的 .credentials.yaml，并由 settings.yaml 引用。';
+  readonly envNoteCode = 'harness.field.dsh.envNote';
 
   readonly fields: FieldSpec[] = [
     {
       key: 'providerType',
       label: '提供方类型',
+      labelCode: 'harness.field.dsh.providerType.label',
       kind: 'select',
       defaultValue: 'custom',
       options: [
-        { value: 'custom', label: '自定义提供方' },
-        { value: 'official', label: 'DeepSeek 官方' },
+        {
+          value: 'custom',
+          label: '自定义提供方',
+          labelCode: 'harness.field.dsh.providerType.option.custom',
+        },
+        {
+          value: 'official',
+          label: 'DeepSeek 官方',
+          labelCode: 'harness.field.dsh.providerType.option.official',
+        },
       ],
     },
     {
       key: 'providerId',
       label: 'Provider ID（可选）',
+      labelCode: 'harness.field.providerId.label',
       kind: 'text',
       placeholder: '默认取配置名称',
+      placeholderCode: 'harness.field.providerId.placeholder',
       help: 'DSH 的模型路由标识；必须以小写字母开头。',
+      helpCode: 'harness.field.dsh.providerId.help',
     },
     {
       key: 'models',
       label: '模型目录（可选）',
+      labelCode: 'harness.field.dsh.models.label',
       kind: 'textarea',
       fullWidth: true,
       placeholder: '每行一个模型 ID；留空时只注册上方的默认模型',
+      placeholderCode: 'harness.field.dsh.models.placeholder',
       help: '一个提供方可注册多个模型；上方“模型”作为新会话的默认模型。',
+      helpCode: 'harness.field.dsh.models.help',
     },
     {
       key: 'api',
       label: 'API 协议',
+      labelCode: 'harness.field.dsh.api.label',
       kind: 'select',
       defaultValue: 'openai-responses',
       options: [
@@ -77,27 +94,39 @@ export class DshAdapter implements HarnessAdapter {
     {
       key: 'contextWindow',
       label: '上下文长度',
+      labelCode: 'harness.field.contextLength.label',
       kind: 'text',
       defaultValue: String(DEFAULT_CONTEXT),
     },
     {
       key: 'maxTokens',
       label: '最大输出 tokens',
+      labelCode: 'harness.field.maxTokens.label',
       kind: 'text',
       defaultValue: String(DEFAULT_MAX_TOKENS),
     },
     {
       key: 'reasoningEfforts',
       label: '支持的思考程度',
+      labelCode: 'harness.field.dsh.reasoningEfforts.label',
       kind: 'select',
       defaultValue: '',
       help: 'DSH 只会显示这里声明且上游模型实际支持的档位。',
+      helpCode: 'harness.field.dsh.reasoningEfforts.help',
       options: [
-        { value: '', label: '不声明（提供方默认）' },
+        {
+          value: '',
+          label: '不声明（提供方默认）',
+          labelCode: 'harness.field.dsh.reasoningEfforts.option.unset',
+        },
         { value: 'low,medium,high,xhigh,max', label: 'Low / Medium / High / XHigh / Max' },
         { value: 'low,medium,high,xhigh', label: 'Low / Medium / High / XHigh' },
         { value: 'minimal,low,medium,high', label: 'Minimal / Low / Medium / High' },
-        { value: 'false', label: '模型不支持思考程度' },
+        {
+          value: 'false',
+          label: '模型不支持思考程度',
+          labelCode: 'harness.field.dsh.reasoningEfforts.option.none',
+        },
       ],
     },
   ];

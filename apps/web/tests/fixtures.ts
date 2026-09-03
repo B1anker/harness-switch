@@ -10,18 +10,33 @@ import type {
 } from '@seaveyon/harness-switch-shared';
 import { useAppStore } from '@/stores/app-store';
 
-/** Mirrors the 1M flag spec the Claude adapter emits per model tier. */
-function oneMFieldFixture(role: string, key: string): FieldSpec {
+/**
+ * Mirrors the 1M flag spec the Claude adapter emits per model tier, including the catalog
+ * keys — a fixture without them would render the fallback prose and prove nothing about
+ * how the real payload behaves in English.
+ */
+function oneMFieldFixture(role: string, key: string, labelCode?: string): FieldSpec {
   return {
     key,
     label: `${role} 声明支持 1M`,
+    labelCode: labelCode ?? 'harness.field.claude.oneM.label',
+    ...(labelCode ? {} : { params: { role } }),
     kind: 'select',
     defaultValue: 'false',
     options: [
-      { value: 'false', label: '关闭' },
-      { value: 'true', label: '开启' },
+      { value: 'false', label: '关闭', labelCode: 'harness.field.toggle.off' },
+      { value: 'true', label: '开启', labelCode: 'harness.field.toggle.on' },
     ],
   };
+}
+
+/**
+ * A plain text field as the Claude adapter emits it. Every one of its label keys is
+ * `harness.field.claude.<key>.label`, so the key derives the code and the call site keeps
+ * showing the literal label the tests query by.
+ */
+function textFieldFixture(key: string, label: string): FieldSpec {
+  return { key, label, labelCode: `harness.field.claude.${key}.label`, kind: 'text' };
 }
 
 export function profileFixture(overrides: Partial<ProfilePublic> = {}): ProfilePublic {
@@ -49,27 +64,36 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
       {
         key: 'authVar',
         label: '凭据变量',
+        labelCode: 'harness.field.claude.authVar.label',
         kind: 'select',
         defaultValue: 'ANTHROPIC_AUTH_TOKEN',
         fullWidth: true,
         options: [
-          { value: 'ANTHROPIC_AUTH_TOKEN', label: 'ANTHROPIC_AUTH_TOKEN（第三方中转）' },
-          { value: 'ANTHROPIC_API_KEY', label: 'ANTHROPIC_API_KEY（官方）' },
+          {
+            value: 'ANTHROPIC_AUTH_TOKEN',
+            label: 'ANTHROPIC_AUTH_TOKEN（第三方中转）',
+            labelCode: 'harness.field.claude.authVar.option.authToken',
+          },
+          {
+            value: 'ANTHROPIC_API_KEY',
+            label: 'ANTHROPIC_API_KEY（官方）',
+            labelCode: 'harness.field.claude.authVar.option.official',
+          },
         ],
       },
-      { key: 'haikuModel', label: 'Haiku 模型映射', kind: 'text' },
-      { key: 'haikuModelName', label: 'Haiku 显示名称（选填）', kind: 'text' },
-      { key: 'sonnetModel', label: 'Sonnet 模型映射', kind: 'text' },
-      { key: 'sonnetModelName', label: 'Sonnet 显示名称（选填）', kind: 'text' },
+      textFieldFixture('haikuModel', 'Haiku 模型映射'),
+      textFieldFixture('haikuModelName', 'Haiku 显示名称（选填）'),
+      textFieldFixture('sonnetModel', 'Sonnet 模型映射'),
+      textFieldFixture('sonnetModelName', 'Sonnet 显示名称（选填）'),
       oneMFieldFixture('Sonnet', 'sonnetModel1m'),
-      { key: 'opusModel', label: 'Opus 模型映射', kind: 'text' },
-      { key: 'opusModelName', label: 'Opus 显示名称（选填）', kind: 'text' },
+      textFieldFixture('opusModel', 'Opus 模型映射'),
+      textFieldFixture('opusModelName', 'Opus 显示名称（选填）'),
       oneMFieldFixture('Opus', 'opusModel1m'),
-      { key: 'fableModel', label: 'Fable 模型映射（可选）', kind: 'text' },
-      { key: 'fableModelName', label: 'Fable 显示名称（选填）', kind: 'text' },
+      textFieldFixture('fableModel', 'Fable 模型映射（可选）'),
+      textFieldFixture('fableModelName', 'Fable 显示名称（选填）'),
       oneMFieldFixture('Fable', 'fableModel1m'),
-      { key: 'subagentModel', label: '子代理模型（可选）', kind: 'text' },
-      oneMFieldFixture('子代理', 'subagentModel1m'),
+      textFieldFixture('subagentModel', '子代理模型（可选）'),
+      oneMFieldFixture('子代理', 'subagentModel1m', 'harness.field.claude.oneM.subagentLabel'),
     ],
     targets: [
       {

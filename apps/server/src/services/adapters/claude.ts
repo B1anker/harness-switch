@@ -68,18 +68,26 @@ const MODEL_MAPPINGS: readonly ModelMapping[] = [
 ];
 
 const ONE_M_OPTIONS = [
-  { value: 'false', label: '关闭' },
-  { value: 'true', label: '开启' },
+  { value: 'false', label: '关闭', labelCode: 'harness.field.toggle.off' },
+  { value: 'true', label: '开启', labelCode: 'harness.field.toggle.on' },
 ];
 
-function oneMField(role: string, key: string): FieldSpec {
+/**
+ * `role` is a model tier name (`Sonnet`, `Opus`, `Fable`) and reads the same in every
+ * language, so it is interpolated into one shared catalog entry. The subagent row is the
+ * exception — its role is prose — so it passes its own key instead of a `role` value.
+ */
+function oneMField(role: string, key: string, labelCode?: string): FieldSpec {
   return {
     key,
     label: `${role} 声明支持 1M`,
+    labelCode: labelCode ?? 'harness.field.claude.oneM.label',
+    ...(labelCode ? {} : { params: { role } }),
     kind: 'select',
     defaultValue: 'false',
     options: ONE_M_OPTIONS,
     help: '在模型 ID 末尾追加 [1m]，向 Claude Code 声明 1M 上下文；Claude Code 请求上游前会去掉该后缀。仅在该模型确实支持 1M 时开启。',
+    helpCode: 'harness.field.claude.oneM.help',
   };
 }
 
@@ -105,91 +113,139 @@ export class ClaudeAdapter implements HarnessAdapter {
     {
       key: 'authVar',
       label: '凭据变量',
+      labelCode: 'harness.field.claude.authVar.label',
       kind: 'select',
       defaultValue: 'ANTHROPIC_AUTH_TOKEN',
       help: '第三方中转通常要求 ANTHROPIC_AUTH_TOKEN；官方 API key 用 ANTHROPIC_API_KEY。',
+      helpCode: 'harness.field.claude.authVar.help',
       fullWidth: true,
       options: [
-        { value: 'ANTHROPIC_AUTH_TOKEN', label: 'ANTHROPIC_AUTH_TOKEN（第三方中转）' },
-        { value: 'ANTHROPIC_API_KEY', label: 'ANTHROPIC_API_KEY（官方）' },
+        {
+          value: 'ANTHROPIC_AUTH_TOKEN',
+          label: 'ANTHROPIC_AUTH_TOKEN（第三方中转）',
+          labelCode: 'harness.field.claude.authVar.option.authToken',
+        },
+        {
+          value: 'ANTHROPIC_API_KEY',
+          label: 'ANTHROPIC_API_KEY（官方）',
+          labelCode: 'harness.field.claude.authVar.option.official',
+        },
       ],
     },
     {
       key: 'haikuModel',
       label: 'Haiku 模型映射',
+      labelCode: 'harness.field.claude.haikuModel.label',
       kind: 'text',
       required: true,
       placeholder: '例如：glm-5-air',
+      placeholderCode: 'harness.field.claude.example.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_HAIKU_MODEL。',
+      helpCode: 'harness.field.claude.modelMapping.help',
+      params: { value: 'glm-5-air', envVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL' },
     },
     {
       key: 'haikuModelName',
       label: 'Haiku 显示名称（选填）',
+      labelCode: 'harness.field.claude.haikuModelName.label',
       kind: 'text',
       placeholder: '留空则使用 Haiku 模型 ID',
+      placeholderCode: 'harness.field.claude.modelName.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
+      helpCode: 'harness.field.claude.modelName.help',
+      params: { role: 'Haiku', envVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME' },
     },
     {
       key: 'sonnetModel',
       label: 'Sonnet 模型映射',
+      labelCode: 'harness.field.claude.sonnetModel.label',
       kind: 'text',
       required: true,
       placeholder: '例如：glm-5',
+      placeholderCode: 'harness.field.claude.example.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_SONNET_MODEL。',
+      helpCode: 'harness.field.claude.modelMapping.help',
+      params: { value: 'glm-5', envVar: 'ANTHROPIC_DEFAULT_SONNET_MODEL' },
     },
     {
       key: 'sonnetModelName',
       label: 'Sonnet 显示名称（选填）',
+      labelCode: 'harness.field.claude.sonnetModelName.label',
       kind: 'text',
       placeholder: '留空则使用 Sonnet 模型 ID',
+      placeholderCode: 'harness.field.claude.modelName.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_SONNET_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
+      helpCode: 'harness.field.claude.modelName.help',
+      params: { role: 'Sonnet', envVar: 'ANTHROPIC_DEFAULT_SONNET_MODEL_NAME' },
     },
     oneMField('Sonnet', 'sonnetModel1m'),
     {
       key: 'opusModel',
       label: 'Opus 模型映射',
+      labelCode: 'harness.field.claude.opusModel.label',
       kind: 'text',
       required: true,
       placeholder: '例如：glm-5',
+      placeholderCode: 'harness.field.claude.example.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_OPUS_MODEL。',
+      helpCode: 'harness.field.claude.modelMapping.help',
+      params: { value: 'glm-5', envVar: 'ANTHROPIC_DEFAULT_OPUS_MODEL' },
     },
     {
       key: 'opusModelName',
       label: 'Opus 显示名称（选填）',
+      labelCode: 'harness.field.claude.opusModelName.label',
       kind: 'text',
       placeholder: '留空则使用 Opus 模型 ID',
+      placeholderCode: 'harness.field.claude.modelName.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_OPUS_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
+      helpCode: 'harness.field.claude.modelName.help',
+      params: { role: 'Opus', envVar: 'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME' },
     },
     oneMField('Opus', 'opusModel1m'),
     {
       key: 'fableModel',
       label: 'Fable 模型映射（可选）',
+      labelCode: 'harness.field.claude.fableModel.label',
       kind: 'text',
       placeholder: '例如：glm-5',
+      placeholderCode: 'harness.field.claude.example.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL；用于支持 Fable 档位的新版 Claude Code。',
+      helpCode: 'harness.field.claude.fableModel.help',
+      params: { value: 'glm-5' },
     },
     {
       key: 'fableModelName',
       label: 'Fable 显示名称（选填）',
+      labelCode: 'harness.field.claude.fableModelName.label',
       kind: 'text',
       placeholder: '留空则使用 Fable 模型 ID',
+      placeholderCode: 'harness.field.claude.modelName.placeholder',
       help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
+      helpCode: 'harness.field.claude.modelName.help',
+      params: { role: 'Fable', envVar: 'ANTHROPIC_DEFAULT_FABLE_MODEL_NAME' },
     },
     oneMField('Fable', 'fableModel1m'),
     {
       key: 'subagentModel',
       label: '子代理模型（可选）',
+      labelCode: 'harness.field.claude.subagentModel.label',
       kind: 'text',
       placeholder: '例如：glm-5-air',
+      placeholderCode: 'harness.field.claude.example.placeholder',
       help: '写入 CLAUDE_CODE_SUBAGENT_MODEL，可让子代理使用更快或成本更低的模型。',
+      helpCode: 'harness.field.claude.subagentModel.help',
+      params: { value: 'glm-5-air' },
     },
-    oneMField('子代理', 'subagentModel1m'),
+    oneMField('子代理', 'subagentModel1m', 'harness.field.claude.oneM.subagentLabel'),
     {
       key: 'extraEnv',
       label: '追加环境变量（可选）',
+      labelCode: 'harness.field.claude.extraEnv.label',
       kind: 'textarea',
       placeholder: 'ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2\nAPI_TIMEOUT_MS=3000000',
       help: '每行一个 KEY=VALUE，会合并进 settings.json 的 env。',
+      helpCode: 'harness.field.claude.extraEnv.help',
     },
   ];
 

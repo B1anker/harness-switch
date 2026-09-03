@@ -58,41 +58,66 @@ export class CodexAdapter implements HarnessAdapter {
   readonly mode: HarnessMode = 'replace';
   readonly envVarNames = [DEFAULT_ENV_KEY];
   readonly envNote = '仅「环境变量」认证模式需要 env.sh，其余模式的凭据自包含在 config.toml 里。';
+  readonly envNoteCode = 'harness.field.codex.envNote';
 
   readonly fields: FieldSpec[] = [
     {
       key: 'authMode',
       label: '认证方式',
+      labelCode: 'harness.field.codex.authMode.label',
       kind: 'select',
       defaultValue: 'bearer_token',
       help: 'auth.json 就是 Codex 的登录缓存，覆盖它会丢失 ChatGPT 登录态，所以默认不碰它。',
+      helpCode: 'harness.field.codex.authMode.help',
       options: [
-        { value: 'bearer_token', label: '写入 config.toml（推荐，保留官方登录）' },
-        { value: 'env_key', label: '环境变量（需要 source env.sh）' },
-        { value: 'openai_auth', label: '写入 auth.json（会覆盖 ChatGPT 登录缓存）' },
+        {
+          value: 'bearer_token',
+          label: '写入 config.toml（推荐，保留官方登录）',
+          labelCode: 'harness.field.codex.authMode.option.bearerToken',
+        },
+        {
+          value: 'env_key',
+          label: '环境变量（需要 source env.sh）',
+          labelCode: 'harness.field.codex.authMode.option.envKey',
+        },
+        {
+          value: 'openai_auth',
+          label: '写入 auth.json（会覆盖 ChatGPT 登录缓存）',
+          labelCode: 'harness.field.codex.authMode.option.openaiAuth',
+        },
       ],
     },
     {
       key: 'providerId',
       label: 'Provider ID（可选）',
+      labelCode: 'harness.field.providerId.label',
       kind: 'text',
       placeholder: '默认取配置名称',
+      placeholderCode: 'harness.field.providerId.placeholder',
       help: 'openai / ollama / lmstudio / amazon-bedrock 等是 Codex 保留字，会自动改名。',
+      helpCode: 'harness.field.codex.providerId.help',
     },
     {
       key: 'envKeyName',
       label: '环境变量名',
+      labelCode: 'harness.field.codex.envKeyName.label',
       kind: 'text',
       defaultValue: DEFAULT_ENV_KEY,
       help: '仅「环境变量」模式生效。',
+      helpCode: 'harness.field.codex.envKeyName.help',
     },
     {
       key: 'reasoningEffort',
       label: '推理强度（可选）',
+      labelCode: 'harness.field.codex.reasoningEffort.label',
       kind: 'select',
       defaultValue: '',
       options: [
-        { value: '', label: '不设置' },
+        {
+          value: '',
+          label: '不设置',
+          labelCode: 'harness.field.codex.reasoningEffort.option.unset',
+        },
         { value: 'low', label: 'low' },
         { value: 'medium', label: 'medium' },
         { value: 'high', label: 'high' },
@@ -113,6 +138,7 @@ export class CodexAdapter implements HarnessAdapter {
       {
         key: AUTH,
         label: 'auth.json（仅 auth.json 模式）',
+        labelCode: 'harness.field.codex.target.auth',
         path: join(this.environment.harnessHomes.codex, 'auth.json'),
         format: 'json',
       },

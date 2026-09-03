@@ -23,12 +23,19 @@ export type ConfigFormat = 'json' | 'toml' | 'yaml' | 'text';
 export type FieldOption = {
   value: string;
   label: string;
+  /** Catalog key for {@link FieldOption.label}. See {@link FieldSpec.labelCode}. */
+  labelCode?: string;
 };
 
 /**
  * Describes one harness-specific field so the web UI can render the form without
  * duplicating each harness schema. Core fields (name, base URL, API key, model,
  * notes) are always rendered and are not part of this list.
+ *
+ * The prose fields (`label`, `help`, `placeholder`) are the adapter's own wording;
+ * the matching `*Code` entries name the catalog key the web UI resolves instead, so
+ * a form renders in the reader's language. Prose stays as the fallback for a build
+ * whose catalog lacks the key — the same split `DoctorCheck` uses.
  */
 export type FieldSpec = {
   key: string;
@@ -41,6 +48,14 @@ export type FieldSpec = {
   defaultValue?: string;
   /** Lets schema-driven forms place this field on its own row. */
   fullWidth?: boolean;
+  /** Catalog key for {@link FieldSpec.label}. */
+  labelCode?: string;
+  /** Catalog key for {@link FieldSpec.help}. */
+  helpCode?: string;
+  /** Catalog key for {@link FieldSpec.placeholder}. */
+  placeholderCode?: string;
+  /** Values the `*Code` entries interpolate. Data, never keys. */
+  params?: MessageParams;
 };
 
 /** One native config file a harness owns. */
@@ -49,6 +64,11 @@ export type TargetSpec = {
   label: string;
   path: string;
   format: ConfigFormat;
+  /**
+   * Catalog key for {@link TargetSpec.label}. Only set where the label carries prose
+   * beyond the file name — a bare `config.toml` reads the same in every language.
+   */
+  labelCode?: string;
 };
 
 export type ProfilePublic = {
@@ -89,6 +109,8 @@ export type HarnessSummary = {
   envVars: string[];
   /** Set when the harness ignores shell environment variables entirely. */
   envNote?: string;
+  /** Catalog key for {@link HarnessSummary.envNote}. See {@link FieldSpec.labelCode}. */
+  envNoteCode?: string;
   /** Whether this harness can safely return to its built-in account login. */
   supportsOfficialAuth?: boolean;
 };

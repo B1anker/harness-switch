@@ -39,6 +39,8 @@ export interface HarnessAdapter {
   readonly envVarNames: string[];
   /** Explains why the env.sh layer cannot help, when it cannot. */
   readonly envNote?: string;
+  /** Catalog key for {@link HarnessAdapter.envNote}, so the UI can localize it. */
+  readonly envNoteCode?: string;
 
   /**
    * Environment variables to emit into env.sh for this profile. Empty when the harness

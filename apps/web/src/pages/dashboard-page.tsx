@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { UpdateButton } from '@/components/update-button';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
 import { useI18n, useTranslation } from '@/lib/i18n';
-import { catalogKey, lineText } from '@/lib/messages';
+import { catalogKey, lineText, specText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -405,7 +405,9 @@ function ContextPanel({
             </div>
             {harness.targets.map((target) => (
               <div key={target.key}>
-                <p className="text-xs text-muted-foreground">{target.label}</p>
+                <p className="text-xs text-muted-foreground">
+                  {specText(t, target.labelCode, target.label)}
+                </p>
                 <p className="mt-1 break-all font-mono text-xs leading-relaxed">{target.path}</p>
               </div>
             ))}
