@@ -23,6 +23,7 @@ import type {
   PreviewTarget,
   ProbeRequest,
   ProbeResult,
+  ProbeStoredRequest,
   ProviderMutationResponse,
   ProviderPublic,
   ProvidersResponse,
@@ -125,9 +126,13 @@ type AppState = {
   /** Tests unsaved form values; the credential is inline or resolved from the vault. */
   probeDraft: (input: ProbeRequest) => Promise<ProbeResult>;
   /** Tests a saved profile with its stored credential. */
-  probeProfile: (harnessId: HarnessId, name: string) => Promise<ProbeResult>;
+  probeProfile: (
+    harnessId: HarnessId,
+    name: string,
+    options?: ProbeStoredRequest,
+  ) => Promise<ProbeResult>;
   /** Tests a vault entry's credential against one of its endpoints. */
-  probeVaultEntry: (id: string, endpoint?: string) => Promise<ProbeResult>;
+  probeVaultEntry: (id: string, options?: ProbeStoredRequest) => Promise<ProbeResult>;
   loadDoctor: (harnessId: HarnessId) => Promise<void>;
   loadDrift: () => Promise<void>;
   reapplyDrift: (harnessId: HarnessId) => Promise<DriftFileState[]>;
@@ -393,18 +398,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     return result.result;
   },
 
-  probeProfile: async (harnessId, name) => {
+  probeProfile: async (harnessId, name, options) => {
     const result = await api<{ result: ProbeResult }>(profileProbePath(harnessId, name), {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify(options ?? {}),
     });
     return result.result;
   },
 
-  probeVaultEntry: async (id, endpoint) => {
+  probeVaultEntry: async (id, options) => {
     const result = await api<{ result: ProbeResult }>(providerProbePath(id), {
       method: 'POST',
-      body: JSON.stringify(endpoint ? { endpoint } : {}),
+      body: JSON.stringify(options ?? {}),
     });
     return result.result;
   },

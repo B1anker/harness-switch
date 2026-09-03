@@ -106,6 +106,8 @@ export function ProfileDialog({
   const [fieldErrors, setFieldErrors] = useState<ProfileFieldErrors>({});
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
+  /** Opt-in: a completion costs the user a token, so it is never sent unasked. */
+  const [testCompletion, setTestCompletion] = useState(false);
 
   const providerEntries = providers ?? [];
   const selectedProvider = providerEntries.find((entry) => entry.id === providerId) ?? null;
@@ -207,15 +209,26 @@ export function ProfileDialog({
     setProbing(true);
     setError(null);
     setProbeResult(null);
+    const trimmedModel = model.trim();
     try {
       let result: ProbeResult;
       if (selectedProvider || apiKey.trim()) {
         result = await probeDraft({
           baseUrl: url,
           ...(selectedProvider ? { providerId } : { apiKey }),
+          ...(testCompletion ? { completion: true } : {}),
+          ...(testCompletion && trimmedModel ? { model: trimmedModel } : {}),
         });
       } else if (isEdit && profile) {
-        result = await probeProfile(harness.id, profile.name);
+        // The saved-profile route caches per profile, so an explicit click here means
+        // "test it now": refresh bypasses a cached verdict the user just asked to redo.
+        result = await probeProfile(
+          harness.id,
+          profile.name,
+          testCompletion
+            ? { completion: true, refresh: true, ...(trimmedModel ? { model: trimmedModel } : {}) }
+            : undefined,
+        );
       } else {
         setFieldErrors((current) => ({
           ...current,
@@ -615,8 +628,22 @@ export function ProfileDialog({
                       {probing ? <Loader2 className="animate-spin" /> : null}
                       {probing ? t('probe.probing') : t('probe.action')}
                     </Button>
+                    <label
+                      htmlFor="probe-completion"
+                      className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+                    >
+                      <Checkbox
+                        id="probe-completion"
+                        checked={testCompletion}
+                        onCheckedChange={(checked) => setTestCompletion(checked === true)}
+                      />
+                      {t('probe.completionAction')}
+                    </label>
                     {probeResult ? <ProbeResultLine result={probeResult} /> : null}
                   </div>
+                  {testCompletion ? (
+                    <p className="text-xs text-muted-foreground">{t('probe.completionHint')}</p>
+                  ) : null}
                   {probeResult?.ok && catalogModels.length > 0 ? (
                     <p className="text-xs text-muted-foreground">{t('probe.catalogHint')}</p>
                   ) : null}

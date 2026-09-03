@@ -1,9 +1,10 @@
 import { join } from 'node:path';
-import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
 import { compact, type DetectedProfile, providerId, seedProfile, toCandidate } from './detect';
+import { apiFieldProtocol } from './protocol';
 import {
   ensureObject,
   isPlainObject,
@@ -25,6 +26,7 @@ import type {
 
 const MODELS = 'models';
 const SETTINGS = 'settings';
+const DEFAULT_API = 'openai-completions';
 const DEFAULT_CONTEXT = 200000;
 const DEFAULT_MAX_TOKENS = 8192;
 
@@ -60,7 +62,7 @@ export class PiAdapter implements HarnessAdapter {
       label: '协议',
       labelCode: 'harness.field.pi.api.label',
       kind: 'select',
-      defaultValue: 'openai-completions',
+      defaultValue: DEFAULT_API,
       options: [
         { value: 'openai-completions', label: 'openai-completions' },
         { value: 'openai-responses', label: 'openai-responses' },
@@ -132,6 +134,11 @@ export class PiAdapter implements HarnessAdapter {
     return {};
   }
 
+  /** The `api` field is exactly the protocol Pi will call the provider over. */
+  completionProtocol(profile: AdapterProfile): CompletionProtocol | undefined {
+    return apiFieldProtocol(profile.extras.api, 'openai-chat');
+  }
+
   validate(profile: AdapterProfile): void {
     if (!profile.model.trim()) {
       throw new HttpError(400, 'Pi 需要填写模型名称，否则无法生成 models 条目', {
@@ -164,7 +171,7 @@ export class PiAdapter implements HarnessAdapter {
 
     provider.baseUrl = profile.baseUrl;
     provider.apiKey = profile.apiKey;
-    provider.api = profile.extras.api || 'openai-completions';
+    provider.api = profile.extras.api || DEFAULT_API;
     provider.authHeader = profile.extras.authHeader !== 'false';
     provider.models = [model];
 

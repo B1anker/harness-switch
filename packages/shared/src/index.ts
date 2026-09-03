@@ -29,6 +29,7 @@ export {
   type Language,
 } from './locales';
 export type {
+  CompletionProtocol,
   CreateProfileRequest,
   CreateProviderRequest,
   GitHubDeviceCodeRequest,
@@ -50,6 +51,7 @@ export type {
   UserSyncRequest,
 } from './schemas';
 export {
+  completionProtocolSchema,
   createProfileRequestSchema,
   createProviderRequestSchema,
   extrasSchema,
@@ -122,6 +124,7 @@ export type {
   OperationUndoResponse,
   PreviewResponse,
   PreviewTarget,
+  ProbeCompletion,
   ProbeResponse,
   ProbeResult,
   ProfilePublic,

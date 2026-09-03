@@ -171,6 +171,10 @@ export const DOCTOR_CODES = {
   probeMissingCredential: 'doctor.check.probeMissingCredential',
   probeOk: 'doctor.check.probeOk',
   probeFailed: 'doctor.check.probeFailed',
+  /** The active model answered a minimal completion, so the route really works. */
+  completionOk: 'doctor.check.completionOk',
+  /** The endpoint is reachable but its active model would not complete. */
+  completionFailed: 'doctor.check.completionFailed',
 } as const;
 
 export type DoctorCode = (typeof DOCTOR_CODES)[keyof typeof DOCTOR_CODES];
@@ -214,6 +218,18 @@ export const PROBE_CODES = {
   httpError: 'probe.httpError',
   /** A 2xx response arrived but its body is not JSON in any known catalog shape. */
   invalidResponse: 'probe.invalidResponse',
+  /** A completion test was asked for but no model id could be resolved to send. */
+  missingModel: 'probe.missingModel',
+  /** Every candidate completion path answered 404: the endpoint speaks none of them. */
+  completionUnsupported: 'probe.completionUnsupported',
+  /**
+   * The named model refused the completion with a non-2xx status. Distinct from
+   * `httpError` because this is the failure the whole test exists to catch: the catalog
+   * listed the model and the model itself did not answer, so the prose names it.
+   */
+  completionHttpError: 'probe.completionHttpError',
+  /** A 2xx answer to a completion request whose body is not a completion. */
+  completionInvalid: 'probe.completionInvalid',
 } as const;
 
 export type ProbeCode = (typeof PROBE_CODES)[keyof typeof PROBE_CODES];

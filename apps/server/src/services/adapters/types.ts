@@ -1,4 +1,5 @@
 import type {
+  CompletionProtocol,
   FieldSpec,
   HarnessId,
   HarnessMode,
@@ -57,6 +58,14 @@ export interface HarnessAdapter {
    * never reads credentials from the shell, so the file stays truthful.
    */
   envVars(profile: AdapterProfile): Record<string, string>;
+
+  /**
+   * Wire protocol this profile would actually be called over, so a completion probe
+   * tests the same shape the tool will use rather than guessing. Undefined when the
+   * harness's protocol cannot be determined from the profile, which leaves the probe
+   * to try each protocol in turn.
+   */
+  completionProtocol?(profile: AdapterProfile): CompletionProtocol | undefined;
 
   /**
    * Every live file this harness may own. `render` decides which ones it actually

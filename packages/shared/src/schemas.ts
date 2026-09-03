@@ -41,6 +41,17 @@ export const overridesSchema = z.record(mapKey, optionalText(MAX_OVERRIDE));
 
 export const conflictPolicySchema = z.enum(['skip', 'overwrite']);
 
+/**
+ * Wire protocols a minimal completion can be sent over. These are the three shapes the
+ * managed harnesses speak, so an adapter's own protocol field maps onto one of them and
+ * the probe tests the endpoint the same way the tool will actually call it.
+ */
+export const completionProtocolSchema = z.enum([
+  'openai-chat',
+  'openai-responses',
+  'anthropic-messages',
+]);
+
 export const loginRequestSchema = z.object({
   password: z.string().trim().min(1, 'password 不能为空').max(MAX_KEY),
 });
@@ -172,12 +183,23 @@ export const probeRequestSchema = z.object({
   baseUrl: z.string().trim().min(1, 'baseUrl 不能为空').max(MAX_URL),
   apiKey: optionalText(MAX_KEY).optional(),
   providerId: optionalText(MAX_NAME).optional(),
+  /** Also send one minimal completion, which is the only proof a model really answers. */
+  completion: z.boolean().optional(),
+  /** Model to complete against. Falls back to the first id the catalog returned. */
+  model: optionalText(MAX_NAME).optional(),
+  /** Wire protocol to try first; the others are still attempted as fallbacks. */
+  protocol: completionProtocolSchema.optional(),
 });
 
 /** Probe with the credential and base URL already stored for an entity. */
 export const probeStoredRequestSchema = z.object({
   /** Named vault endpoint to test; defaults to the entry's first endpoint. */
   endpoint: optionalText(MAX_NAME).optional(),
+  completion: z.boolean().optional(),
+  model: optionalText(MAX_NAME).optional(),
+  protocol: completionProtocolSchema.optional(),
+  /** Ignore a cached completion outcome and send a fresh request. */
+  refresh: z.boolean().optional(),
 });
 
 /** GitHub Sync schemas */
@@ -225,6 +247,7 @@ export type ScanImportSelection = z.infer<typeof scanImportSelectionSchema>;
 export type ScanImportRequest = z.infer<typeof scanImportRequestSchema>;
 export type ProbeRequest = z.infer<typeof probeRequestSchema>;
 export type ProbeStoredRequest = z.infer<typeof probeStoredRequestSchema>;
+export type CompletionProtocol = z.infer<typeof completionProtocolSchema>;
 export type GitHubDeviceCodeRequest = z.infer<typeof gitHubDeviceCodeRequestSchema>;
 export type GitHubDevicePollRequest = z.infer<typeof gitHubDevicePollRequestSchema>;
 export type GitHubTokenAuthRequestSchemaType = z.infer<typeof gitHubTokenAuthRequestSchema>;

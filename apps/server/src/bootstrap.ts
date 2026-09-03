@@ -14,6 +14,7 @@ import { IJournalService, JournalService } from './services/journal';
 import { ILiveWriteService, LiveWriteService } from './services/live-write';
 import { ILogService, LogService } from './services/log';
 import { IProbeService, ProbeService } from './services/probe';
+import { IProbeCacheService, ProbeCacheService } from './services/probe-cache';
 import { IProfileService, ProfileService } from './services/profiles';
 import { HarnessRegistry, IHarnessRegistry } from './services/registry';
 import { IScanService, ScanService } from './services/scan';
@@ -43,6 +44,7 @@ export function createServices(): InstantiationService {
   collection.set(IVaultService, new SyncDescriptor(VaultService));
   collection.set(IProfileService, new SyncDescriptor(ProfileService));
   collection.set(IProbeService, new SyncDescriptor(ProbeService));
+  collection.set(IProbeCacheService, new SyncDescriptor(ProbeCacheService));
   collection.set(IActivationService, new SyncDescriptor(ActivationService));
   collection.set(ITransferService, new SyncDescriptor(TransferService));
   collection.set(IGitHubSyncService, new SyncDescriptor(GitHubSyncService));

@@ -384,6 +384,12 @@ export type ProbeResult = {
   requestUrl?: string;
   /** Model ids from the catalog, in the order the endpoint returned them, deduped. */
   models?: string[];
+  /**
+   * Outcome of the minimal completion test, when one ran. Independent of the fields
+   * above: a relay whose catalog lists a model it cannot actually serve reports
+   * `ok: true` here with `completion.ok: false`.
+   */
+  completion?: ProbeCompletion;
   /** Stable machine-readable failure reason; see `PROBE_CODES`. */
   code?: string;
   /** Values the UI interpolates into the translated message for `code`. */
@@ -393,6 +399,38 @@ export type ProbeResult = {
   msg?: string;
   /** Server prose for the same failure; kept for the CLI and as UI fallback. */
   message?: string;
+};
+
+/**
+ * One minimal completion sent to the endpoint, which is the only thing that proves a
+ * listed model can actually answer. Many relays serve a full `/v1/models` catalog and
+ * then 5xx on the models in it, so catalog success alone is not a working endpoint.
+ *
+ * Carried as its own shape rather than folded into {@link ProbeResult} because the two
+ * outcomes are independent: the catalog can succeed while the completion fails, and the
+ * UI reports them as separate lines.
+ */
+export type ProbeCompletion = {
+  ok: boolean;
+  /** The model id actually sent, which may differ from the one the caller asked for. */
+  model?: string;
+  /** Wire protocol used: `openai-chat`, `openai-responses` or `anthropic-messages`. */
+  protocol?: string;
+  status?: number;
+  latencyMs?: number;
+  requestUrl?: string;
+  /** True when the reply carried assistant text rather than only a bare envelope. */
+  produced?: boolean;
+  code?: string;
+  params?: MessageParams;
+  data?: MessageParams;
+  msg?: string;
+  message?: string;
+  /**
+   * When this outcome was replayed from the per-profile cache rather than sent now,
+   * the ISO timestamp of the request that produced it.
+   */
+  cachedAt?: string;
 };
 
 export type ProbeResponse = {

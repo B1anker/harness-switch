@@ -182,6 +182,7 @@ export function cliUsage(): string {
     '  --json, -j    machine-readable JSON output',
     '  --yes, -y     skip confirmation for activate, official and delete',
     "  --probe       test the active profile's endpoint (makes a real request)",
+    '  --completion  also send one minimal completion; proves the model answers, costs a token',
     '  --harness H   limit doctor to one harness',
     '  --strict      make doctor exit 1 when any check has error status',
     '  --user USER   run an API-backed command for this Unix user',

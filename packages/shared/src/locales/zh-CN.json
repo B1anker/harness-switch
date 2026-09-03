@@ -497,7 +497,9 @@
       "probeOfficialLogin": "{{harness}} 处于官方账号登录状态，无自定义端点可探测",
       "probeMissingCredential": "配置 {{profile}} 缺少 Base URL 或 API Key，无法探测",
       "probeOk": "配置 {{profile}} 的端点可达",
-      "probeFailed": "配置 {{profile}} 的连通性探测失败"
+      "probeFailed": "配置 {{profile}} 的连通性探测失败",
+      "completionOk": "模型 {{model}} 补全成功（{{latencyMs}}ms）",
+      "completionFailed": "模型 {{model}} 补全失败：端点可达，但这个模型无法作答"
     }
   },
   "notice": {
@@ -667,7 +669,11 @@
       "networkError": "无法连接到端点（DNS、拒绝连接或 TLS 失败）",
       "unauthorized": "端点可达但拒绝了凭据（HTTP {{status}}），请检查 API Key",
       "httpError": "端点返回 HTTP {{status}}",
-      "invalidResponse": "响应不是已知的模型目录格式"
+      "invalidResponse": "响应不是已知的模型目录格式",
+      "missingModel": "没有可用于补全测试的模型：请填写模型名称，或先获取模型目录",
+      "completionUnsupported": "端点不接受任何已知的补全协议",
+      "completionHttpError": "模型 {{model}} 的补全请求返回 HTTP {{status}}：目录里有这个模型，但它无法作答",
+      "completionInvalid": "补全响应不是已知的格式，无法确认模型真的作答"
     }
   },
   "warning": {
@@ -905,9 +911,14 @@
   },
   "probe": {
     "action": "测试连接",
+    "completionAction": "测试补全",
+    "completionHint": "真实发送一条最小请求，验证模型确实能作答（会消耗一两个 token）。",
     "probing": "正在测试…",
     "ok": "连接正常 · {{latencyMs}}ms · {{count}} 个模型",
     "okNoCatalog": "连接正常 · {{latencyMs}}ms · 端点未提供模型目录",
+    "completionOk": "模型 {{model}} 可作答 · {{latencyMs}}ms",
+    "completionCached": "模型 {{model}} 可作答 · 缓存于 {{at}}",
+    "completionFailedCached": "缓存于 {{at}}",
     "catalogHint": "已获取 {{count}} 个模型，点击“模型”输入框可从列表选择。",
     "missingBaseUrl": "请先填写至少一个 endpoint URL 再测试。"
   }

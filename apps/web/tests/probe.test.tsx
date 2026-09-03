@@ -131,7 +131,8 @@ test('editing a saved profile without retyping the key probes stored credentials
   fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
 
   await waitFor(() => expect(calls.saved).toHaveLength(1));
-  expect(calls.saved[0]).toEqual(['claude', 'openrouter-main']);
+  // No options at all, so the server's own defaults apply and no completion is sent.
+  expect(calls.saved[0]).toEqual(['claude', 'openrouter-main', undefined]);
   expect(calls.draft).toEqual([]);
 });
 
@@ -192,6 +193,127 @@ test('editing any relevant input invalidates a previous probe result', async () 
   expect(screen.queryByText(/连接正常/)).toBeNull();
   // And the stale catalog no longer drives the model input.
   expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）').getAttribute('list')).toBeNull();
+});
+
+/* ------------------------------------------------------------------ */
+/* Completion probe                                                    */
+/* ------------------------------------------------------------------ */
+
+test('the completion is opt-in: unchecked, the request carries no completion flag', async () => {
+  const calls = setupProfileDialog();
+  renderCreateDialog();
+
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-typed');
+  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+  await waitFor(() => expect(calls.draft).toHaveLength(1));
+  // A token is only ever spent on an explicit ask.
+  expect(calls.draft[0]?.[0]).toEqual({
+    baseUrl: 'https://api.example.com/v1',
+    apiKey: 'sk-typed',
+  });
+});
+
+test('checking the box asks for a completion against the typed model', async () => {
+  const calls = setupProfileDialog();
+  renderCreateDialog();
+
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-typed');
+  fill('回退模型（ANTHROPIC_MODEL）', 'model-a');
+  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+  await waitFor(() => expect(calls.draft).toHaveLength(1));
+  expect(calls.draft[0]?.[0]).toEqual({
+    baseUrl: 'https://api.example.com/v1',
+    apiKey: 'sk-typed',
+    completion: true,
+    model: 'model-a',
+  });
+});
+
+test('a saved-profile completion asks to bypass any cached verdict', async () => {
+  const calls = setupProfileDialog();
+  render(
+    <ProfileDialog harness={harnessFixture()} profile={profileFixture()} onOpenChange={() => {}} />,
+  );
+
+  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+  await waitFor(() => expect(calls.saved).toHaveLength(1));
+  // Clicking the button means "test it now", so a stored outcome must not be replayed.
+  expect(calls.saved[0]?.[2]).toMatchObject({ completion: true, refresh: true });
+});
+
+test('a listed model that does not answer renders red under a green catalog line', async () => {
+  setupProfileDialog({
+    draft: {
+      ...OK_RESULT,
+      completion: {
+        ok: false,
+        model: 'model-a',
+        status: 500,
+        code: 'probe.completionHttpError',
+        params: { status: 500, model: 'model-a' },
+        message: '模型 model-a 的补全请求返回 HTTP 500',
+      },
+    },
+  });
+  renderCreateDialog();
+
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-typed');
+  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+  // Both verdicts are shown: the endpoint is reachable and the model still cannot serve.
+  expect(await screen.findByText('连接正常 · 42ms · 2 个模型')).toBeInTheDocument();
+  expect(
+    await screen.findByText('模型 model-a 的补全请求返回 HTTP 500：目录里有这个模型，但它无法作答'),
+  ).toBeInTheDocument();
+});
+
+test('a working model reports its own success line', async () => {
+  setupProfileDialog({
+    draft: {
+      ...OK_RESULT,
+      completion: { ok: true, model: 'model-a', latencyMs: 640, produced: true },
+    },
+  });
+  renderCreateDialog();
+
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-typed');
+  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+  expect(await screen.findByText('模型 model-a 可作答 · 640ms')).toBeInTheDocument();
+});
+
+test('a replayed outcome says when it was measured rather than claiming it is current', async () => {
+  setupProfileDialog({
+    saved: {
+      ...OK_RESULT,
+      completion: {
+        ok: true,
+        model: 'model-a',
+        latencyMs: 640,
+        cachedAt: '2026-09-03T04:05:00.000Z',
+      },
+    },
+  });
+  render(
+    <ProfileDialog harness={harnessFixture()} profile={profileFixture()} onOpenChange={() => {}} />,
+  );
+
+  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+
+  // "answered" and "answered hours ago" are different claims; the line must not blur them.
+  expect(await screen.findByText(/model-a/)).toHaveTextContent(/缓存/);
 });
 
 /* ------------------------------------------------------------------ */

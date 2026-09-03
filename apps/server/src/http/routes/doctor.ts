@@ -9,10 +9,13 @@ export function createDoctorRoutes(services: InstantiationService): Hono {
 
   app.get('/', async (c) => {
     const probe = c.req.query('probe') === '1';
+    // `completion` implies `probe`; the service applies that rule, so both flags travel
+    // as the caller sent them.
+    const completion = c.req.query('completion') === '1';
     const harnessParam = c.req.query('harness');
     const harness =
       harnessParam && harnessParam.length > 0 ? (harnessParam as HarnessId) : undefined;
-    return c.json(await doctor.run({ probe, harness }));
+    return c.json(await doctor.run({ probe, completion, harness }));
   });
 
   return app;

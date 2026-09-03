@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -346,6 +347,8 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
   const [probeError, setProbeError] = useState<MessageLine | null>(null);
   /** Which drafted endpoint the probe section targets; defaults to the first. */
   const [probeTarget, setProbeTarget] = useState(0);
+  /** Opt-in: a completion costs the user a token, so it is never sent unasked. */
+  const [testCompletion, setTestCompletion] = useState(false);
 
   // A probe result describes one exact input combination; edits invalidate it.
   const endpointsSignature = JSON.stringify(endpoints);
@@ -400,6 +403,9 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
       const result = await probeDraft({
         baseUrl: selected.endpoint.baseUrl,
         ...(apiKey.trim() ? { apiKey } : { providerId: entry?.id ?? '' }),
+        // No model is named: a vault entry owns a credential, not a model, so the
+        // completion goes to whatever the catalog listed first.
+        ...(testCompletion ? { completion: true } : {}),
       });
       setProbeResult(result);
     } catch (err) {
@@ -626,6 +632,8 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
           probing={probing}
           result={probeResult}
           probeError={probeError}
+          completion={testCompletion}
+          onCompletionChange={setTestCompletion}
           onProbe={runProbe}
         />
       </div>
@@ -671,6 +679,8 @@ function VaultProbeRow({
   probing,
   result,
   probeError,
+  completion,
+  onCompletionChange,
   onProbe,
 }: {
   options: VaultProbeOption[];
@@ -682,6 +692,8 @@ function VaultProbeRow({
   probing: boolean;
   result: ProbeResult | null;
   probeError?: MessageLine | null;
+  completion: boolean;
+  onCompletionChange: (value: boolean) => void;
   onProbe: () => void | Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -724,6 +736,17 @@ function VaultProbeRow({
           </SelectContent>
         </Select>
       ) : null}
+      <label
+        htmlFor="vault-probe-completion"
+        className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+      >
+        <Checkbox
+          id="vault-probe-completion"
+          checked={completion}
+          onCheckedChange={(checked) => onCompletionChange(checked === true)}
+        />
+        {t('probe.completionAction')}
+      </label>
       {probeError ? (
         <span className="flex items-center gap-1.5 text-sm text-destructive">
           <XCircle className="size-4 shrink-0" aria-hidden />

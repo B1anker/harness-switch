@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
@@ -10,6 +10,7 @@ import {
   seedProfile,
   toCandidate,
 } from './detect';
+import { apiFieldProtocol } from './protocol';
 import { numeric, parseYamlDocument, tryParseYamlDocument, valueString } from './serialize';
 import type {
   AdapterProfile,
@@ -22,6 +23,7 @@ import type {
 
 const SETTINGS = 'settings';
 const CREDENTIALS = 'credentials';
+const DEFAULT_API = 'openai-responses';
 const DEFAULT_CONTEXT = 262144;
 const DEFAULT_MAX_TOKENS = 32768;
 
@@ -86,7 +88,7 @@ export class DshAdapter implements HarnessAdapter {
       label: 'API 协议',
       labelCode: 'harness.field.dsh.api.label',
       kind: 'select',
-      defaultValue: 'openai-responses',
+      defaultValue: DEFAULT_API,
       options: [
         { value: 'openai-responses', label: 'openai-responses' },
         { value: 'openai-completions', label: 'openai-completions' },
@@ -156,6 +158,16 @@ export class DshAdapter implements HarnessAdapter {
     return {};
   }
 
+  /**
+   * The `api` field only governs custom providers. The official route goes through DSH's
+   * own `llm-deepseek` provider, which talks to DeepSeek's OpenAI-compatible surface.
+   */
+  completionProtocol(profile: AdapterProfile): CompletionProtocol | undefined {
+    return this.isOfficial(profile)
+      ? 'openai-chat'
+      : apiFieldProtocol(profile.extras.api, 'openai-responses');
+  }
+
   validate(profile: AdapterProfile): void {
     if (!profile.model.trim()) {
       throw new HttpError(400, 'DeepSeek Harness 需要填写模型名称', {
@@ -187,7 +199,7 @@ export class DshAdapter implements HarnessAdapter {
       settings.setIn(['llm-pi-ai', 'providers', providerId], {
         displayName: profile.name,
         apiKeyEnv: credentialRef,
-        api: profile.extras.api || 'openai-responses',
+        api: profile.extras.api || DEFAULT_API,
         baseURL: profile.baseUrl,
         models,
       });

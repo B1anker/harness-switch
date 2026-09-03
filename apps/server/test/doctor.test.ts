@@ -56,6 +56,29 @@ function fakeBin(name: string): void {
   writeFileSync(join(binDir, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
 }
 
+/**
+ * Replaces the suite's throwing `fetch` with a relay that serves a catalog and answers
+ * completions. Returns the POSTs it received, which is how a test proves a token was or
+ * was not spent. The update check keeps failing, since it is a GET to a non-catalog path.
+ */
+function stubEndpoint(options: { completionStatus?: number } = {}): () => string[] {
+  const posts: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(typeof input === 'string' ? input : input.toString());
+    if ((init?.method ?? 'GET') === 'POST') {
+      posts.push(url.pathname);
+      return options.completionStatus
+        ? Response.json({ error: 'model unavailable' }, { status: options.completionStatus })
+        : Response.json({ content: [{ type: 'text', text: 'hi' }] });
+    }
+    if (url.pathname.endsWith('/models')) {
+      return Response.json({ data: [{ id: 'claude-sonnet-4-5' }] });
+    }
+    throw new Error('offline');
+  }) as unknown as typeof globalThis.fetch;
+  return () => posts;
+}
+
 function checksOf(report: DoctorResponse, harness: string, id: string): DoctorCheck[] {
   return (
     report.items
@@ -212,6 +235,67 @@ describe('doctor', () => {
     const check = checksOf(report, 'claude', 'claude.probe')[0];
     expect(check?.status).toBe('unknown');
     expect(check?.code).toBe(DOCTOR_CODES.probeNoProfile);
+  });
+
+  test('no completion is sent unless it was asked for', async () => {
+    fakeBin('claude');
+    activateClaude();
+    const posts = stubEndpoint();
+    const report = await doctor().run({ harness: 'claude', probe: true });
+    expect(checksOf(report, 'claude', 'claude.probe')[0]?.status).toBe('ok');
+    // A probe alone must never bill a token: the completion check is absent entirely.
+    expect(checksOf(report, 'claude', 'claude.completion')).toEqual([]);
+    expect(posts()).toEqual([]);
+  });
+
+  test('a listed model that does not answer is its own error next to a healthy probe', async () => {
+    fakeBin('claude');
+    activateClaude();
+    // The case this feature exists for: the catalog is fine, the model 500s.
+    stubEndpoint({ completionStatus: 500 });
+    const report = await doctor().run({ harness: 'claude', completion: true });
+
+    // Reachability is reported as ok, because it is: the two verdicts stay separate.
+    expect(checksOf(report, 'claude', 'claude.probe')[0]?.status).toBe('ok');
+    const check = checksOf(report, 'claude', 'claude.completion')[0];
+    expect(check?.status).toBe('error');
+    expect(check?.code).toBe(DOCTOR_CODES.completionFailed);
+    expect(check?.params?.model).toBe('claude-sonnet-4-5');
+    expect(check?.params?.reason).toBe(PROBE_CODES.completionHttpError);
+    const detail = check?.detail as { model?: string; status?: number } | undefined;
+    expect(detail?.model).toBe('claude-sonnet-4-5');
+    expect(detail?.status).toBe(500);
+  });
+
+  test('--completion implies the probe rather than silently doing nothing', async () => {
+    fakeBin('claude');
+    activateClaude();
+    stubEndpoint();
+    // `probe` is deliberately left off: a completion is only ever sent as part of one.
+    const report = await doctor().run({ harness: 'claude', completion: true });
+    expect(checksOf(report, 'claude', 'claude.probe')[0]?.status).toBe('ok');
+    const check = checksOf(report, 'claude', 'claude.completion')[0];
+    expect(check?.status).toBe('ok');
+    expect(check?.code).toBe(DOCTOR_CODES.completionOk);
+  });
+
+  test('a repeated run replays the cached completion instead of paying again', async () => {
+    fakeBin('claude');
+    activateClaude();
+    const posts = stubEndpoint();
+    await doctor().run({ harness: 'claude', completion: true });
+    expect(posts()).toHaveLength(1);
+
+    // The whole point of caching per profile: doctor on a five-harness machine must not
+    // bill a completion per harness per run.
+    const second = await doctor().run({ harness: 'claude', completion: true });
+    expect(posts()).toHaveLength(1);
+    const check = checksOf(second, 'claude', 'claude.completion')[0];
+    expect(check?.status).toBe('ok');
+    // A replay says so, in prose and in detail: "answered" and "answered hours ago" differ.
+    const detail = check?.detail as { cachedAt?: string } | undefined;
+    expect(typeof detail?.cachedAt).toBe('string');
+    expect(messageOf(check)).toContain('缓存');
   });
 
   test('the probe skips harnesses in official-login mode instead of crashing', async () => {

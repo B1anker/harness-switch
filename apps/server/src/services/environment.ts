@@ -22,6 +22,8 @@ type EnvironmentFiles = {
   sessions: string;
   vault: string;
   github: string;
+  /** Cached completion-probe outcomes, keyed by harness and profile. Disposable. */
+  probeCache: string;
 };
 
 export interface IEnvironmentService {
@@ -109,6 +111,7 @@ export class EnvironmentService implements IEnvironmentService {
       sessions: join(dataDir, 'sessions.json'),
       vault: join(dataDir, 'vault.json'),
       github: join(dataDir, 'github.json'),
+      probeCache: join(dataDir, 'probe-cache.json'),
     };
   }
 
