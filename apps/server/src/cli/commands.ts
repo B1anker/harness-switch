@@ -123,10 +123,10 @@ function validateCommand(command: string, positional: string[], flags: CliFlags)
     delete: { flags: ['yes'], min: 2, max: 2, usage: 'delete <harness> <profile> [--yes]' },
     providers: { min: 0, max: 0, usage: 'providers [options]' },
     doctor: {
-      flags: ['probe', 'harness', 'strict'],
+      flags: ['probe', 'completion', 'harness', 'strict'],
       min: 0,
       max: 0,
-      usage: 'doctor [--probe] [--harness H] [--strict]',
+      usage: 'doctor [--probe] [--completion] [--harness H] [--strict]',
     },
     plan: { min: 2, max: 2, usage: 'plan <harness> <profile> [options]' },
     activate: {
@@ -283,6 +283,11 @@ async function cmdDoctor(client: CliClient, flags: CliFlags, json: OutputMode): 
   const query = new URLSearchParams();
   if (hasFlag(flags, 'probe')) {
     query.set('probe', '1');
+  }
+  // The server treats a completion request as implying the probe, so --completion alone
+  // is enough; both flags together are the same thing said twice.
+  if (hasFlag(flags, 'completion')) {
+    query.set('completion', '1');
   }
   const harness = flagValue(flags, 'harness');
   if (harness) {

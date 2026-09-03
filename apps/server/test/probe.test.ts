@@ -8,7 +8,7 @@ import { createApp } from '../src/app';
 import { createServices } from '../src/bootstrap';
 import { IAuthService } from '../src/services/auth';
 import { IEnvironmentService } from '../src/services/environment';
-import { extractModels, ProbeService } from '../src/services/probe';
+import { extractCompletionText, extractModels, ProbeService } from '../src/services/probe';
 
 /**
  * A local relay that speaks enough of the model-catalog contract to exercise every
@@ -70,6 +70,50 @@ function startAnthropicOnly(): { stop(): void; port: number } {
     },
   });
   return { stop: () => server.stop(true), port: server.port! };
+}
+
+type CompletionRelay = {
+  stop(): void;
+  port: number;
+  /** Every completion request received, so a test can assert on protocol and body. */
+  completions: { path: string; body: Record<string, unknown> }[];
+};
+
+/**
+ * The failure this whole feature exists to catch: a relay whose catalog is perfect and
+ * whose models do not answer. `answer` decides what the completion endpoints reply with,
+ * so one helper covers both the healthy and the 5xx case.
+ */
+function startCompletionRelay(answer: (path: string) => Response): CompletionRelay {
+  const completions: { path: string; body: Record<string, unknown> }[] = [];
+  const server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const url = new URL(request.url);
+      if (request.headers.get('authorization') !== 'Bearer sk-test') {
+        return Response.json({ error: 'bad credential' }, { status: 401 });
+      }
+      if (url.pathname === '/v1/models') {
+        return Response.json({ data: [{ id: 'relay-model' }, { id: 'relay-other' }] });
+      }
+      if (request.method === 'POST') {
+        completions.push({
+          path: url.pathname,
+          body: (await request.json()) as Record<string, unknown>,
+        });
+        return answer(url.pathname);
+      }
+      return Response.json({ error: 'no catalog here' }, { status: 404 });
+    },
+  });
+  return { stop: () => server.stop(true), port: server.port!, completions };
+}
+
+/** An OpenAI chat envelope carrying one token of assistant text. */
+function chatReply(): Response {
+  return Response.json({
+    choices: [{ message: { role: 'assistant', content: 'hi' } }],
+  });
 }
 
 describe('probe service', () => {
@@ -206,6 +250,277 @@ describe('probe service', () => {
     expect(extractModels(JSON.stringify({ data: [] }))).toEqual([]);
     expect(extractModels('not json')).toBeNull();
     expect(extractModels(JSON.stringify({ unrelated: true }))).toBeNull();
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Completion probe                                                    */
+/* ------------------------------------------------------------------ */
+
+describe('completion probe', () => {
+  const probe = new ProbeService();
+
+  test('no completion is sent unless it was asked for', async () => {
+    const relay = startCompletionRelay(chatReply);
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+      });
+      expect(result.ok).toBe(true);
+      expect(result.completion).toBeUndefined();
+      // The point of the flag: an unasked-for probe never bills a token.
+      expect(relay.completions).toEqual([]);
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('a catalog that lists a model the model cannot serve reports both verdicts', async () => {
+    // The exact shape of the bug this test exists for: /v1/models is perfect, the model 500s.
+    const relay = startCompletionRelay(() =>
+      Response.json({ error: 'upstream exploded' }, { status: 500 }),
+    );
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+        protocol: 'openai-chat',
+      });
+      // The catalog read still succeeded, and says so: the two verdicts stay separate.
+      expect(result.ok).toBe(true);
+      expect(result.models).toEqual(['relay-model', 'relay-other']);
+      expect(result.completion?.ok).toBe(false);
+      expect(result.completion?.code).toBe(PROBE_CODES.completionHttpError);
+      expect(result.completion?.status).toBe(500);
+      // The model name is the detail that makes the failure actionable.
+      expect(result.completion?.params?.model).toBe('relay-model');
+      expect(result.completion?.model).toBe('relay-model');
+      expect(result.completion?.protocol).toBe('openai-chat');
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('a working model reports the completion as its own success', async () => {
+    const relay = startCompletionRelay(chatReply);
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+        protocol: 'openai-chat',
+      });
+      expect(result.ok).toBe(true);
+      expect(result.completion?.ok).toBe(true);
+      expect(result.completion?.produced).toBe(true);
+      expect(typeof result.completion?.latencyMs).toBe('number');
+      expect(relay.completions).toHaveLength(1);
+      expect(relay.completions[0]?.path).toBe('/v1/chat/completions');
+      // Minimal by construction: one token of budget, no streaming to drain.
+      expect(relay.completions[0]?.body).toMatchObject({ model: 'relay-model', max_tokens: 1 });
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('falls back to the profile-less model when the caller names none', async () => {
+    const relay = startCompletionRelay(chatReply);
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        protocol: 'openai-chat',
+      });
+      // With no model named, the catalog's first id is the only sensible subject.
+      expect(result.completion?.model).toBe('relay-model');
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('only a 404 advances to the next protocol', async () => {
+    // Anthropic-style: the two OpenAI paths do not exist, /v1/messages does.
+    const relay = startCompletionRelay((path) =>
+      path === '/v1/messages'
+        ? Response.json({ content: [{ type: 'text', text: 'hi' }] })
+        : Response.json({ error: 'not found' }, { status: 404 }),
+    );
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+      });
+      expect(result.completion?.ok).toBe(true);
+      expect(result.completion?.protocol).toBe('anthropic-messages');
+      expect(relay.completions.map((call) => call.path)).toEqual([
+        '/v1/chat/completions',
+        '/v1/responses',
+        '/v1/messages',
+      ]);
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('a 500 ends the attempt instead of blaming the next protocol', async () => {
+    const relay = startCompletionRelay(() => new Response(null, { status: 502 }));
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+      });
+      expect(result.completion?.status).toBe(502);
+      // One attempt only: a real endpoint verdict is not a reason to keep guessing.
+      expect(relay.completions).toHaveLength(1);
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('the caller-named protocol goes first without dropping the fallbacks', async () => {
+    const relay = startCompletionRelay((path) =>
+      path === '/v1/messages'
+        ? Response.json({ content: [{ type: 'text', text: 'hi' }] })
+        : Response.json({ error: 'not found' }, { status: 404 }),
+    );
+    try {
+      await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+        protocol: 'anthropic-messages',
+      });
+      // The harness's own protocol answered first, so nothing else was tried.
+      expect(relay.completions.map((call) => call.path)).toEqual(['/v1/messages']);
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('a 200 carrying a relay error object is not a working model', async () => {
+    const relay = startCompletionRelay(() =>
+      Response.json({ error: { message: 'no such model' } }, { status: 200 }),
+    );
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+        protocol: 'openai-chat',
+      });
+      expect(result.completion?.ok).toBe(false);
+      expect(result.completion?.code).toBe(PROBE_CODES.completionInvalid);
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('the completion still runs when the catalog fails, given a named model', async () => {
+    // Relays that serve no catalog at all yet complete fine are common; reporting only
+    // "no model catalog" would hide that the endpoint works.
+    const relay = startCompletionRelay(chatReply);
+    const port = relay.port;
+    try {
+      const result = await probe.probe({
+        // A path with no catalog under it: /nope/v1/models and /nope/models both 404.
+        baseUrl: `http://127.0.0.1:${port}/nope`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+        protocol: 'openai-chat',
+      });
+      expect(result.ok).toBe(false);
+      expect(result.completion?.ok).toBe(true);
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('a catalog failure with no model to fall back on says so', async () => {
+    const relay = startCompletionRelay(chatReply);
+    const port = relay.port;
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${port}/nope`,
+        apiKey: 'sk-test',
+        completion: true,
+      });
+      expect(result.ok).toBe(false);
+      expect(result.completion?.ok).toBe(false);
+      expect(result.completion?.code).toBe(PROBE_CODES.missingModel);
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('the Responses protocol asks for the smallest budget that API accepts', async () => {
+    const relay = startCompletionRelay((path) =>
+      path === '/v1/responses'
+        ? Response.json({ output_text: 'hi' })
+        : Response.json({ error: 'not found' }, { status: 404 }),
+    );
+    try {
+      const result = await probe.probe({
+        baseUrl: `http://127.0.0.1:${relay.port}`,
+        apiKey: 'sk-test',
+        completion: true,
+        model: 'relay-model',
+        protocol: 'openai-responses',
+      });
+      expect(result.completion?.ok).toBe(true);
+      // 16 rather than 1: the Responses API rejects anything lower.
+      expect(relay.completions[0]?.body).toMatchObject({ max_output_tokens: 16 });
+    } finally {
+      relay.stop();
+    }
+  });
+
+  test('an empty answer still proves the model ran', () => {
+    // With max_tokens: 1 the whole budget can go to a stop token. A well-formed envelope
+    // carrying no text is a success; only an unrecognised shape is a failure.
+    expect(extractCompletionText(JSON.stringify({ choices: [{ message: { content: '' } }] }))).toBe(
+      '',
+    );
+    expect(extractCompletionText(JSON.stringify({ content: [] }))).toBe('');
+  });
+
+  test('extractCompletionText handles every known completion envelope', () => {
+    expect(
+      extractCompletionText(JSON.stringify({ choices: [{ message: { content: 'hello' } }] })),
+    ).toBe('hello');
+    expect(extractCompletionText(JSON.stringify({ choices: [{ text: 'legacy' }] }))).toBe('legacy');
+    expect(
+      extractCompletionText(JSON.stringify({ choices: [{ delta: { content: 'chunk' } }] })),
+    ).toBe('chunk');
+    expect(
+      extractCompletionText(JSON.stringify({ content: [{ type: 'text', text: 'anthropic' }] })),
+    ).toBe('anthropic');
+    expect(
+      extractCompletionText(
+        JSON.stringify({ output: [{ content: [{ type: 'output_text', text: 'responses' }] }] }),
+      ),
+    ).toBe('responses');
+    expect(extractCompletionText(JSON.stringify({ output_text: 'convenience' }))).toBe(
+      'convenience',
+    );
+
+    // Not completions at all: an HTML error page, a bare value, an unknown envelope.
+    expect(extractCompletionText('<html>error</html>')).toBeNull();
+    expect(extractCompletionText(JSON.stringify('just a string'))).toBeNull();
+    expect(extractCompletionText(JSON.stringify({ unrelated: true }))).toBeNull();
+    // A relay reporting failure with a 200 status.
+    expect(extractCompletionText(JSON.stringify({ error: { message: 'nope' } }))).toBeNull();
   });
 });
 

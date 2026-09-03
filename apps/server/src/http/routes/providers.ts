@@ -116,7 +116,17 @@ export function createProviderRoutes(services: InstantiationService): Hono {
         },
       } satisfies ProbeResponse);
     }
-    return c.json({ result: await probe.probe({ baseUrl, apiKey }) } satisfies ProbeResponse);
+    return c.json({
+      result: await probe.probe({
+        baseUrl,
+        apiKey,
+        // A vault entry owns a credential, not a model, so there is no per-profile
+        // outcome to cache: the model comes from the request or from the catalog.
+        completion: body.completion,
+        model: body.model,
+        protocol: body.protocol,
+      }),
+    } satisfies ProbeResponse);
   });
 
   app.delete('/:id', (c) => {

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import type { IEnvironmentService } from '../environment';
 import {
   providerId as baseProviderId,
@@ -150,6 +150,11 @@ export class CodexAdapter implements HarnessAdapter {
       return {};
     }
     return { [this.envKeyName(profile)]: profile.apiKey };
+  }
+
+  /** `chat` was removed from Codex; `responses` is the only protocol it still speaks. */
+  completionProtocol(): CompletionProtocol {
+    return 'openai-responses';
   }
 
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {

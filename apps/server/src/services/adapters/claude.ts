@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import type { IEnvironmentService } from '../environment';
 import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
@@ -277,6 +277,11 @@ export class ClaudeAdapter implements HarnessAdapter {
       }
     }
     return vars;
+  }
+
+  /** Claude Code only ever speaks the Anthropic Messages API. */
+  completionProtocol(): CompletionProtocol {
+    return 'anthropic-messages';
   }
 
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {

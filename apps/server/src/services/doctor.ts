@@ -9,6 +9,7 @@ import {
   type HarnessId,
   type MessageParams,
   PROBE_CODES,
+  type ProbeCompletion,
 } from '@seaveyon/harness-switch-shared';
 import { createDecorator, inject } from '../di';
 import { checkForUpdate } from '../update';
@@ -19,12 +20,23 @@ import { IDriftService } from './drift';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { IProbeService } from './probe';
+import { IProbeCacheService } from './probe-cache';
+import { probeSavedProfile } from './probe-profile';
 import { IProfileService } from './profiles';
 import { IHarnessRegistry } from './registry';
 
 export type DoctorOptions = {
   /** Run the connectivity probe against each harness's active profile. */
   probe?: boolean;
+  /**
+   * Also send one minimal completion during the probe, which is the only proof the
+   * active model really answers. Costs a token per harness, so it is opt-in even
+   * when `probe` is on — and a cached outcome is replayed when one is still valid.
+   *
+   * Implies `probe`: a completion is only ever sent as part of one, so asking for it
+   * alone turns the probe on rather than silently doing nothing.
+   */
+  completion?: boolean;
   /** Restrict the report to one harness. */
   harness?: HarnessId;
 };
@@ -57,6 +69,7 @@ const BIN_NAMES: Partial<Record<HarnessId, string>> = {
   IDriftService,
   IProfileService,
   IProbeService,
+  IProbeCacheService,
 )
 export class DoctorService implements IDoctorService {
   declare readonly _serviceBrand: undefined;
@@ -70,6 +83,7 @@ export class DoctorService implements IDoctorService {
     private readonly drift: IDriftService,
     private readonly profiles: IProfileService,
     private readonly probe: IProbeService,
+    private readonly probeCache: IProbeCacheService,
   ) {}
 
   async run(options: DoctorOptions = {}): Promise<DoctorResponse> {
@@ -77,12 +91,14 @@ export class DoctorService implements IDoctorService {
       ? [this.harnesses.require(options.harness)]
       : this.harnesses.list().map((item) => item.id);
 
+    const completion = options.completion === true;
+
     // Probes run concurrently: five endpoints answered serially would turn a single
     // slow relay into a visibly stalled report.
     const items: DoctorReport[] = await Promise.all(
       harnessIds.map(async (harness) => ({
         harness,
-        checks: await this.harnessChecks(harness, options.probe === true),
+        checks: await this.harnessChecks(harness, completion || options.probe === true, completion),
       })),
     );
 
@@ -91,7 +107,11 @@ export class DoctorService implements IDoctorService {
     return { items, updatedAvailable: update.updateAvailable };
   }
 
-  private async harnessChecks(harness: HarnessId, probe: boolean): Promise<DoctorCheck[]> {
+  private async harnessChecks(
+    harness: HarnessId,
+    probe: boolean,
+    completion: boolean,
+  ): Promise<DoctorCheck[]> {
     const checks: DoctorCheck[] = [];
 
     // Installation: PATH CLIs must be findable; web-service harnesses skip this.
@@ -261,47 +281,64 @@ export class DoctorService implements IDoctorService {
 
     // Connectivity probe: a real request against the active profile's base URL with
     // its stored credential. A failure here means the tool would fail too, so it
-    // reports as an error rather than a warning.
+    // reports as an error rather than a warning. With `completion` it also sends one
+    // minimal completion, which adds a second check of its own.
     if (probe) {
-      checks.push(await this.probeCheck(harness));
+      checks.push(...(await this.probeChecks(harness, completion)));
     }
 
     return checks;
   }
 
-  private async probeCheck(harness: HarnessId): Promise<DoctorCheck> {
+  /**
+   * The catalog verdict and the completion verdict are separate checks because they fail
+   * separately: a relay that lists the model and then 5xx on it reports probe ok and
+   * completion error, which is exactly the state a single check would hide.
+   */
+  private async probeChecks(harness: HarnessId, completion: boolean): Promise<DoctorCheck[]> {
     const active = this.activation.getActive(harness);
     if (!active) {
-      return unknown(
-        `${harness}.probe`,
-        '未激活任何配置，跳过连通性探测',
-        DOCTOR_CODES.probeNoProfile,
-        undefined,
-        { probed: false },
-      );
+      return [
+        unknown(
+          `${harness}.probe`,
+          '未激活任何配置，跳过连通性探测',
+          DOCTOR_CODES.probeNoProfile,
+          undefined,
+          { probed: false },
+        ),
+      ];
     }
     // Official-login mode points at the tool's own service, not a profile-owned
     // endpoint; there is nothing of ours to probe, and no stored credential either.
     if (active.official === true) {
-      return unknown(
-        `${harness}.probe`,
-        `${HARNESS_LABELS[harness]} 处于官方账号登录状态，无自定义端点可探测`,
-        DOCTOR_CODES.probeOfficialLogin,
-        undefined,
-        { probed: false },
-      );
+      return [
+        unknown(
+          `${harness}.probe`,
+          `${HARNESS_LABELS[harness]} 处于官方账号登录状态，无自定义端点可探测`,
+          DOCTOR_CODES.probeOfficialLogin,
+          undefined,
+          { probed: false },
+        ),
+      ];
     }
     const decrypted = this.profiles.decrypt(harness, active.name);
     if (!decrypted.baseUrl || !decrypted.apiKey) {
-      return warn(
-        `${harness}.probe`,
-        `配置 ${active.name} 缺少 Base URL 或 API Key，无法探测`,
-        DOCTOR_CODES.probeMissingCredential,
-        { profile: active.name },
-        { probed: false, baseUrl: decrypted.baseUrl || null },
-      );
+      return [
+        warn(
+          `${harness}.probe`,
+          `配置 ${active.name} 缺少 Base URL 或 API Key，无法探测`,
+          DOCTOR_CODES.probeMissingCredential,
+          { profile: active.name },
+          { probed: false, baseUrl: decrypted.baseUrl || null },
+        ),
+      ];
     }
-    const result = await this.probe.probe(decrypted);
+    const result = await probeSavedProfile(
+      { probe: this.probe, cache: this.probeCache, adapter: this.adapters.get(harness) },
+      harness,
+      decrypted,
+      { completion },
+    );
     const detail = {
       probed: true,
       baseUrl: result.requestUrl ?? decrypted.baseUrl,
@@ -310,22 +347,24 @@ export class DoctorService implements IDoctorService {
       modelCount: result.models?.length ?? null,
       reason: result.code ?? null,
     };
-    if (result.ok) {
-      return ok(
-        `${harness}.probe`,
-        `端点可达（${result.latencyMs ?? '?'}ms，${result.models?.length ?? 0} 个模型）`,
-        DOCTOR_CODES.probeOk,
-        { profile: active.name },
-        detail,
-      );
-    }
-    return error(
-      `${harness}.probe`,
-      `连通性探测失败：${result.message ?? '未知原因'}`,
-      DOCTOR_CODES.probeFailed,
-      { profile: active.name, reason: result.code ?? PROBE_CODES.networkError },
-      detail,
-    );
+    const catalog = result.ok
+      ? ok(
+          `${harness}.probe`,
+          `端点可达（${result.latencyMs ?? '?'}ms，${result.models?.length ?? 0} 个模型）`,
+          DOCTOR_CODES.probeOk,
+          { profile: active.name },
+          detail,
+        )
+      : error(
+          `${harness}.probe`,
+          `连通性探测失败：${result.message ?? '未知原因'}`,
+          DOCTOR_CODES.probeFailed,
+          { profile: active.name, reason: result.code ?? PROBE_CODES.networkError },
+          detail,
+        );
+    return result.completion
+      ? [catalog, completionCheck(harness, active.name, result.completion)]
+      : [catalog];
   }
 
   private commandExists(bin: string): boolean {
@@ -427,6 +466,44 @@ function unknown(
   detail?: unknown,
 ): DoctorCheck {
   return makeCheck(id, message, 'unknown', code, params, detail);
+}
+
+/**
+ * The completion verdict as its own check. A cached outcome says so in its prose and in
+ * `detail.cachedAt`, because "the model answered" and "the model answered four hours ago"
+ * are different claims and a diagnostic must not blur them.
+ */
+function completionCheck(
+  harness: HarnessId,
+  profile: string,
+  completion: ProbeCompletion,
+): DoctorCheck {
+  const detail = {
+    model: completion.model ?? null,
+    protocol: completion.protocol ?? null,
+    status: completion.status ?? null,
+    latencyMs: completion.latencyMs ?? null,
+    produced: completion.produced ?? null,
+    cachedAt: completion.cachedAt ?? null,
+    reason: completion.code ?? null,
+  };
+  const model = completion.model ?? '?';
+  const cached = completion.cachedAt ? '（缓存结果）' : '';
+  return completion.ok
+    ? ok(
+        `${harness}.completion`,
+        `模型 ${model} 补全成功（${completion.latencyMs ?? '?'}ms）${cached}`,
+        DOCTOR_CODES.completionOk,
+        { profile, model, latencyMs: completion.latencyMs ?? 0 },
+        detail,
+      )
+    : error(
+        `${harness}.completion`,
+        `模型 ${model} 补全失败：${completion.message ?? '未知原因'}${cached}`,
+        DOCTOR_CODES.completionFailed,
+        { profile, model, reason: completion.code ?? PROBE_CODES.networkError },
+        detail,
+      );
 }
 
 function octal(mode: number): string {

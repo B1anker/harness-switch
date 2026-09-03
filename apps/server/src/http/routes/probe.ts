@@ -37,7 +37,15 @@ export function createProbeRoutes(services: InstantiationService): Hono {
       } satisfies ProbeResponse);
     }
     return c.json({
-      result: await probe.probe({ baseUrl: body.baseUrl, apiKey }),
+      result: await probe.probe({
+        baseUrl: body.baseUrl,
+        apiKey,
+        // No caching here: a draft has no profile to key an outcome to, and the values
+        // change on every keystroke, so an explicit click always sends a real request.
+        completion: body.completion,
+        model: body.model,
+        protocol: body.protocol,
+      }),
     } satisfies ProbeResponse);
   });
 

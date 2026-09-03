@@ -491,7 +491,9 @@
       "probeOfficialLogin": "{{harness}} is on its built-in account login; no custom endpoint to probe",
       "probeMissingCredential": "Profile {{profile}} has no base URL or API key; cannot probe",
       "probeOk": "Endpoint of profile {{profile}} is reachable",
-      "probeFailed": "Connectivity probe failed for profile {{profile}}"
+      "probeFailed": "Connectivity probe failed for profile {{profile}}",
+      "completionOk": "Model {{model}} completed a request ({{latencyMs}}ms)",
+      "completionFailed": "Model {{model}} failed to complete: the endpoint is reachable, but this model cannot answer"
     }
   },
   "notice": {
@@ -660,7 +662,11 @@
       "networkError": "Could not reach the endpoint (DNS, refused connection or TLS failure)",
       "unauthorized": "Endpoint reachable but rejected the credential (HTTP {{status}}); check the API key",
       "httpError": "Endpoint returned HTTP {{status}}",
-      "invalidResponse": "The response is not a recognized model-catalog format"
+      "invalidResponse": "The response is not a recognized model-catalog format",
+      "missingModel": "No model to complete against: fill in a model name, or fetch the catalog first",
+      "completionUnsupported": "The endpoint accepts none of the known completion protocols",
+      "completionHttpError": "Model {{model}} returned HTTP {{status}} for a completion: the catalog lists it, but it cannot answer",
+      "completionInvalid": "The completion response is not a recognized format, so the model cannot be confirmed to have answered"
     }
   },
   "warning": {
@@ -898,9 +904,14 @@
   },
   "probe": {
     "action": "Test connection",
+    "completionAction": "Test completion",
+    "completionHint": "Sends one real minimal request to prove the model actually answers (costs a token or two).",
     "probing": "Testing…",
     "ok": "Reachable · {{latencyMs}}ms · {{count}} models",
     "okNoCatalog": "Reachable · {{latencyMs}}ms · no model catalog returned",
+    "completionOk": "Model {{model}} answers · {{latencyMs}}ms",
+    "completionCached": "Model {{model}} answers · cached {{at}}",
+    "completionFailedCached": "cached {{at}}",
     "catalogHint": "Fetched {{count}} models; click the model field to pick one from the list.",
     "missingBaseUrl": "Add an endpoint URL before testing."
   }

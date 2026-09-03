@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
@@ -95,6 +95,24 @@ export class KimiAdapter implements HarnessAdapter {
 
   envVars(): Record<string, string> {
     return {};
+  }
+
+  /**
+   * `providerType` decides which protocol implementation Kimi Code uses. The `kimi` type
+   * is Moonshot's own OpenAI-compatible chat surface.
+   */
+  completionProtocol(profile: AdapterProfile): CompletionProtocol | undefined {
+    switch (profile.extras.providerType || 'kimi') {
+      case 'anthropic':
+        return 'anthropic-messages';
+      case 'openai_responses':
+        return 'openai-responses';
+      case 'kimi':
+      case 'openai_legacy':
+        return 'openai-chat';
+      default:
+        return undefined;
+    }
   }
 
   validate(profile: AdapterProfile): void {

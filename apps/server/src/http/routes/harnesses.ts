@@ -15,6 +15,8 @@ import { IEnvironmentService } from '../../services/environment';
 import { IFileService } from '../../services/files';
 import { ILogService } from '../../services/log';
 import { IProbeService } from '../../services/probe';
+import { IProbeCacheService } from '../../services/probe-cache';
+import { probeSavedProfile } from '../../services/probe-profile';
 import { IProfileService } from '../../services/profiles';
 import { IHarnessRegistry } from '../../services/registry';
 import { parseWith, readJsonBody } from '../validate';
@@ -29,6 +31,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   const files = services.get(IFileService);
   const log = services.get(ILogService);
   const probe = services.get(IProbeService);
+  const probeCache = services.get(IProbeCacheService);
 
   function summary(id: HarnessId) {
     const adapter = adapters.get(id);
@@ -148,6 +151,9 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
     const name = decodeURIComponent(c.req.param('name'));
     activation.prepareDelete(harnessId, name);
     profiles.remove(harnessId, name);
+    // A later profile of the same name is a different endpoint; it must not inherit this
+    // one's verdict, and the fingerprint alone would not catch an identical re-creation.
+    probeCache.forget(harnessId, name);
     return c.json({ ok: true });
   });
 
@@ -165,10 +171,17 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   app.post('/:harnessId/profiles/:name/probe', async (c) => {
     const harnessId = harnesses.require(c.req.param('harnessId'));
     const name = decodeURIComponent(c.req.param('name'));
-    // An absent body is fine: the request carries no options today.
-    parseWith(probeStoredRequestSchema, await c.req.json().catch(() => ({})));
+    // An absent body is fine: every completion option is optional.
+    const body = parseWith(probeStoredRequestSchema, await c.req.json().catch(() => ({})));
     const decrypted = profiles.decrypt(harnessId, name);
-    return c.json({ result: await probe.probe(decrypted) } satisfies ProbeResponse);
+    return c.json({
+      result: await probeSavedProfile(
+        { probe, cache: probeCache, adapter: adapters.get(harnessId) },
+        harnessId,
+        decrypted,
+        body,
+      ),
+    } satisfies ProbeResponse);
   });
 
   app.post('/:harnessId/profiles/:name/activate', (c) => {
