@@ -165,7 +165,7 @@ describe('cli', () => {
   });
 
   test('json errors preserve the HTTP status and stable server code', async () => {
-    const { code, logs } = await run('official', ['kimi', '--yes', '--json']);
+    const { code, logs } = await run('official', ['pi', '--yes', '--json']);
     expect(code).toBe(1);
     const payload = JSON.parse(logs.join('\n')) as {
       error: { code: string; status: number; message: string };

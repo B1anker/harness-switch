@@ -407,6 +407,95 @@ describe('kimi adapter', () => {
     expect(config.default_model).toBe('other');
   });
 
+  const managed = [
+    '[providers."managed:kimi-code"]',
+    'type = "kimi"',
+    'base_url = "https://api.kimi.com/coding/v1"',
+    'api_key = ""',
+    '',
+    '[providers."managed:kimi-code".oauth]',
+    'storage = "file"',
+    'key = "kimi-code"',
+    '',
+    '[models."kimi-code/k3-256k"]',
+    'provider = "managed:kimi-code"',
+    'model = "k3"',
+    'max_context_size = 262144',
+    '',
+    '[models."kimi-code/kimi-for-coding"]',
+    'provider = "managed:kimi-code"',
+    'model = "kimi-for-coding"',
+    'max_context_size = 262144',
+    '',
+  ].join('\n');
+
+  test('returning to official login keeps every provider and only moves the pointer', () => {
+    const adapter = new KimiAdapter(environment);
+    const activated = adapter.render(profile(), { config: managed }).config;
+    const config = parseToml(
+      adapter.renderOfficial(profile(), { config: activated }).config,
+    ) as KimiConfig;
+
+    expect(config.providers?.['glm-main']?.api_key).toBe('sk-new');
+    expect(config.models?.['glm-main']).toBeDefined();
+    expect(config.providers?.['managed:kimi-code']?.oauth).toBeDefined();
+    expect(config.default_model).toBe('kimi-code/k3-256k');
+  });
+
+  test('official login falls back to the classic alias when k3-256k is absent', () => {
+    const adapter = new KimiAdapter(environment);
+    const seeded = managed.replace(
+      '[models."kimi-code/k3-256k"]\nprovider = "managed:kimi-code"\nmodel = "k3"\nmax_context_size = 262144\n\n',
+      '',
+    );
+    const config = parseToml(
+      adapter.renderOfficial(profile(), { config: seeded }).config,
+    ) as KimiConfig;
+
+    expect(config.default_model).toBe('kimi-code/kimi-for-coding');
+  });
+
+  test('official login recognises a managed provider even before its oauth table exists', () => {
+    const adapter = new KimiAdapter(environment);
+    const seeded = managed.replace(
+      '[providers."managed:kimi-code".oauth]\nstorage = "file"\nkey = "kimi-code"\n\n',
+      '',
+    );
+    const activated = adapter.render(profile(), { config: seeded }).config;
+    const config = parseToml(
+      adapter.renderOfficial(profile(), { config: activated }).config,
+    ) as KimiConfig;
+
+    expect(config.default_model).toBe('kimi-code/k3-256k');
+  });
+
+  test('official login refuses when the file holds no managed entry at all', () => {
+    const adapter = new KimiAdapter(environment);
+    const activated = adapter.render(profile(), { config: existing }).config;
+    expectHttpError(
+      () => adapter.renderOfficial(profile(), { config: activated }),
+      ERROR_CODES.officialLoginMissing,
+      400,
+    );
+  });
+
+  test('official login leaves an absent or corrupt config file alone', () => {
+    const adapter = new KimiAdapter(environment);
+    expect(adapter.renderOfficial(profile(), {})).toEqual({});
+    expect(adapter.renderOfficial(profile(), { config: 'not [valid' })).toEqual({});
+  });
+
+  test('reconciling official login with no previous profile still heals a drifted default', () => {
+    const adapter = new KimiAdapter(environment);
+    const drifted = `${managed}default_model = "leftover"\n\n[providers.leftover]\ntype = "kimi"\napi_key = "sk-leftover"\n\n[models.leftover]\nprovider = "leftover"\nmodel = "m"\nmax_context_size = 100\n`;
+    const config = parseToml(
+      adapter.renderOfficial(undefined, { config: drifted }).config,
+    ) as KimiConfig;
+
+    expect(config.providers?.leftover).toBeDefined();
+    expect(config.default_model).toBe('kimi-code/k3-256k');
+  });
+
   test('normalises dots out of ids, since TOML would read them as nested tables', () => {
     const adapter = new KimiAdapter(environment);
     const rendered = adapter.render(profile({ extras: { providerId: 'gpt-4.1' } }), {}).config;

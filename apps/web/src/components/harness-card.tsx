@@ -114,7 +114,9 @@ export function HarnessCard({ harness, onAdd, onEdit, extraActions }: HarnessCar
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {harness.id === 'claude'
                       ? t('harness.officialHintClaude')
-                      : t('harness.officialHintCodex')}
+                      : harness.id === 'kimi'
+                        ? t('harness.officialHintKimi')
+                        : t('harness.officialHintCodex')}
                   </p>
                 </div>
               </div>

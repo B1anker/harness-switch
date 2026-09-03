@@ -145,6 +145,39 @@ export class KimiAdapter implements HarnessAdapter {
     return { [CONFIG]: stringifyToml(config) };
   }
 
+  /**
+   * Point `default_model` back at the managed provider that `/login` provisions
+   * (recognised by a `managed:` id or an `oauth` credential reference). Additive config
+   * keeps every provider, so nothing is removed: the profile's entries stay on disk for
+   * the next switch, and the OAuth cache under `credentials/` is never touched. When the
+   * file holds no managed entry the user never completed `/login`, so the switch refuses.
+   */
+  renderOfficial(_profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles {
+    if (current[CONFIG] === undefined) {
+      return {};
+    }
+    let config: Record<string, unknown>;
+    try {
+      config = parseTomlObject(current[CONFIG]);
+    } catch {
+      return {};
+    }
+
+    const official = officialModel(config);
+    if (official === undefined) {
+      throw new HttpError(
+        400,
+        '未检测到 Kimi Code 官方登录条目，请先在终端运行 kimi 并完成 /login',
+        {
+          code: ERROR_CODES.officialLoginMissing,
+          params: { harness: 'Kimi Code' },
+        },
+      );
+    }
+    config.default_model = official;
+    return { [CONFIG]: stringifyToml(config) };
+  }
+
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
     let config: Record<string, unknown>;
     try {
@@ -209,4 +242,31 @@ function contextString(value: unknown): string {
   return typeof value === 'number' && Number.isFinite(value)
     ? String(Math.trunc(value))
     : String(DEFAULT_CONTEXT);
+}
+
+/**
+ * The model alias `/login` provisions: its provider is a managed entry (`managed:*` id)
+ * or carries an `oauth` credential reference. When several exist, the preferred official
+ * default wins, then the classic alias, then whatever is left.
+ */
+const PREFERRED_OFFICIAL_MODELS = ['kimi-code/k3-256k', 'kimi-code/kimi-for-coding'];
+
+function officialModel(config: Record<string, unknown>): string | undefined {
+  const providers = isPlainObject(config.providers) ? config.providers : {};
+  const models = isPlainObject(config.models) ? config.models : {};
+  const managed = new Set(
+    Object.entries(providers)
+      .filter(
+        ([id, provider]) =>
+          id.startsWith('managed:') || (isPlainObject(provider) && isPlainObject(provider.oauth)),
+      )
+      .map(([id]) => id),
+  );
+  const aliases = Object.entries(models)
+    .filter(
+      ([, model]) =>
+        isPlainObject(model) && typeof model.provider === 'string' && managed.has(model.provider),
+    )
+    .map(([alias]) => alias);
+  return PREFERRED_OFFICIAL_MODELS.find((preferred) => aliases.includes(preferred)) ?? aliases[0];
 }
