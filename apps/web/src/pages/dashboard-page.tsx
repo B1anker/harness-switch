@@ -321,7 +321,7 @@ function HarnessTabs({
       role="tablist"
       aria-label={t('nav.switchHarness')}
       aria-orientation="vertical"
-      className="flex gap-2 overflow-x-auto border-b bg-card/45 p-3 xl:min-h-[calc(100dvh-80px)] xl:flex-col xl:overflow-x-visible xl:border-b-0 xl:border-r xl:p-4"
+      className="flex gap-2 overflow-x-auto border-b bg-card/45 p-3 xl:sticky xl:top-20 xl:h-[calc(100dvh-80px)] xl:flex-col xl:self-start xl:overflow-x-visible xl:overflow-y-auto xl:border-b-0 xl:border-r xl:p-4"
     >
       {harnesses.map((harness, index) => {
         const selected = harness.id === value;
