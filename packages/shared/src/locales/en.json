@@ -32,6 +32,167 @@
     "switchHarness": "Switch harness"
   },
   "harness": {
+    "field": {
+      "toggle": {
+        "on": "On",
+        "off": "Off"
+      },
+      "providerId": {
+        "label": "Provider ID (optional)",
+        "placeholder": "Defaults to the profile name"
+      },
+      "contextLength": {
+        "label": "Context length"
+      },
+      "maxTokens": {
+        "label": "Max output tokens"
+      },
+      "claude": {
+        "authVar": {
+          "label": "Credential variable",
+          "help": "Third-party relays usually require ANTHROPIC_AUTH_TOKEN; use ANTHROPIC_API_KEY for an official API key.",
+          "option": {
+            "authToken": "ANTHROPIC_AUTH_TOKEN (third-party relay)",
+            "official": "ANTHROPIC_API_KEY (official)"
+          }
+        },
+        "haikuModel": {
+          "label": "Haiku model mapping"
+        },
+        "sonnetModel": {
+          "label": "Sonnet model mapping"
+        },
+        "opusModel": {
+          "label": "Opus model mapping"
+        },
+        "fableModel": {
+          "label": "Fable model mapping (optional)",
+          "help": "Written to ANTHROPIC_DEFAULT_FABLE_MODEL, for newer Claude Code builds that support the Fable tier."
+        },
+        "subagentModel": {
+          "label": "Subagent model (optional)",
+          "help": "Written to CLAUDE_CODE_SUBAGENT_MODEL, so subagents can use a faster or cheaper model."
+        },
+        "haikuModelName": {
+          "label": "Haiku display name (optional)"
+        },
+        "sonnetModelName": {
+          "label": "Sonnet display name (optional)"
+        },
+        "opusModelName": {
+          "label": "Opus display name (optional)"
+        },
+        "fableModelName": {
+          "label": "Fable display name (optional)"
+        },
+        "modelMapping": {
+          "help": "Written to {{envVar}}."
+        },
+        "modelName": {
+          "help": "Written to {{envVar}}; left empty, Claude Code shows the model ID itself.",
+          "placeholder": "Leave empty to use the {{role}} model ID"
+        },
+        "example": {
+          "placeholder": "e.g. {{value}}"
+        },
+        "extraEnv": {
+          "label": "Extra environment variables (optional)",
+          "help": "One KEY=VALUE per line, merged into the env block of settings.json."
+        },
+        "oneM": {
+          "subagentLabel": "Declare 1M support for subagents",
+          "label": "Declare 1M support for {{role}}",
+          "help": "Appends [1m] to the model ID to declare a 1M context window to Claude Code, which strips the suffix before calling the provider. Enable it only when the model really supports 1M."
+        }
+      },
+      "codex": {
+        "envNote": "Only the environment-variable auth mode needs env.sh; the other modes keep their credential inside config.toml.",
+        "authMode": {
+          "label": "Authentication mode",
+          "help": "auth.json is Codex's own login cache. Overwriting it loses the ChatGPT session, so it is left alone by default.",
+          "option": {
+            "bearerToken": "Write to config.toml (recommended, keeps official login)",
+            "envKey": "Environment variable (requires sourcing env.sh)",
+            "openaiAuth": "Write to auth.json (overwrites the ChatGPT login cache)"
+          }
+        },
+        "providerId": {
+          "help": "openai, ollama, lmstudio, amazon-bedrock and similar are reserved by Codex and get renamed automatically."
+        },
+        "envKeyName": {
+          "label": "Environment variable name",
+          "help": "Only used by the environment-variable mode."
+        },
+        "reasoningEffort": {
+          "label": "Reasoning effort (optional)",
+          "option": {
+            "unset": "Not set"
+          }
+        },
+        "target": {
+          "auth": "auth.json (auth.json mode only)"
+        }
+      },
+      "kimi": {
+        "envNote": "Kimi Code does not read credentials from the shell, so env.sh has no effect on it.",
+        "providerType": {
+          "label": "Provider type",
+          "help": "Decides which protocol implementation Kimi Code uses.",
+          "option": {
+            "kimi": "kimi (Moonshot / Kimi Code)"
+          }
+        },
+        "maxContextSize": {
+          "help": "Kimi Code requires every models entry to declare max_context_size."
+        }
+      },
+      "pi": {
+        "envNote": "The API key is written straight into models.json, so no environment variable is needed; --model still overrides at run time.",
+        "providerId": {
+          "help": "Models are referenced as provider/model."
+        },
+        "api": {
+          "label": "Protocol"
+        },
+        "authHeader": {
+          "label": "Authorization header",
+          "help": "Sent as Authorization: Bearer <key>."
+        },
+        "reasoning": {
+          "label": "Reasoning support",
+          "help": "Maps to reasoning in models.json. Enable it for thinking models such as GPT or Claude."
+        }
+      },
+      "dsh": {
+        "envNote": "The API key is written securely to DSH's .credentials.yaml and referenced from settings.yaml.",
+        "providerType": {
+          "label": "Provider type",
+          "option": {
+            "custom": "Custom provider",
+            "official": "DeepSeek official"
+          }
+        },
+        "providerId": {
+          "help": "DSH's model routing identifier; it must start with a lowercase letter."
+        },
+        "models": {
+          "label": "Model catalog (optional)",
+          "placeholder": "One model ID per line; left empty, only the default model above is registered",
+          "help": "One provider can register several models; the Model field above is the default for new sessions."
+        },
+        "api": {
+          "label": "API protocol"
+        },
+        "reasoningEfforts": {
+          "label": "Supported reasoning levels",
+          "help": "DSH only shows the levels declared here that the upstream model actually supports.",
+          "option": {
+            "unset": "Not declared (provider default)",
+            "none": "Model does not support reasoning levels"
+          }
+        }
+      }
+    },
     "subtitle": "Manage profiles and safely write this tool's native configuration files.",
     "newProfile": "New profile",
     "addCustomProvider": "Add custom provider",

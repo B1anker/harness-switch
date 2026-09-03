@@ -14,6 +14,15 @@ export function parseJsonObject(text: string | undefined): JsonObject {
   return isPlainObject(parsed) ? parsed : {};
 }
 
+/** Malformed content yields `undefined` so callers can skip a write instead of clobbering. */
+export function tryParseJsonObject(text: string | undefined): JsonObject | undefined {
+  try {
+    return parseJsonObject(text);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Key order follows the parsed object, so merging into a user's file appends new keys
  * instead of reshuffling the whole document.
@@ -28,6 +37,14 @@ export function parseTomlObject(text: string | undefined): JsonObject {
   }
   const parsed = parseTomlText(text) as unknown;
   return isPlainObject(parsed) ? parsed : {};
+}
+
+export function tryParseTomlObject(text: string | undefined): JsonObject | undefined {
+  try {
+    return parseTomlObject(text);
+  } catch {
+    return undefined;
+  }
 }
 
 export function stringifyToml(value: JsonObject): string {
@@ -46,6 +63,14 @@ export function parseYamlDocument(text: string | undefined) {
     throw document.errors[0];
   }
   return document;
+}
+
+export function tryParseYamlDocument(text: string | undefined) {
+  try {
+    return parseYamlDocument(text);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -97,6 +122,16 @@ export function readString(source: unknown, key: string): string {
   }
   const value = source[key];
   return typeof value === 'string' ? value : '';
+}
+
+/** Positive finite numbers only; anything else falls back so a typo never writes NaN. */
+export function numeric(raw: string | undefined, fallback: number): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
+}
+
+export function valueString(value: unknown, fallback: string | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : fallback || '';
 }
 
 /**

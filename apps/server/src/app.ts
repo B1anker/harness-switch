@@ -4,7 +4,7 @@ import type { ErrorResponse, Language } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import { HttpError } from './common/errors';
-import { localizeError, localizeMessage, requestLanguage } from './common/localize';
+import { localizeMessage, requestLanguage } from './common/localize';
 import type { InstantiationService } from './di';
 import { createAuthGuard, createOriginGuard, createServiceMiddleware } from './http/middleware';
 import { createAuthRoutes } from './http/routes/auth';
@@ -111,7 +111,7 @@ export function createApp(services: InstantiationService): Hono {
   app.notFound((c) => {
     const code = ERROR_CODES.requestFailed;
     return c.json(
-      { code, msg: localizeError(requestLanguage(c.req.header('Accept-Language')), code) },
+      { code, msg: localizeMessage(requestLanguage(c.req.header('Accept-Language')), code) },
       404,
     );
   });
@@ -128,7 +128,7 @@ export function createApp(services: InstantiationService): Hono {
         {
           code: error.code,
           ...(data ? { data } : {}),
-          msg: localizeError(requestLanguage(c.req.header('Accept-Language')), error.code, data),
+          msg: localizeMessage(requestLanguage(c.req.header('Accept-Language')), error.code, data),
         } satisfies ErrorResponse,
         error.status as 400,
       );
@@ -138,7 +138,7 @@ export function createApp(services: InstantiationService): Hono {
     return c.json(
       {
         code,
-        msg: localizeError(requestLanguage(c.req.header('Accept-Language')), code),
+        msg: localizeMessage(requestLanguage(c.req.header('Accept-Language')), code),
       } satisfies ErrorResponse,
       500,
     );

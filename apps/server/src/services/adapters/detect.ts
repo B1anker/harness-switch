@@ -1,3 +1,4 @@
+import { slugify } from './serialize';
 import type { AdapterProfile } from './types';
 
 /**
@@ -17,6 +18,11 @@ export type DetectedProfile = {
   /** True when the tool is currently pointed at this provider. */
   active: boolean;
 };
+
+/** Slug from an explicit providerId, else the profile name. Adapters may wrap this. */
+export function providerId(profile: AdapterProfile): string {
+  return slugify(profile.extras.providerId || profile.name, 'provider');
+}
 
 /** A throwaway profile that only exists to tell `backfill` which entry to read. */
 export function seedProfile(extras: Record<string, string> = {}): AdapterProfile {

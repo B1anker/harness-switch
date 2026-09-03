@@ -3,14 +3,16 @@ import type { FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
-import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
+import { compact, type DetectedProfile, providerId, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
   isPlainObject,
+  numeric,
   parseTomlObject,
   readString,
-  slugify,
   stringifyToml,
+  tryParseTomlObject,
+  valueString,
 } from './serialize';
 import type {
   AdapterProfile,
@@ -37,16 +39,23 @@ export class KimiAdapter implements HarnessAdapter {
   readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'Kimi Code 不从 shell 读取凭据，env.sh 对它无效。';
+  readonly envNoteCode = 'harness.field.kimi.envNote';
 
   readonly fields: FieldSpec[] = [
     {
       key: 'providerType',
       label: 'Provider 类型',
+      labelCode: 'harness.field.kimi.providerType.label',
       kind: 'select',
       defaultValue: 'kimi',
       help: '决定 Kimi Code 使用哪套协议实现。',
+      helpCode: 'harness.field.kimi.providerType.help',
       options: [
-        { value: 'kimi', label: 'kimi（Moonshot / Kimi Code）' },
+        {
+          value: 'kimi',
+          label: 'kimi（Moonshot / Kimi Code）',
+          labelCode: 'harness.field.kimi.providerType.option.kimi',
+        },
         { value: 'anthropic', label: 'anthropic' },
         { value: 'openai_responses', label: 'openai_responses' },
         { value: 'openai_legacy', label: 'openai_legacy' },
@@ -55,15 +64,19 @@ export class KimiAdapter implements HarnessAdapter {
     {
       key: 'providerId',
       label: 'Provider ID（可选）',
+      labelCode: 'harness.field.providerId.label',
       kind: 'text',
       placeholder: '默认取配置名称',
+      placeholderCode: 'harness.field.providerId.placeholder',
     },
     {
       key: 'maxContextSize',
       label: '上下文长度',
+      labelCode: 'harness.field.contextLength.label',
       kind: 'text',
       defaultValue: String(DEFAULT_CONTEXT),
       help: 'Kimi Code 要求 models 条目必须声明 max_context_size。',
+      helpCode: 'harness.field.kimi.maxContextSize.help',
     },
   ];
 
@@ -95,7 +108,7 @@ export class KimiAdapter implements HarnessAdapter {
 
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     this.validate(profile);
-    const id = this.providerId(profile);
+    const id = providerId(profile);
     const config = parseTomlObject(current[CONFIG]);
 
     const provider = ensureObject(ensureObject(config, 'providers'), id);
@@ -106,7 +119,7 @@ export class KimiAdapter implements HarnessAdapter {
     const model = ensureObject(ensureObject(config, 'models'), id);
     model.provider = id;
     model.model = profile.model;
-    model.max_context_size = this.contextSize(profile);
+    model.max_context_size = numeric(profile.extras.maxContextSize, DEFAULT_CONTEXT);
 
     config.default_model = id;
 
@@ -114,14 +127,12 @@ export class KimiAdapter implements HarnessAdapter {
   }
 
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
-    const id = this.providerId(profile);
+    const id = providerId(profile);
     if (current[CONFIG] === undefined) {
       return {};
     }
-    let config: Record<string, unknown>;
-    try {
-      config = parseTomlObject(current[CONFIG]);
-    } catch {
+    const config = tryParseTomlObject(current[CONFIG]);
+    if (!config) {
       return {};
     }
 
@@ -156,10 +167,8 @@ export class KimiAdapter implements HarnessAdapter {
     if (current[CONFIG] === undefined) {
       return {};
     }
-    let config: Record<string, unknown>;
-    try {
-      config = parseTomlObject(current[CONFIG]);
-    } catch {
+    const config = tryParseTomlObject(current[CONFIG]);
+    if (!config) {
       return {};
     }
 
@@ -179,13 +188,11 @@ export class KimiAdapter implements HarnessAdapter {
   }
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
-    let config: Record<string, unknown>;
-    try {
-      config = parseTomlObject(current[CONFIG]);
-    } catch {
+    const config = tryParseTomlObject(current[CONFIG]);
+    if (!config) {
       return {};
     }
-    const id = this.providerId(profile);
+    const id = providerId(profile);
     const providers = config.providers;
     const provider = isPlainObject(providers) ? providers[id] : undefined;
     const models = config.models;
@@ -200,10 +207,8 @@ export class KimiAdapter implements HarnessAdapter {
 
   /** One candidate per `providers` entry; `default_model` names the one in use. */
   detect(current: CurrentFiles): DetectedProfile[] {
-    let config: Record<string, unknown>;
-    try {
-      config = parseTomlObject(current[CONFIG]);
-    } catch {
+    const config = tryParseTomlObject(current[CONFIG]);
+    if (!config) {
       return [];
     }
     const providers = config.providers;
@@ -221,27 +226,15 @@ export class KimiAdapter implements HarnessAdapter {
         const seed = seedProfile({
           providerId: id,
           providerType: readString(provider, 'type') || 'kimi',
-          maxContextSize: contextString(isPlainObject(model) ? model.max_context_size : undefined),
+          maxContextSize: valueString(
+            isPlainObject(model) ? model.max_context_size : undefined,
+            String(DEFAULT_CONTEXT),
+          ),
         });
         return toCandidate(id, seed, this.backfill(seed, current), id === selected);
       }),
     );
   }
-
-  private providerId(profile: AdapterProfile): string {
-    return slugify(profile.extras.providerId || profile.name, 'provider');
-  }
-
-  private contextSize(profile: AdapterProfile): number {
-    const parsed = Number(profile.extras.maxContextSize);
-    return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : DEFAULT_CONTEXT;
-  }
-}
-
-function contextString(value: unknown): string {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? String(Math.trunc(value))
-    : String(DEFAULT_CONTEXT);
 }
 
 /**

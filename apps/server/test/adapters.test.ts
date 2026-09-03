@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
+import { CATALOGS, ERROR_CODES, LANGUAGES } from '@seaveyon/harness-switch-shared';
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
 import { ClaudeAdapter } from '../src/services/adapters/claude';
@@ -7,7 +7,7 @@ import { CodexAdapter } from '../src/services/adapters/codex';
 import { DshAdapter } from '../src/services/adapters/dsh';
 import { KimiAdapter } from '../src/services/adapters/kimi';
 import { PiAdapter } from '../src/services/adapters/pi';
-import type { AdapterProfile } from '../src/services/adapters/types';
+import type { AdapterProfile, HarnessAdapter } from '../src/services/adapters/types';
 import type { IEnvironmentService } from '../src/services/environment';
 import { expectHttpError } from './support/http-error';
 
@@ -760,3 +760,114 @@ describe('provider ids', () => {
     expect(idOf(first)).not.toBe(idOf(second));
   });
 });
+
+describe('form field localization', () => {
+  // Typed as the interface, not the concrete classes: these assertions are about the
+  // contract every adapter serves to the UI, and the optional members live there.
+  const adapters: HarnessAdapter[] = [
+    new ClaudeAdapter(environment),
+    new CodexAdapter(environment),
+    new KimiAdapter(environment),
+    new PiAdapter(environment),
+    new DshAdapter(environment),
+  ];
+
+  test('every catalog key an adapter emits exists in every language', () => {
+    // The web UI renders these keys instead of the adapter's own Chinese prose. A key with
+    // no catalog entry silently falls back to that prose, so an English reader would see
+    // Chinese with nothing failing anywhere — this is the only thing that catches it.
+    const missing: string[] = [];
+    for (const adapter of adapters) {
+      for (const key of catalogKeys(adapter)) {
+        for (const language of LANGUAGES) {
+          if (typeof lookup(CATALOGS[language], key) !== 'string') {
+            missing.push(`${language}: ${key} (${adapter.id})`);
+          }
+        }
+      }
+    }
+    expect(missing).toEqual([]);
+  });
+
+  test('every field carrying prose carries a key for it', () => {
+    // Labels like `config.toml` or `openai-responses` are identifiers and stay as they are;
+    // anything with a CJK character is prose and needs a key, or it never gets translated.
+    const untranslated: string[] = [];
+    for (const adapter of adapters) {
+      const note = adapter.envNote;
+      if (note && hasCjk(note) && !adapter.envNoteCode) {
+        untranslated.push(`${adapter.id}: envNote`);
+      }
+      for (const target of adapter.targets()) {
+        if (hasCjk(target.label) && !target.labelCode) {
+          untranslated.push(`${adapter.id}: target ${target.key}`);
+        }
+      }
+      for (const field of adapter.fields) {
+        if (hasCjk(field.label) && !field.labelCode) {
+          untranslated.push(`${adapter.id}.${field.key}: label`);
+        }
+        if (field.help && hasCjk(field.help) && !field.helpCode) {
+          untranslated.push(`${adapter.id}.${field.key}: help`);
+        }
+        if (field.placeholder && hasCjk(field.placeholder) && !field.placeholderCode) {
+          untranslated.push(`${adapter.id}.${field.key}: placeholder`);
+        }
+        for (const option of field.options ?? []) {
+          if (hasCjk(option.label) && !option.labelCode) {
+            untranslated.push(`${adapter.id}.${field.key}: option ${option.value}`);
+          }
+        }
+      }
+    }
+    expect(untranslated).toEqual([]);
+  });
+
+  test('interpolated keys receive every value they name', () => {
+    // A `{{role}}` left unsubstituted renders literally in the form, which looks like a bug
+    // to the user and reads as one in a screenshot.
+    const unresolved: string[] = [];
+    for (const adapter of adapters) {
+      for (const field of adapter.fields) {
+        const keys = [field.labelCode, field.helpCode, field.placeholderCode];
+        for (const key of keys.filter((value): value is string => value !== undefined)) {
+          for (const language of LANGUAGES) {
+            const template = lookup(CATALOGS[language], key);
+            if (typeof template !== 'string') continue;
+            for (const name of [...template.matchAll(/{{\s*([\w.]+)\s*}}/g)].map((m) => m[1])) {
+              if (field.params?.[name as string] === undefined) {
+                unresolved.push(`${adapter.id}.${field.key}: ${key} wants ${name}`);
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(unresolved).toEqual([]);
+  });
+});
+
+/** Every catalog key one adapter hands to the UI. */
+function catalogKeys(adapter: HarnessAdapter): string[] {
+  return [
+    adapter.envNoteCode,
+    ...adapter.targets().map((target) => target.labelCode),
+    ...adapter.fields.flatMap((field) => [
+      field.labelCode,
+      field.helpCode,
+      field.placeholderCode,
+      ...(field.options ?? []).map((option) => option.labelCode),
+    ]),
+  ].filter((key): key is string => key !== undefined);
+}
+
+function lookup(catalog: Record<string, unknown>, key: string): unknown {
+  return key.split('.').reduce<unknown>((current, part) => {
+    if (typeof current !== 'object' || current === null || Array.isArray(current)) return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, catalog);
+}
+
+function hasCjk(value: string): boolean {
+  return /[　-〿㐀-䶿一-鿿＀-￯]/.test(value);
+}

@@ -43,6 +43,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
       targets: adapter.targets(),
       envVars: adapter.envVarNames,
       envNote: adapter.envNote,
+      envNoteCode: adapter.envNoteCode,
       supportsOfficialAuth: adapter.renderOfficial !== undefined,
     };
   }

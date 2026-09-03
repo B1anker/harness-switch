@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslation } from '@/lib/i18n';
-import { errorLine, lineText, type MessageLine } from '@/lib/messages';
+import { errorLine, lineText, type MessageLine, specText } from '@/lib/messages';
 import { PRESETS, type Preset } from '@/lib/presets';
 import { useAppStore } from '@/stores/app-store';
 
@@ -237,10 +237,11 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
     if (endpointMissing) next.providerEndpoint = { key: 'profile.error.endpointGone' };
     for (const field of harness.fields) {
       if (field.required && !extras[field.key]?.trim()) {
-        // The label is the server's own prose for this field, so it is interpolated as data.
+        // Resolve the label first: interpolating the raw prose would leave the server's
+        // own language sitting inside an otherwise translated sentence.
         next[`extra:${field.key}`] = {
           key: 'profile.error.fieldRequired',
-          params: { label: field.label },
+          params: { label: specText(t, field.labelCode, field.label, field.params) },
         };
       }
     }
@@ -302,7 +303,7 @@ export function ProfileDialog({ harness, profile, onOpenChange }: ProfileDialogP
             <DialogDescription>
               {t('profile.intro', {
                 targets: harness.targets
-                  .map((target) => target.label)
+                  .map((target) => specText(t, target.labelCode, target.label))
                   .join(t('common.listSeparator')),
               })}
               {harness.mode === 'additive' ? t('profile.additiveNote') : ''}
@@ -797,27 +798,31 @@ function ExtraField({
 }) {
   const { t } = useTranslation();
   const id = `extra-${field.key}`;
+  const label = specText(t, field.labelCode, field.label, field.params);
+  const placeholder = field.placeholder
+    ? specText(t, field.placeholderCode, field.placeholder, field.params)
+    : undefined;
   return (
     <div
       className={
         field.kind === 'textarea' || field.fullWidth ? 'space-y-2 sm:col-span-2' : 'space-y-2'
       }
     >
-      <Label htmlFor={id}>{field.label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       {field.kind === 'select' ? (
         <Select value={value} onValueChange={onChange}>
           <SelectTrigger
             id={id}
-            aria-label={field.label}
+            aria-label={label}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
           >
-            <SelectValue placeholder={field.placeholder ?? t('profile.selectPlaceholder')} />
+            <SelectValue placeholder={placeholder ?? t('profile.selectPlaceholder')} />
           </SelectTrigger>
           <SelectContent>
             {field.options?.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.label}
+                {specText(t, option.labelCode, option.label)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -827,7 +832,7 @@ function ExtraField({
           id={id}
           rows={3}
           value={value}
-          placeholder={field.placeholder}
+          placeholder={placeholder}
           className="font-mono text-xs"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
@@ -838,7 +843,7 @@ function ExtraField({
           id={id}
           type={field.kind === 'password' ? 'password' : 'text'}
           value={value}
-          placeholder={field.placeholder}
+          placeholder={placeholder}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
           onChange={(event) => onChange(event.target.value)}
@@ -849,7 +854,11 @@ function ExtraField({
           {lineText(t, error)}
         </p>
       ) : null}
-      {field.help ? <p className="text-xs text-muted-foreground">{field.help}</p> : null}
+      {field.help ? (
+        <p className="text-xs text-muted-foreground">
+          {specText(t, field.helpCode, field.help, field.params)}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -908,7 +917,7 @@ function ClaudeModelMappingFields({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`extra-${nameKey}`} className="text-xs md:sr-only">
-                  {nameField.label}
+                  {specText(t, nameField.labelCode, nameField.label, nameField.params)}
                 </Label>
                 <Input
                   id={`extra-${nameKey}`}
@@ -916,7 +925,13 @@ function ClaudeModelMappingFields({
                   placeholder={
                     values[modelKey]?.trim()
                       ? t('profile.mapping.defaultTo', { model: values[modelKey].trim() })
-                      : nameField.placeholder
+                      : nameField.placeholder &&
+                        specText(
+                          t,
+                          nameField.placeholderCode,
+                          nameField.placeholder,
+                          nameField.params,
+                        )
                   }
                   aria-invalid={nameError ? true : undefined}
                   aria-describedby={nameError ? `extra-${nameKey}-error` : undefined}
@@ -930,12 +945,20 @@ function ClaudeModelMappingFields({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`extra-${modelKey}`} className="text-xs md:sr-only">
-                  {modelField.label}
+                  {specText(t, modelField.labelCode, modelField.label, modelField.params)}
                 </Label>
                 <Input
                   id={`extra-${modelKey}`}
                   value={values[modelKey] ?? ''}
-                  placeholder={modelField.placeholder}
+                  placeholder={
+                    modelField.placeholder &&
+                    specText(
+                      t,
+                      modelField.placeholderCode,
+                      modelField.placeholder,
+                      modelField.params,
+                    )
+                  }
                   aria-invalid={modelError ? true : undefined}
                   aria-describedby={modelError ? `extra-${modelKey}-error` : undefined}
                   onChange={(event) => onChange(modelKey, event.target.value)}
@@ -967,12 +990,20 @@ function ClaudeModelMappingFields({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="extra-subagentModel" className="text-xs md:sr-only">
-                {subagentField.label}
+                {specText(t, subagentField.labelCode, subagentField.label, subagentField.params)}
               </Label>
               <Input
                 id="extra-subagentModel"
                 value={values.subagentModel ?? ''}
-                placeholder={subagentField.placeholder}
+                placeholder={
+                  subagentField.placeholder &&
+                  specText(
+                    t,
+                    subagentField.placeholderCode,
+                    subagentField.placeholder,
+                    subagentField.params,
+                  )
+                }
                 aria-invalid={errors['extra:subagentModel'] ? true : undefined}
                 aria-describedby={
                   errors['extra:subagentModel'] ? 'extra-subagentModel-error' : undefined
@@ -1033,6 +1064,7 @@ function OneMCell({
     );
   }
   const id = `extra-${field.key}`;
+  const label = specText(t, field.labelCode, field.label, field.params);
   return (
     <div className="space-y-1.5">
       <div className="flex h-10 items-center">
@@ -1043,12 +1075,12 @@ function OneMCell({
           <Checkbox
             id={id}
             checked={value === 'true'}
-            aria-label={field.label}
+            aria-label={label}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
             onCheckedChange={(checked) => onChange(field.key, checked === true ? 'true' : 'false')}
           />
-          <span className="md:hidden">{field.label}</span>
+          <span className="md:hidden">{label}</span>
           <span className="hidden md:inline">{t('profile.mapping.enable')}</span>
         </label>
       </div>
