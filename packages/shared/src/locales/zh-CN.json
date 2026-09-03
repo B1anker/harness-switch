@@ -225,6 +225,7 @@
     "deleteTitle": "删除配置？",
     "deleteBody": "将删除 {{harness}} / {{profile}}。{{extra}}此操作不可撤销。",
     "deleteAdditiveExtra": "它在配置文件里的 provider 条目也会被一并摘掉。",
+    "deleteDshOfficialExtra": "它的 DeepSeek 原生路由和凭据引用也会被一并移除。",
     "official": "官方登录",
     "officialActive": "已使用",
     "officialSwitch": "切回官方",

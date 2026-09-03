@@ -768,18 +768,18 @@ describe('dsh adapter', () => {
     const settings = parseYaml(rendered.settings);
     expect(settings['agent-default-model']).toEqual({
       provider: 'deepseek-official',
-      model: 'deepseek-v4-flash',
+      model: 'old-model',
     });
     expect(rendered.credentials).toBeUndefined();
     expect(
-      adapter.officialAvailable!({
+      adapter.official!({
         settings: rendered.settings,
         credentials: 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n',
       }),
-    ).toBe(true);
+    ).toMatchObject({ kind: 'native-api', available: true });
     expect(
-      adapter.officialAvailable!({ settings: rendered.settings, credentials: 'version: 1\n' }),
-    ).toBe(false);
+      adapter.official!({ settings: rendered.settings, credentials: 'version: 1\n' }),
+    ).toBeUndefined();
   });
 });
 

@@ -16,6 +16,7 @@ import type {
   AdapterTarget,
   CurrentFiles,
   HarnessAdapter,
+  OfficialCapability,
   RenderedFiles,
 } from './types';
 
@@ -37,6 +38,7 @@ export class DshAdapter implements HarnessAdapter {
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 安全写入 DSH 的 .credentials.yaml，并由 settings.yaml 引用。';
   readonly envNoteCode = 'harness.field.dsh.envNote';
+  readonly officialNeedsCurrent = true;
 
   readonly fields: FieldSpec[] = [
     {
@@ -222,33 +224,33 @@ export class DshAdapter implements HarnessAdapter {
    * both native entries, and only move DSH's default-model pointer.
    */
   renderOfficial(_profile: AdapterProfile | undefined, current: CurrentFiles): RenderedFiles {
-    const settings = tryParseYamlDocument(current[SETTINGS]);
-    const credentials = tryParseYamlDocument(current[CREDENTIALS]);
-    const route = settings ? toPlain(settings.getIn(['llm-deepseek'])) : undefined;
-    const credentialRef =
-      typeof route?.apiKeyEnv === 'string' && route.apiKeyEnv
-        ? route.apiKeyEnv
-        : 'DEEPSEEK_API_KEY';
-    const apiKey =
-      credentials?.getIn(['refs', credentialRef]) ?? credentials?.getIn([credentialRef]);
-    if (!settings || !route || typeof apiKey !== 'string' || !apiKey.trim()) {
+    const official = this.readOfficialRoute(current);
+    if (!official) {
       throw new HttpError(400, '未检测到 DeepSeek 官方 API Key 配置', {
         code: ERROR_CODES.officialApiKeyMissing,
         params: { harness: 'DeepSeek Harness' },
       });
     }
 
-    const models = Array.isArray(route.models) ? route.models : [];
-    const firstModel = toPlain(models[0]);
-    const model = typeof firstModel?.id === 'string' ? firstModel.id : '';
-    settings.setIn(['agent-default-model', 'provider'], 'deepseek-official');
-    if (model) settings.setIn(['agent-default-model', 'model'], model);
-    else settings.deleteIn(['agent-default-model', 'model']);
-    settings.deleteIn(['agent-default-model', 'reasoningEffort']);
-    return { [SETTINGS]: settings.toString() };
+    // This route and its selected model belong to DSH. Switching back must not
+    // replace the user's native choice with the first configured model.
+    official.settings.setIn(['agent-default-model', 'provider'], 'deepseek-official');
+    return { [SETTINGS]: official.settings.toString() };
   }
 
-  officialAvailable(current: CurrentFiles): boolean {
+  official(current: CurrentFiles): OfficialCapability | undefined {
+    const official = this.readOfficialRoute(current);
+    if (!official) return undefined;
+    return {
+      kind: 'native-api',
+      available: true,
+      titleCode: 'harness.deepseekOfficial',
+      hintCode: 'harness.officialHintDsh',
+      matchesProfile: (profile) => profile.extras.providerType === 'official',
+    };
+  }
+
+  private readOfficialRoute(current: CurrentFiles) {
     const settings = tryParseYamlDocument(current[SETTINGS]);
     const credentials = tryParseYamlDocument(current[CREDENTIALS]);
     const route = settings ? toPlain(settings.getIn(['llm-deepseek'])) : undefined;
@@ -258,7 +260,10 @@ export class DshAdapter implements HarnessAdapter {
         : 'DEEPSEEK_API_KEY';
     const apiKey =
       credentials?.getIn(['refs', credentialRef]) ?? credentials?.getIn([credentialRef]);
-    return route !== undefined && typeof apiKey === 'string' && apiKey.trim() !== '';
+    if (!settings || route === undefined || typeof apiKey !== 'string' || !apiKey.trim()) {
+      return undefined;
+    }
+    return { settings, route, credentialRef, apiKey };
   }
 
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {

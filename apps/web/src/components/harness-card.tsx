@@ -33,28 +33,18 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [activating, setActivating] = useState<ProfilePublic | null>(null);
   const [activatingOfficial, setActivatingOfficial] = useState(false);
-  // A saved DSH official API profile already represents the same native
-  // `llm-deepseek` entry the detector finds. Show one editable card, not both.
-  const dshOfficialProfile =
-    harness.id === 'dsh'
-      ? harness.profiles.find((profile) => profile.extras.providerType === 'official')
-      : undefined;
-  const dshOfficialCount = harness.profiles.filter(
-    (profile) => profile.extras.providerType === 'official',
-  ).length;
+  const official = harness.official;
+  const linkedOfficialProfile = official?.linkedProfileName
+    ? harness.profiles.find((profile) => profile.name === official.linkedProfileName)
+    : undefined;
   const visibleProfiles = harness.profiles.filter(
-    (profile) =>
-      !(
-        harness.id === 'dsh' &&
-        harness.officialAvailable === true &&
-        profile.extras.providerType === 'official'
-      ),
+    (profile) => profile.name !== official?.linkedProfileName,
   );
-  const dshOfficialActive =
-    dshOfficialProfile !== undefined &&
-    harness.active?.official !== true &&
-    harness.active?.name === dshOfficialProfile.name;
-
+  const pendingProfile = harness.profiles.find((profile) => profile.name === pendingName);
+  const isLastDshOfficial =
+    harness.id === 'dsh' &&
+    pendingProfile?.extras.providerType === 'official' &&
+    harness.profiles.filter((profile) => profile.extras.providerType === 'official').length === 1;
   // The stored name of the official entry is data on disk, so the display text
   // comes from the `official` flag rather than from matching the name.
   const activeName = harness.active?.official
@@ -117,7 +107,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
         </div>
 
         <div className="space-y-3">
-          {harness.supportsOfficialAuth && harness.officialAvailable !== false ? (
+          {official?.available ? (
             <div className="flex items-center justify-between gap-3 rounded-xl border bg-card px-4 py-4 shadow-[0_10px_28px_-26px_rgb(36_39_70/0.38)]">
               <div className="flex min-w-0 items-center gap-3">
                 <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -125,44 +115,29 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                 </span>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium">
-                      {harness.id === 'dsh' ? t('harness.deepseekOfficial') : t('harness.official')}
-                    </p>
-                    {harness.active?.official || dshOfficialActive ? (
+                    <p className="font-medium">{t(official.titleCode)}</p>
+                    {official.active ? (
                       <Badge variant="secondary">{t('harness.active')}</Badge>
                     ) : null}
                   </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {harness.id === 'claude'
-                      ? t('harness.officialHintClaude')
-                      : harness.id === 'kimi'
-                        ? t('harness.officialHintKimi')
-                        : harness.id === 'dsh'
-                          ? t('harness.officialHintDsh')
-                          : t('harness.officialHintCodex')}
-                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t(official.hintCode)}</p>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <Button
                   size="sm"
-                  variant={harness.active?.official || dshOfficialActive ? 'secondary' : 'outline'}
-                  disabled={harness.active?.official || dshOfficialActive}
-                  onClick={() => {
-                    if (dshOfficialProfile) setActivating(dshOfficialProfile);
-                    else setActivatingOfficial(true);
-                  }}
+                  variant={official.active ? 'secondary' : 'outline'}
+                  disabled={official.active}
+                  onClick={() => setActivatingOfficial(true)}
                 >
-                  {harness.active?.official || dshOfficialActive
-                    ? t('harness.officialActive')
-                    : t('harness.officialSwitch')}
+                  {official.active ? t('harness.officialActive') : t('harness.officialSwitch')}
                 </Button>
-                {dshOfficialProfile ? (
+                {linkedOfficialProfile ? (
                   <Button
                     size="icon"
                     variant="ghost"
-                    aria-label={t('harness.edit', { name: dshOfficialProfile.name })}
-                    onClick={() => onEdit(dshOfficialProfile)}
+                    aria-label={t('harness.edit', { name: linkedOfficialProfile.name })}
+                    onClick={() => onEdit(linkedOfficialProfile)}
                   >
                     <Pencil />
                   </Button>
@@ -170,7 +145,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
               </div>
             </div>
           ) : null}
-          {visibleProfiles.length === 0 && !dshOfficialProfile ? (
+          {visibleProfiles.length === 0 && !linkedOfficialProfile ? (
             <div className="rounded-xl border border-dashed bg-card/60 px-5 py-8 text-center">
               <p className="text-sm text-muted-foreground">{t('harness.noProfiles')}</p>
               <Button className="mt-4" size="sm" onClick={onAdd}>
@@ -182,8 +157,6 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
             visibleProfiles.map((profile) => {
               const active =
                 harness.active?.official !== true && harness.active?.name === profile.name;
-              const dshOfficial =
-                harness.id === 'dsh' && profile.extras.providerType === 'official';
               return (
                 <div
                   key={profile.name}
@@ -203,16 +176,11 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                     />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">
-                          {dshOfficial ? t('harness.deepseekOfficial') : profile.name}
-                        </p>
+                        <p className="font-medium">{profile.name}</p>
                         {active ? (
                           <Badge>
                             {harness.id === 'dsh' ? t('harness.default') : t('harness.active')}
                           </Badge>
-                        ) : null}
-                        {dshOfficial ? (
-                          <Badge variant="secondary">{t('harness.official')}</Badge>
                         ) : null}
                         {profile.overriddenTargets.length > 0 ? (
                           <Badge variant="outline">{t('harness.manualOverride')}</Badge>
@@ -252,31 +220,23 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                     >
                       <Pencil />
                     </Button>
-                    {!dshOfficial ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t('harness.copy', { name: profile.name })}
-                        onClick={() => onCopy?.(profile)}
-                      >
-                        <Copy />
-                      </Button>
-                    ) : null}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t('harness.copy', { name: profile.name })}
+                      onClick={() => onCopy?.(profile)}
+                    >
+                      <Copy />
+                    </Button>
                     <Button
                       size="icon"
                       variant="ghost"
                       aria-label={t('harness.delete', { name: profile.name })}
-                      disabled={active || (dshOfficial && dshOfficialCount === 1)}
+                      disabled={active}
                       title={active ? t('harness.deleteBlocked') : undefined}
                       onClick={() => setPendingName(profile.name)}
                     >
-                      <Trash2
-                        className={
-                          active || (dshOfficial && dshOfficialCount === 1)
-                            ? undefined
-                            : 'text-destructive'
-                        }
-                      />
+                      <Trash2 className={active ? undefined : 'text-destructive'} />
                     </Button>
                   </div>
                 </div>
@@ -312,7 +272,11 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
               {t('harness.deleteBody', {
                 harness: harness.label,
                 profile: pendingName ?? '',
-                extra: harness.mode === 'additive' ? t('harness.deleteAdditiveExtra') : '',
+                extra: isLastDshOfficial
+                  ? t('harness.deleteDshOfficialExtra')
+                  : harness.mode === 'additive'
+                    ? t('harness.deleteAdditiveExtra')
+                    : '',
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -14,6 +14,7 @@ import type {
   AdapterTarget,
   CurrentFiles,
   HarnessAdapter,
+  OfficialCapability,
   RenderedFiles,
 } from './types';
 
@@ -108,6 +109,15 @@ export class ClaudeAdapter implements HarnessAdapter {
       nameEnvVar ? [envVar, nameEnvVar] : [envVar],
     ),
   ];
+
+  official(_current: CurrentFiles): OfficialCapability {
+    return {
+      kind: 'account-login',
+      available: true,
+      titleCode: 'harness.official',
+      hintCode: 'harness.officialHintClaude',
+    };
+  }
 
   readonly fields: FieldSpec[] = [
     {

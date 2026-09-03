@@ -529,6 +529,27 @@ describe('rest api', () => {
     expect(await readFile(claudeSettings(), 'utf8')).toContain('sk-source');
   });
 
+  test('refuses copying a DSH official profile into a second official profile', async () => {
+    const context = await createTestApp();
+    expect(
+      (
+        await createProfile(context, 'dsh', {
+          name: 'official',
+          baseUrl: 'https://api.deepseek.com',
+          apiKey: 'sk-official',
+          model: 'deepseek-v4-flash',
+          extras: { providerType: 'official' },
+        })
+      ).status,
+    ).toBe(201);
+
+    const response = await createProfile(context, 'dsh', {
+      name: 'official-copy',
+      copySourceName: 'official',
+    });
+    expect(response.status).toBe(409);
+  });
+
   test('returns Claude to its built-in official login', async () => {
     const context = await createTestApp();
     await createProfile(context, 'claude', {
@@ -555,7 +576,7 @@ describe('rest api', () => {
     const claude = await summary(context, 'claude');
     expect(claude.active?.official).toBe(true);
     expect(claude.active?.name).toBe('官方登录');
-    expect(claude.supportsOfficialAuth).toBe(true);
+    expect(claude.official).toMatchObject({ kind: 'account-login', available: true, active: true });
   });
 
   test('returns Kimi Code to its managed official login', async () => {
@@ -610,7 +631,7 @@ describe('rest api', () => {
 
     const kimi = await summary(context, 'kimi');
     expect(kimi.active?.official).toBe(true);
-    expect(kimi.supportsOfficialAuth).toBe(true);
+    expect(kimi.official).toMatchObject({ kind: 'account-login', available: true, active: true });
 
     // And a profile activation can reuse the entry that stayed on disk.
     await activate(context, 'kimi', 'relay');
@@ -619,7 +640,7 @@ describe('rest api', () => {
 
   test('switches DSH to a detected native DeepSeek official API key', async () => {
     const context = await createTestApp();
-    expect((await summary(context, 'dsh')).officialAvailable).toBe(false);
+    expect((await summary(context, 'dsh')).official).toBeUndefined();
     const settingsPath = join(homeDir, '.dsh', 'settings.yaml');
     const credentialsPath = join(homeDir, '.dsh', '.credentials.yaml');
     await mkdir(join(homeDir, '.dsh'), { recursive: true });
@@ -647,9 +668,16 @@ describe('rest api', () => {
 
     const settings = await readFile(settingsPath, 'utf8');
     expect(settings).toContain('provider: deepseek-official');
-    expect(settings).toContain('model: deepseek-v4-flash');
-    expect((await summary(context, 'dsh')).supportsOfficialAuth).toBe(true);
-    expect((await summary(context, 'dsh')).officialAvailable).toBe(true);
+    expect(settings).toContain('model: relay-model');
+    expect(await readFile(credentialsPath, 'utf8')).toBe(
+      'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n',
+    );
+    expect((await summary(context, 'dsh')).official).toMatchObject({
+      kind: 'native-api',
+      available: true,
+      active: true,
+    });
+    expect((await summary(context, 'dsh')).active?.official).toBe(true);
   });
 
   test('refuses to switch Kimi Code to an official login it never completed', async () => {
