@@ -170,7 +170,7 @@ test('loading the session also refreshes drift without blocking on its failure',
   expect(requests.some((request) => request.path === '/api/drift')).toBe(true);
 });
 
-test('activating explains what took effect and when', async () => {
+test('activating toasts a short done message', async () => {
   useAppStore.setState({
     harnesses: [{ id: 'claude', label: 'Claude Code' }],
   } as Partial<ReturnType<typeof useAppStore.getState>> as never);
@@ -182,11 +182,7 @@ test('activating explains what took effect and when', async () => {
   await useAppStore.getState().activateProfile('claude', 'openrouter-main');
 
   const notice = useAppStore.getState().notice ?? [];
-  expect(notice[0]).toMatchObject({
-    key: 'notice.activated',
-    params: { harness: 'Claude Code', profile: 'openrouter-main' },
-  });
-  expect(notice.some((line) => line.key === 'notice.activatedHint')).toBe(true);
+  expect(notice[0]).toMatchObject({ key: 'notice.switchDone' });
   expect(requests[0]).toMatchObject({
     path: '/api/harnesses/claude/profiles/openrouter-main/activate',
     method: 'POST',
@@ -317,7 +313,7 @@ test('logging out clears everything the session loaded', async () => {
 });
 
 test('dismissing the notice clears it', () => {
-  useAppStore.setState({ notice: [{ key: 'notice.activatedHint' }] });
+  useAppStore.setState({ notice: [{ key: 'notice.switchDone' }] });
   useAppStore.getState().clearNotice();
   expect(useAppStore.getState().notice).toBeNull();
 });

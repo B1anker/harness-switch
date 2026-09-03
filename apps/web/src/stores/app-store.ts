@@ -16,7 +16,6 @@ import type {
   HarnessId,
   HarnessSummary,
   LocalUserPublic,
-  MessageParams,
   OperationReceipt,
   OperationsResponse,
   OperationUndoResponse,
@@ -73,8 +72,7 @@ type AppState = {
   backups: BackupEntry[];
   /**
    * Lines for the toast. Kept as keys rather than sentences because these are built
-   * outside React, where there is no `t` — and because an open toast should follow a
-   * language switch.
+   * outside React, where there is no `t`; the toast component resolves them as it fires.
    */
   notice: MessageLine[] | null;
   /** Provider Vault entries; null until the first successful load. */
@@ -140,16 +138,6 @@ type AppState = {
   loadOperations: (harnessId: HarnessId) => Promise<void>;
   undoOperation: (id: string) => Promise<void>;
 };
-
-/**
- * The `user` interpolation for an activation notice. A username is data; the stand-in
- * for "the current user" is copy, so it travels as a key and is translated on render.
- */
-function activationLine(key: string, username: string, params: MessageParams): MessageLine {
-  return username
-    ? { key, params: { ...params, user: username } }
-    : { key, params, paramKeys: { user: 'notice.currentUser' } };
-}
 
 export const useAppStore = create<AppState>((set, get) => ({
   sessionChecked: false,
@@ -309,13 +297,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await api<ActivateResponse>(`${profilePath(harnessId, name)}/activate`, {
       method: 'POST',
     });
-    const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
     set({
-      notice: [
-        activationLine('notice.activated', get().currentUser, { harness: label, profile: name }),
-        { key: 'notice.activatedHint' },
-        ...result.warnings.map(messageLine),
-      ],
+      notice: [{ key: 'notice.switchDone' }, ...result.warnings.map(messageLine)],
     });
     await get().loadHarnesses();
   },
@@ -324,13 +307,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const result = await api<ActivateResponse>(`/api/harnesses/${harnessId}/official/activate`, {
       method: 'POST',
     });
-    const label = get().harnesses.find((item) => item.id === harnessId)?.label ?? harnessId;
     set({
-      notice: [
-        activationLine('notice.officialRestored', get().currentUser, { harness: label }),
-        { key: 'notice.officialHint' },
-        ...result.warnings.map(messageLine),
-      ],
+      notice: [{ key: 'notice.switchDone' }, ...result.warnings.map(messageLine)],
     });
     await get().loadHarnesses();
   },

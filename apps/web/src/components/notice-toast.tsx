@@ -1,9 +1,15 @@
 import { useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { useTranslation } from '@/lib/i18n';
 import { lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
+/**
+ * Fires a Sonner toast per pending notice line, then clears the queue. Lines stay
+ * catalog keys until here because the store has no `t`; the trade-off versus the old
+ * hand-rolled toast is that a fired toast no longer follows a language switch.
+ */
 export function NoticeToast() {
   const { t } = useTranslation();
   const notice = useAppStore((state) => state.notice);
@@ -13,33 +19,16 @@ export function NoticeToast() {
     if (!notice) {
       return;
     }
-    const timer = window.setTimeout(() => clearNotice(), 8000);
-    return () => window.clearTimeout(timer);
-  }, [notice, clearNotice]);
+    for (const line of notice) {
+      const text = lineText(t, line);
+      if (line.key.startsWith('warning.')) {
+        toast.warning(text);
+      } else {
+        toast.success(text);
+      }
+    }
+    clearNotice();
+  }, [notice, clearNotice, t]);
 
-  if (!notice) {
-    return null;
-  }
-
-  return (
-    <div
-      role="status"
-      className="fixed bottom-4 right-4 z-50 w-[min(28rem,calc(100vw-2rem))] rounded-2xl border bg-card p-4 shadow-[0_18px_50px_-24px_rgb(36_39_70/0.45)]"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium">{t('notice.title')}</p>
-        <Button size="sm" variant="ghost" onClick={clearNotice}>
-          {t('notice.close')}
-        </Button>
-      </div>
-      {notice.map((line) => (
-        <p
-          key={`${line.key}-${line.scope ?? ''}`}
-          className="mt-2 text-sm leading-relaxed text-muted-foreground"
-        >
-          {lineText(t, line)}
-        </p>
-      ))}
-    </div>
-  );
+  return <Toaster position="top-center" richColors />;
 }

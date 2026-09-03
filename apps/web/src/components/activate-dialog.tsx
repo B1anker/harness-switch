@@ -45,7 +45,6 @@ export function ActivateDialog({
   const [previewError, setPreviewError] = useState<MessageLine | null>(null);
   const [activationError, setActivationError] = useState<MessageLine | null>(null);
   const [executing, setExecuting] = useState(false);
-  const [succeeded, setSucceeded] = useState(false);
   const [previewAttempt, setPreviewAttempt] = useState(0);
 
   useEffect(() => {
@@ -57,7 +56,6 @@ export function ActivateDialog({
     setPreviewError(null);
     setActivationError(null);
     setExecuting(false);
-    setSucceeded(false);
     const preview = official
       ? previewOfficial(harness.id)
       : previewProfile(harness.id, profileName ?? '');
@@ -75,15 +73,15 @@ export function ActivateDialog({
 
   async function activate(event: MouseEvent<HTMLButtonElement>) {
     // AlertDialogAction closes by default; keep the diff visible until the write has
-    // completed, then turn the dialog into a durable success receipt or retry state.
+    // completed, then close and let the toast confirm, or stay open for a retry.
     event.preventDefault();
-    if (!targets || executing || succeeded) return;
+    if (!targets || executing) return;
     setExecuting(true);
     setActivationError(null);
     try {
       if (official) await activateOfficial(harness.id);
       else await activateProfile(harness.id, profileName ?? '');
-      setSucceeded(true);
+      onOpenChange(false);
     } catch (error) {
       setActivationError(errorLine(error));
     } finally {
@@ -132,34 +130,25 @@ export function ActivateDialog({
             {t('activate.failed', { reason: lineText(t, activationError) })}
           </p>
         ) : null}
-        {succeeded ? <p className="text-sm text-primary">{t('activate.succeeded')}</p> : null}
         <AlertDialogFooter>
-          {succeeded ? (
-            <AlertDialogAction onClick={() => onOpenChange(false)}>
-              {t('common.close')}
+          <AlertDialogCancel disabled={executing}>{t('common.cancel')}</AlertDialogCancel>
+          {previewError ? (
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                setPreviewAttempt((attempt) => attempt + 1);
+              }}
+            >
+              {t('activate.retryPreview')}
             </AlertDialogAction>
           ) : (
-            <>
-              <AlertDialogCancel disabled={executing}>{t('common.cancel')}</AlertDialogCancel>
-              {previewError ? (
-                <AlertDialogAction
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setPreviewAttempt((attempt) => attempt + 1);
-                  }}
-                >
-                  {t('activate.retryPreview')}
-                </AlertDialogAction>
-              ) : (
-                <AlertDialogAction disabled={targets === null || executing} onClick={activate}>
-                  {executing
-                    ? t('activate.executing')
-                    : activationError
-                      ? t('activate.retry')
-                      : t('activate.confirm')}
-                </AlertDialogAction>
-              )}
-            </>
+            <AlertDialogAction disabled={targets === null || executing} onClick={activate}>
+              {executing
+                ? t('activate.executing')
+                : activationError
+                  ? t('activate.retry')
+                  : t('activate.confirm')}
+            </AlertDialogAction>
           )}
         </AlertDialogFooter>
       </AlertDialogContent>

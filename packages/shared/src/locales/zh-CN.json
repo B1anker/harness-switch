@@ -68,6 +68,7 @@
     "officialSwitch": "切回官方",
     "officialHintClaude": "使用 Claude Code 自身的 Anthropic 账号登录",
     "officialHintCodex": "使用 Codex 自身的 ChatGPT / OpenAI 账号登录",
+    "officialHintKimi": "使用 Kimi Code 自身的 Kimi 账号登录（/login 写入的 OAuth 凭据）",
     "application": "应用",
     "writeMode": "写入模式",
     "modeReplace": "替换当前配置",
@@ -210,8 +211,7 @@
     "executing": "正在写入…",
     "failed": "写入失败：{{reason}}。配置未切换，请修正后重试。",
     "retry": "重试激活",
-    "retryPreview": "重新读取预览",
-    "succeeded": "切换完成，已创建备份和可撤销的操作收据。"
+    "retryPreview": "重新读取预览"
   },
   "env": {
     "title": "环境变量文件兼容性",
@@ -334,12 +334,7 @@
     }
   },
   "notice": {
-    "title": "已写入磁盘",
-    "close": "关闭",
-    "activated": "{{harness}} 已切换到「{{profile}}」（用户：{{user}}），原生配置文件已写入。",
-    "activatedHint": "Claude Code 会立即生效；Codex、Kimi Code、Pi 需要重新启动进程。",
-    "officialRestored": "{{harness}} 已切回官方登录（用户：{{user}}），第三方 API 路由已从原生配置中移除。",
-    "officialHint": "如尚未登录，请在终端启动对应工具并完成一次官方登录。",
+    "switchDone": "切换完成",
     "warningPrefix": "注意：{{message}}",
     "currentUser": "当前用户",
     "transferImported": "导入完成。",
@@ -422,6 +417,7 @@
     },
     "activation": {
       "officialLoginUnsupported": "{{harness}} 不支持官方账号登录模式",
+      "officialLoginMissing": "未检测到 {{harness}} 的官方登录条目，请先在终端完成一次官方登录",
       "noActiveProfile": "该工具未激活任何配置，无可渲染的内容",
       "officialProfileCannotAdopt": "当前处于官方登录状态，没有可回填的配置档案",
       "adoptUnsupported": "该工具不支持采纳现场配置",
