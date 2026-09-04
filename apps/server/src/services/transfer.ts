@@ -1,4 +1,3 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import {
   type CodexAuthJsonEffect,
   HARNESS_IDS,
@@ -175,7 +174,7 @@ export class TransferService implements ITransferService {
           ]
         : [];
     });
-    return encrypt(
+    return this.seal(
       {
         format: 'harness-switch-portable-config',
         version: VERSION,
@@ -322,7 +321,7 @@ export class TransferService implements ITransferService {
 
   private decrypt(envelope: TransferEnvelope, passphrase: string): PortablePayload {
     this.assertPassphrase(passphrase);
-    const payload = decrypt(envelope, passphrase);
+    const payload = this.open(envelope, passphrase);
     if (
       payload.format !== 'harness-switch-portable-config' ||
       payload.version !== VERSION ||
@@ -554,8 +553,7 @@ export class TransferService implements ITransferService {
 
   private restore(path: string, snapshot: string | undefined): void {
     try {
-      if (snapshot === undefined) this.files.remove(path);
-      else this.files.writeSecure(path, snapshot);
+      this.files.restore(path, snapshot);
     } catch {
       // Preserve the original import failure; the cache transaction rolls its own write back.
     }
@@ -578,57 +576,38 @@ export class TransferService implements ITransferService {
       throw new HttpError(400, '迁移密码至少需要 8 个字符');
     }
   }
-}
 
-function encrypt(payload: PortablePayload, passphrase: string): TransferEnvelope {
-  const salt = randomBytes(16);
-  const iv = randomBytes(12);
-  const key = scryptSync(passphrase, salt, 32);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const data = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
-  return {
-    format: FORMAT,
-    version: VERSION,
-    kdf: { name: 'scrypt', salt: salt.toString('base64url') },
-    cipher: {
-      name: 'aes-256-gcm',
-      iv: iv.toString('base64url'),
-      tag: cipher.getAuthTag().toString('base64url'),
-      data: data.toString('base64url'),
-    },
-  };
-}
+  private seal(payload: PortablePayload, passphrase: string): TransferEnvelope {
+    const { salt, iv, tag, data } = this.crypto.seal(JSON.stringify(payload), passphrase);
+    return {
+      format: FORMAT,
+      version: VERSION,
+      kdf: { name: 'scrypt', salt },
+      cipher: { name: 'aes-256-gcm', iv, tag, data },
+    };
+  }
 
-function decrypt(envelope: TransferEnvelope, passphrase: string): PortablePayload {
-  try {
-    if (
-      envelope?.format !== FORMAT ||
-      envelope.version !== VERSION ||
-      envelope.kdf?.name !== 'scrypt' ||
-      envelope.cipher?.name !== 'aes-256-gcm' ||
-      typeof envelope.kdf.salt !== 'string' ||
-      typeof envelope.cipher.iv !== 'string' ||
-      typeof envelope.cipher.tag !== 'string' ||
-      typeof envelope.cipher.data !== 'string' ||
-      envelope.cipher.data.length > MAX_ENCRYPTED_BYTES
-    ) {
-      throw new Error('invalid envelope');
+  private open(envelope: TransferEnvelope, passphrase: string): PortablePayload {
+    try {
+      if (
+        envelope?.format !== FORMAT ||
+        envelope.version !== VERSION ||
+        envelope.kdf?.name !== 'scrypt' ||
+        envelope.cipher?.name !== 'aes-256-gcm' ||
+        typeof envelope.kdf.salt !== 'string' ||
+        typeof envelope.cipher.iv !== 'string' ||
+        typeof envelope.cipher.tag !== 'string' ||
+        typeof envelope.cipher.data !== 'string' ||
+        envelope.cipher.data.length > MAX_ENCRYPTED_BYTES
+      ) {
+        throw new Error('invalid envelope');
+      }
+      return JSON.parse(
+        this.crypto.open({ salt: envelope.kdf.salt, ...envelope.cipher }, passphrase),
+      ) as PortablePayload;
+    } catch {
+      throw new HttpError(400, '迁移密码错误或导出文件已损坏');
     }
-    const salt = Buffer.from(envelope.kdf.salt, 'base64url');
-    const key = scryptSync(passphrase, salt, 32);
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      key,
-      Buffer.from(envelope.cipher.iv, 'base64url'),
-    );
-    decipher.setAuthTag(Buffer.from(envelope.cipher.tag, 'base64url'));
-    const plain = Buffer.concat([
-      decipher.update(Buffer.from(envelope.cipher.data, 'base64url')),
-      decipher.final(),
-    ]).toString('utf8');
-    return JSON.parse(plain) as PortablePayload;
-  } catch {
-    throw new HttpError(400, '迁移密码错误或导出文件已损坏');
   }
 }
 

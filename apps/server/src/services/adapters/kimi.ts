@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
-import type { IEnvironmentService } from '../environment';
+import { BaseAdapter } from './base';
 import { compact, type DetectedProfile, providerId, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
@@ -34,13 +34,14 @@ const DEFAULT_CONTEXT = 262144;
  * Note this targets Kimi Code (TypeScript, `~/.kimi-code`), not the separate Kimi CLI
  * (Python, `~/.kimi`). Both ship a `kimi` command.
  */
-export class KimiAdapter implements HarnessAdapter {
+export class KimiAdapter extends BaseAdapter implements HarnessAdapter {
   readonly id = 'kimi' as const;
   readonly mode: HarnessMode = 'additive';
   readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'Kimi Code 不从 shell 读取凭据，env.sh 对它无效。';
   readonly envNoteCode = 'harness.field.kimi.envNote';
+  protected readonly requires = ['model'] as const;
 
   official(_current: CurrentFiles): OfficialCapability {
     return {
@@ -90,8 +91,6 @@ export class KimiAdapter implements HarnessAdapter {
     },
   ];
 
-  constructor(private readonly environment: IEnvironmentService) {}
-
   targets(): AdapterTarget[] {
     return [
       {
@@ -122,15 +121,6 @@ export class KimiAdapter implements HarnessAdapter {
         return 'openai-chat';
       default:
         return undefined;
-    }
-  }
-
-  validate(profile: AdapterProfile): void {
-    if (!profile.model.trim()) {
-      throw new HttpError(400, 'Kimi Code 需要填写模型名称，否则无法生成 models 条目', {
-        code: ERROR_CODES.adapterModelRequired,
-        params: { harness: 'Kimi Code' },
-      });
     }
   }
 

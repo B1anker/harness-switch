@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { InstantiationService } from '../../di';
 import { IBackupService } from '../../services/backup';
+import { param } from '../params';
 
 export function createBackupRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -8,10 +9,10 @@ export function createBackupRoutes(services: InstantiationService): Hono {
 
   app.get('/', (c) => c.json({ items: backups.list() }));
 
-  app.get('/:id', (c) => c.json(backups.detail(decodeURIComponent(c.req.param('id')))));
+  app.get('/:id', (c) => c.json(backups.detail(param(c, 'id'))));
 
   app.post('/:id/restore', (c) => {
-    backups.restore(decodeURIComponent(c.req.param('id')));
+    backups.restore(param(c, 'id'));
     return c.json({ ok: true });
   });
 

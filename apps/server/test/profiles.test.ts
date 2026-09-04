@@ -1,30 +1,24 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
-import { createServices } from '../src/bootstrap';
+import type { InstantiationService } from '../src/di';
 import { ICryptoService } from '../src/services/crypto';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import { IProfileService } from '../src/services/profiles';
-import { expectHttpError } from './support/http-error';
+import { createSandbox, createTestServices, expectHttpError, type Sandbox } from './support';
 
-let homeDir = '';
-let services: ReturnType<typeof createServices>;
+let sandbox: Sandbox;
+let services: InstantiationService;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-profiles-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
+  sandbox = createSandbox('hsw-profiles');
+  services = createTestServices();
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 function create(name: string, extra: Record<string, unknown> = {}) {
@@ -256,7 +250,7 @@ describe('crypto', () => {
 describe('file service', () => {
   test('tells an absent file apart from an empty one', () => {
     const files = services.get(IFileService);
-    const file = join(homeDir, 'maybe.txt');
+    const file = sandbox.home('maybe.txt');
 
     expect(files.readOptional(file)).toBeUndefined();
     files.writeUserFile(file, '');
@@ -265,36 +259,36 @@ describe('file service', () => {
 
   test('leaves no temporary files behind', () => {
     const files = services.get(IFileService);
-    const dir = join(homeDir, 'writes');
+    const dir = sandbox.home('writes');
     files.writeUserFile(join(dir, 'a.json'), '{}');
 
-    expect(files.listDirectories(homeDir)).toContain('writes');
+    expect(files.listDirectories(sandbox.homeDir)).toContain('writes');
     expect(Bun.spawnSync(['ls', dir]).stdout.toString().trim()).toBe('a.json');
   });
 
   test('removing is idempotent and works on directories', () => {
     const files = services.get(IFileService);
-    const dir = join(homeDir, 'tree');
+    const dir = sandbox.home('tree');
     files.writeUserFile(join(dir, 'a.json'), '{}');
 
     files.remove(dir);
     files.remove(dir);
     expect(files.exists(dir)).toBe(false);
-    expect(files.listDirectories(join(homeDir, 'missing'))).toEqual([]);
+    expect(files.listDirectories(sandbox.home('missing'))).toEqual([]);
   });
 
   test('falls back instead of throwing on unreadable json', () => {
     const files = services.get(IFileService);
-    const file = join(homeDir, 'broken.json');
+    const file = sandbox.home('broken.json');
     files.writeUserFile(file, '{ nope');
 
     expect(files.readJson(file, { fallback: true })).toEqual({ fallback: true });
-    expect(files.readJson(join(homeDir, 'absent.json'), null)).toBeNull();
+    expect(files.readJson(sandbox.home('absent.json'), null)).toBeNull();
   });
 
   test('readOptional rethrows non-ENOENT errors instead of reporting an absent file', () => {
     const files = services.get(IFileService);
-    const blocked = join(homeDir, 'blocked');
+    const blocked = sandbox.home('blocked');
     files.writeUserFile(blocked, 'not a directory');
 
     expect(() => files.readOptional(join(blocked, 'config.json'))).toThrow();
@@ -302,14 +296,14 @@ describe('file service', () => {
 
   test('readJsonStrict returns the fallback only when the file is absent', () => {
     const files = services.get(IFileService);
-    expect(files.readJsonStrict(join(homeDir, 'absent.json'), { fallback: true })).toEqual({
+    expect(files.readJsonStrict(sandbox.home('absent.json'), { fallback: true })).toEqual({
       fallback: true,
     });
   });
 
   test('readJsonStrict quarantines a corrupt store instead of silently dropping it', () => {
     const files = services.get(IFileService);
-    const file = join(homeDir, 'store.json');
+    const file = sandbox.home('store.json');
     files.writeUserFile(file, '{ nope');
 
     expectHttpError(
@@ -317,16 +311,18 @@ describe('file service', () => {
       ERROR_CODES.storageCorruptQuarantined,
     );
     expect(files.exists(file)).toBe(false);
-    const quarantined = readdirSync(homeDir).find((name) => name.startsWith('store.json.corrupt-'));
+    const quarantined = readdirSync(sandbox.homeDir).find((name) =>
+      name.startsWith('store.json.corrupt-'),
+    );
     expect(quarantined).toBeDefined();
-    expect(files.readOptional(join(homeDir, quarantined as string))).toBe('{ nope');
+    expect(files.readOptional(sandbox.home(quarantined as string))).toBe('{ nope');
     // The next read is clean, so the service recovers instead of bricking.
     expect(files.readJsonStrict(file, { fallback: true })).toEqual({ fallback: true });
   });
 
   test('a corrupt profile store fails closed instead of being overwritten as empty', () => {
     const profiles = services.get(IProfileService);
-    const store = join(homeDir, '.harness-switch', 'profiles.json');
+    const store = sandbox.data('profiles.json');
     services.get(IFileService).writeUserFile(store, '{ nope');
 
     expectHttpError(() => profiles.list('claude'), ERROR_CODES.storageCorruptQuarantined);

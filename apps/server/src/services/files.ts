@@ -69,6 +69,12 @@ export interface IFileService {
   writeUserSecretFile(file: string, text: string): void;
   readJson<T>(file: string, fallback: T): T;
   writeJson(file: string, value: unknown): void;
+  /**
+   * Puts a file back to a snapshot taken with {@link IFileService.readOptional}, where
+   * `undefined` means it did not exist. Used to unwind a partially applied multi-file
+   * write.
+   */
+  restore(file: string, snapshot: string | undefined): void;
   ensureDir(dir: string): void;
   remove(file: string): void;
   listDirectories(dir: string): string[];
@@ -208,6 +214,14 @@ export class FileService implements IFileService {
 
   writeJson(file: string, value: unknown): void {
     this.writeSecure(file, `${JSON.stringify(value, null, 2)}\n`);
+  }
+
+  restore(file: string, snapshot: string | undefined): void {
+    if (snapshot === undefined) {
+      this.remove(file);
+      return;
+    }
+    this.writeSecure(file, snapshot);
   }
 
   ensureDir(dir: string): void {

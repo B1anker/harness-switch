@@ -4,7 +4,9 @@ import type {
   ProbeResult,
 } from '@seaveyon/harness-switch-shared';
 import { PROBE_CODES } from '@seaveyon/harness-switch-shared';
+import { isRecord } from '../common/guards';
 import { createDecorator, inject } from '../di';
+import { IHttpClient } from './http-client';
 
 export type ProbeInput = {
   baseUrl: string;
@@ -73,9 +75,11 @@ const COMPLETION_PROTOCOLS: readonly CompletionProtocol[] = [
  * one minimal request and reports its outcome separately, so "lists models" and "answers
  * with one" never get conflated.
  */
-@inject()
+@inject(IHttpClient)
 export class ProbeService implements IProbeService {
   declare readonly _serviceBrand: undefined;
+
+  constructor(private readonly http: IHttpClient) {}
 
   async probe(input: ProbeInput): Promise<ProbeResult> {
     const baseUrl = input.baseUrl.trim();
@@ -146,7 +150,7 @@ export class ProbeService implements IProbeService {
     const started = performance.now();
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await this.http.fetch(url, {
         headers: authHeaders(apiKey, { Accept: 'application/json' }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
         redirect: 'follow',
@@ -228,7 +232,7 @@ export class ProbeService implements IProbeService {
     const started = performance.now();
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await this.http.fetch(url, {
         method: 'POST',
         headers: authHeaders(apiKey, {
           Accept: 'application/json',
@@ -527,11 +531,6 @@ function contentText(content: unknown): string {
     })
     .join('');
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function firstString(record: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {
     const value = record[key];

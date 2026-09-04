@@ -1,36 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   HarnessSummary,
   ScanHarnessResult,
   ScanImportResponse,
 } from '@seaveyon/harness-switch-shared';
-import { createApp } from '../src/app';
-import { createServices } from '../src/bootstrap';
-import { IAuthService } from '../src/services/auth';
-import { IEnvironmentService } from '../src/services/environment';
+import { createSandbox, createTestApp, type Sandbox, type TestApp } from './support';
 
-let homeDir = '';
-
-type Context = {
-  app: ReturnType<typeof createApp>;
-  cookie: string;
-};
+let sandbox: Sandbox;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-scan-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  process.env.CODEX_HOME = join(homeDir, '.codex');
+  sandbox = createSandbox('hsw-scan', { env: (home) => ({ CODEX_HOME: home('.codex') }) });
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  delete process.env.CODEX_HOME;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 function seed(file: string, content: string): void {
@@ -38,25 +23,8 @@ function seed(file: string, content: string): void {
   writeFileSync(file, content, { mode: 0o600 });
 }
 
-async function boot(): Promise<Context> {
-  const services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
-  const password = services.get(IAuthService).ensurePassword();
-  const app = createApp(services);
-  const login = await app.request('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  return { app, cookie: login.headers.get('set-cookie') ?? '' };
-}
-
-async function scan(context: Context): Promise<ScanHarnessResult[]> {
-  const response = await context.app.request('/api/scan', {
-    headers: { Cookie: context.cookie },
-  });
-  expect(response.status).toBe(200);
-  return ((await response.json()) as { items: ScanHarnessResult[] }).items;
+async function scan(context: TestApp): Promise<ScanHarnessResult[]> {
+  return (await context.json<{ items: ScanHarnessResult[] }>('/api/scan')).items;
 }
 
 function resultFor(items: ScanHarnessResult[], harness: string): ScanHarnessResult {
@@ -68,27 +36,20 @@ function resultFor(items: ScanHarnessResult[], harness: string): ScanHarnessResu
 }
 
 async function importSelections(
-  context: Context,
+  context: TestApp,
   selections: unknown[],
 ): Promise<{ status: number; body: ScanImportResponse }> {
-  const response = await context.app.request('/api/scan/import', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-    body: JSON.stringify({ selections }),
-  });
+  const response = await context.post('/api/scan/import', { selections });
   return { status: response.status, body: (await response.json()) as ScanImportResponse };
 }
 
-async function summary(context: Context, harness: string): Promise<HarnessSummary> {
-  const response = await context.app.request(`/api/harnesses/${harness}`, {
-    headers: { Cookie: context.cookie },
-  });
-  return (await response.json()) as HarnessSummary;
+async function summary(context: TestApp, harness: string): Promise<HarnessSummary> {
+  return context.json<HarnessSummary>(`/api/harnesses/${harness}`);
 }
 
 function seedClaude(): void {
   seed(
-    join(homeDir, '.claude', 'settings.json'),
+    sandbox.home('.claude', 'settings.json'),
     JSON.stringify(
       {
         env: {
@@ -105,7 +66,7 @@ function seedClaude(): void {
 
 function seedCodexPair(): void {
   seed(
-    join(homeDir, '.codex', 'config.toml'),
+    sandbox.home('.codex', 'config.toml'),
     [
       'model = "gpt-5"',
       'model_provider = "alpha"',
@@ -129,7 +90,7 @@ function seedCodexPair(): void {
 describe('existing configuration scan', () => {
   test('finds the routing a user set up in claude by hand', async () => {
     seedClaude();
-    const context = await boot();
+    const context = await createTestApp();
 
     const claude = resultFor(await scan(context), 'claude');
     expect(claude.candidates).toHaveLength(1);
@@ -144,12 +105,9 @@ describe('existing configuration scan', () => {
 
   test('never puts the credential itself in the response', async () => {
     seedClaude();
-    const context = await boot();
+    const context = await createTestApp();
 
-    const response = await context.app.request('/api/scan', {
-      headers: { Cookie: context.cookie },
-    });
-    const body = await response.text();
+    const body = await (await context.get('/api/scan')).text();
     expect(body).not.toContain('sk-claude-existing-key');
     expect(body).toContain('•');
 
@@ -160,7 +118,7 @@ describe('existing configuration scan', () => {
 
   test('reports every provider of an additive tool, flagging the active one', async () => {
     seedCodexPair();
-    const context = await boot();
+    const context = await createTestApp();
 
     const codex = resultFor(await scan(context), 'codex');
     expect(codex.candidates.map((item) => item.sourceKey).toSorted()).toEqual(['alpha', 'beta']);
@@ -179,7 +137,7 @@ describe('existing configuration scan', () => {
   });
 
   test('says which files it looked at, including the ones that are missing', async () => {
-    const context = await boot();
+    const context = await createTestApp();
     const codex = resultFor(await scan(context), 'codex');
     expect(codex.sources.map((source) => source.key).toSorted()).toEqual(['auth', 'config']);
     expect(codex.sources.every((source) => !source.exists)).toBe(true);
@@ -187,8 +145,8 @@ describe('existing configuration scan', () => {
   });
 
   test('refuses to guess at a config file the tool itself could not parse', async () => {
-    seed(join(homeDir, '.codex', 'config.toml'), 'model = \n');
-    const context = await boot();
+    seed(sandbox.home('.codex', 'config.toml'), 'model = \n');
+    const context = await createTestApp();
 
     const codex = resultFor(await scan(context), 'codex');
     expect(codex.candidates).toHaveLength(0);
@@ -199,8 +157,8 @@ describe('existing configuration scan', () => {
 describe('scan import', () => {
   test('saves a candidate as a profile without touching the tool config', async () => {
     seedClaude();
-    const context = await boot();
-    const settingsPath = join(homeDir, '.claude', 'settings.json');
+    const context = await createTestApp();
+    const settingsPath = sandbox.home('.claude', 'settings.json');
     const before = readFileSync(settingsPath, 'utf8');
 
     const { status, body } = await importSelections(context, [
@@ -222,7 +180,7 @@ describe('scan import', () => {
 
   test('extracting to the vault links the profile instead of inlining the key', async () => {
     seedClaude();
-    const context = await boot();
+    const context = await createTestApp();
 
     const { body } = await importSelections(context, [
       { id: 'claude:claude', name: '走 vault', target: 'vault', providerName: '我的中转' },
@@ -235,16 +193,13 @@ describe('scan import', () => {
     expect(profile?.providerId).toBeTruthy();
     expect(profile?.providerEndpoint).toBe('default');
 
-    const providers = await context.app.request('/api/providers', {
-      headers: { Cookie: context.cookie },
-    });
-    const { items } = (await providers.json()) as { items: Array<{ name: string }> };
+    const { items } = await context.json<{ items: Array<{ name: string }> }>('/api/providers');
     expect(items.map((item) => item.name)).toContain('我的中转');
   });
 
   test('two candidates can share one vault entry', async () => {
     seedCodexPair();
-    const context = await boot();
+    const context = await createTestApp();
 
     const first = await importSelections(context, [
       { id: 'codex:alpha', name: 'alpha', target: 'vault', providerName: '共享凭据' },
@@ -267,7 +222,7 @@ describe('scan import', () => {
 
   test('a same-name profile is skipped unless overwrite is asked for', async () => {
     seedClaude();
-    const context = await boot();
+    const context = await createTestApp();
 
     expect(
       (await importSelections(context, [{ id: 'claude:claude', name: '重名', target: 'profile' }]))
@@ -289,8 +244,8 @@ describe('scan import', () => {
 
   test('a candidate that vanished between scan and import is reported, not invented', async () => {
     seedClaude();
-    const context = await boot();
-    rmSync(join(homeDir, '.claude', 'settings.json'));
+    const context = await createTestApp();
+    rmSync(sandbox.home('.claude', 'settings.json'));
 
     const { body } = await importSelections(context, [
       { id: 'claude:claude', name: '没了', target: 'profile' },
@@ -302,7 +257,7 @@ describe('scan import', () => {
 
   test('a provider whose key lives in the shell must have one supplied', async () => {
     seedCodexPair();
-    const context = await boot();
+    const context = await createTestApp();
 
     const refused = await importSelections(context, [
       { id: 'codex:beta', name: 'beta', target: 'profile' },
@@ -317,13 +272,11 @@ describe('scan import', () => {
   });
 
   test('an empty or malformed selection list is refused', async () => {
-    const context = await boot();
+    const context = await createTestApp();
     expect((await importSelections(context, [])).status).toBe(400);
 
-    const bad = await context.app.request('/api/scan/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ selections: [{ id: 'claude:claude', name: 'x', target: 'disk' }] }),
+    const bad = await context.post('/api/scan/import', {
+      selections: [{ id: 'claude:claude', name: 'x', target: 'disk' }],
     });
     expect(bad.status).toBe(400);
   });

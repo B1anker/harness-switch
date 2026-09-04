@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
-import type { IEnvironmentService } from '../environment';
+import { BaseAdapter } from './base';
 import {
   providerId as baseProviderId,
   compact,
@@ -33,13 +33,14 @@ const DEFAULT_MAX_TOKENS = 32768;
  * `agent-default-model` namespace, so activating a profile both registers its route
  * and selects it for newly created sessions.
  */
-export class DshAdapter implements HarnessAdapter {
+export class DshAdapter extends BaseAdapter implements HarnessAdapter {
   readonly id = 'dsh' as const;
   readonly mode: HarnessMode = 'additive';
   readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 安全写入 DSH 的 .credentials.yaml，并由 settings.yaml 引用。';
   readonly envNoteCode = 'harness.field.dsh.envNote';
+  protected readonly requires = ['model', 'apiKey'] as const;
   readonly officialNeedsCurrent = true;
 
   readonly fields: FieldSpec[] = [
@@ -135,8 +136,6 @@ export class DshAdapter implements HarnessAdapter {
     },
   ];
 
-  constructor(private readonly environment: IEnvironmentService) {}
-
   targets(): AdapterTarget[] {
     return [
       {
@@ -168,26 +167,9 @@ export class DshAdapter implements HarnessAdapter {
       : apiFieldProtocol(profile.extras.api, 'openai-responses');
   }
 
-  validate(profile: AdapterProfile): void {
-    if (!profile.model.trim()) {
-      throw new HttpError(400, 'DeepSeek Harness 需要填写模型名称', {
-        code: ERROR_CODES.adapterModelRequired,
-        params: { harness: 'DeepSeek Harness' },
-      });
-    }
-    if (!profile.apiKey.trim()) {
-      throw new HttpError(400, 'DeepSeek Harness 需要填写 API key', {
-        code: ERROR_CODES.adapterApiKeyRequired,
-        params: { harness: 'DeepSeek Harness' },
-      });
-    }
-  }
-
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     this.validate(profile);
-    const official = this.isOfficial(profile);
-    const providerId = official ? 'deepseek-official' : this.providerId(profile);
-    const credentialRef = this.credentialRef(providerId);
+    const { official, providerId, credentialRef } = this.route(profile);
     const settings = parseYamlDocument(current[SETTINGS]);
     const models = this.models(profile, official);
     if (official) {
@@ -270,8 +252,7 @@ export class DshAdapter implements HarnessAdapter {
       typeof route?.apiKeyEnv === 'string' && route.apiKeyEnv
         ? route.apiKeyEnv
         : 'DEEPSEEK_API_KEY';
-    const apiKey =
-      credentials?.getIn(['refs', credentialRef]) ?? credentials?.getIn([credentialRef]);
+    const apiKey = credentials ? credentialValue(credentials, credentialRef) : undefined;
     if (!settings || route === undefined || typeof apiKey !== 'string' || !apiKey.trim()) {
       return undefined;
     }
@@ -279,8 +260,7 @@ export class DshAdapter implements HarnessAdapter {
   }
 
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
-    const official = this.isOfficial(profile);
-    const providerId = official ? 'deepseek-official' : this.providerId(profile);
+    const { official, providerId, credentialRef } = this.route(profile);
     const rendered: RenderedFiles = {};
 
     if (current[SETTINGS] !== undefined) {
@@ -300,7 +280,7 @@ export class DshAdapter implements HarnessAdapter {
       const credentials = tryParseYamlDocument(current[CREDENTIALS]);
       if (credentials) {
         this.normalizeCredentials(credentials);
-        credentials.deleteIn(['refs', this.credentialRef(providerId)]);
+        credentials.deleteIn(['refs', credentialRef]);
         rendered[CREDENTIALS] = credentials.toString();
       }
       // The credential provider rejects an invalid document too, so leave it intact.
@@ -310,20 +290,16 @@ export class DshAdapter implements HarnessAdapter {
   }
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
-    const official = this.isOfficial(profile);
-    const providerId = official ? 'deepseek-official' : this.providerId(profile);
+    const { official, credentialRef, settingsPath } = this.route(profile);
     const settings = tryParseYamlDocument(current[SETTINGS]);
     const credentials = tryParseYamlDocument(current[CREDENTIALS]);
     if (!settings || !credentials) {
       return {};
     }
-    const route = toPlain(
-      settings.getIn(official ? ['llm-deepseek'] : ['llm-pi-ai', 'providers', providerId]),
-    );
+    const route = toPlain(settings.getIn(settingsPath));
     const models = Array.isArray(route?.models) ? route.models : [];
     const firstModel = toPlain(models[0]);
-    const ref = this.credentialRef(providerId);
-    const apiKey = credentials.getIn(['refs', ref]) ?? credentials.getIn([ref]);
+    const apiKey = credentialValue(credentials, credentialRef);
 
     return {
       baseUrl: typeof route?.baseURL === 'string' ? route.baseURL : profile.baseUrl,
@@ -372,6 +348,27 @@ export class DshAdapter implements HarnessAdapter {
         return toCandidate(id, seed, this.backfill(seed, current), id === selected);
       }),
     );
+  }
+
+  /**
+   * Where a profile lives in the two native files. The official route is DSH's own
+   * `llm-deepseek` block; everything else is a custom entry under `llm-pi-ai.providers`,
+   * with its credential held by reference in `.credentials.yaml`.
+   */
+  private route(profile: AdapterProfile): {
+    official: boolean;
+    providerId: string;
+    credentialRef: string;
+    settingsPath: string[];
+  } {
+    const official = this.isOfficial(profile);
+    const providerId = official ? 'deepseek-official' : this.providerId(profile);
+    return {
+      official,
+      providerId,
+      credentialRef: this.credentialRef(providerId),
+      settingsPath: official ? ['llm-deepseek'] : ['llm-pi-ai', 'providers', providerId],
+    };
   }
 
   private providerId(profile: AdapterProfile): string {
@@ -438,6 +435,15 @@ export class DshAdapter implements HarnessAdapter {
       ? Object.fromEntries(levels.map((level) => [level, level]))
       : undefined;
   }
+}
+
+/**
+ * Reads a credential by reference. Older DSH files kept the value at the document root,
+ * so the flat key is still accepted on read; {@link DshAdapter.normalizeCredentials}
+ * moves it under `refs` on the next write.
+ */
+function credentialValue(credentials: ReturnType<typeof parseYamlDocument>, ref: string): unknown {
+  return credentials.getIn(['refs', ref]) ?? credentials.getIn([ref]);
 }
 
 function toPlain(value: unknown): Record<string, unknown> | undefined {

@@ -15,6 +15,7 @@ import { createDecorator, inject } from '../di';
 import { type EncryptedValue, ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
+import { IHttpClient } from './http-client';
 import { ILogService } from './log';
 import { IProfileService } from './profiles';
 import { ITransferService } from './transfer';
@@ -83,6 +84,7 @@ export const IGitHubSyncService = createDecorator<IGitHubSyncService>('githubSyn
   IProfileService,
   IVaultService,
   ILogService,
+  IHttpClient,
 )
 export class GitHubSyncService implements IGitHubSyncService {
   declare readonly _serviceBrand: undefined;
@@ -95,6 +97,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     private readonly profiles: IProfileService,
     private readonly vault: IVaultService,
     private readonly log: ILogService,
+    private readonly http: IHttpClient,
   ) {}
 
   private readStore(): GitHubStore {
@@ -139,7 +142,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     };
 
     const url = path.startsWith('http') ? path : `https://api.github.com${path}`;
-    const response = await fetch(url, {
+    const response = await this.http.fetch(url, {
       ...options,
       headers,
     });
@@ -236,7 +239,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     const id = clientId || DEFAULT_CLIENT_ID;
     let response: Response;
     try {
-      response = await fetch('https://github.com/login/device/code', {
+      response = await this.http.fetch('https://github.com/login/device/code', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -290,7 +293,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     const id = clientId || DEFAULT_CLIENT_ID;
     let response: Response;
     try {
-      response = await fetch('https://github.com/login/oauth/access_token', {
+      response = await this.http.fetch('https://github.com/login/oauth/access_token', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -516,7 +519,7 @@ export class GitHubSyncService implements IGitHubSyncService {
 
     let rawContent = file.content;
     if (file.truncated && file.raw_url) {
-      const rawRes = await fetch(file.raw_url, {
+      const rawRes = await this.http.fetch(file.raw_url, {
         headers: { Authorization: `Bearer ${token}`, 'User-Agent': USER_AGENT },
       });
       if (rawRes.ok) {

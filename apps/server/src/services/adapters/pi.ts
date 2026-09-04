@@ -1,8 +1,6 @@
 import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
-import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
-import { HttpError } from '../../common/errors';
-import type { IEnvironmentService } from '../environment';
+import { BaseAdapter } from './base';
 import { compact, type DetectedProfile, providerId, seedProfile, toCandidate } from './detect';
 import { apiFieldProtocol } from './protocol';
 import {
@@ -38,13 +36,14 @@ const DEFAULT_MAX_TOKENS = 8192;
  * There is no provider-order list; `defaultProvider` / `defaultModel` in `settings.json`
  * select the active route. `PI_CODING_AGENT_DIR` overrides the config directory.
  */
-export class PiAdapter implements HarnessAdapter {
+export class PiAdapter extends BaseAdapter implements HarnessAdapter {
   readonly id = 'pi' as const;
   readonly mode: HarnessMode = 'additive';
   readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 直接写入 models.json，无需环境变量；运行时仍可用 --model 覆盖。';
   readonly envNoteCode = 'harness.field.pi.envNote';
+  protected readonly requires = ['model', 'apiKey'] as const;
 
   readonly fields: FieldSpec[] = [
     {
@@ -111,8 +110,6 @@ export class PiAdapter implements HarnessAdapter {
     },
   ];
 
-  constructor(private readonly environment: IEnvironmentService) {}
-
   targets(): AdapterTarget[] {
     return [
       {
@@ -137,21 +134,6 @@ export class PiAdapter implements HarnessAdapter {
   /** The `api` field is exactly the protocol Pi will call the provider over. */
   completionProtocol(profile: AdapterProfile): CompletionProtocol | undefined {
     return apiFieldProtocol(profile.extras.api, 'openai-chat');
-  }
-
-  validate(profile: AdapterProfile): void {
-    if (!profile.model.trim()) {
-      throw new HttpError(400, 'Pi 需要填写模型名称，否则无法生成 models 条目', {
-        code: ERROR_CODES.adapterModelRequired,
-        params: { harness: 'Pi' },
-      });
-    }
-    if (!profile.apiKey.trim()) {
-      throw new HttpError(400, 'Pi 需要填写 API key，否则模型不会出现在 /model 列表里', {
-        code: ERROR_CODES.adapterApiKeyRequired,
-        params: { harness: 'Pi' },
-      });
-    }
   }
 
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {

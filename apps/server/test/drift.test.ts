@@ -1,33 +1,23 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import type { DriftSummary } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
-import { createServices } from '../src/bootstrap';
+import type { InstantiationService } from '../src/di';
 import { IActivationService } from '../src/services/activation';
 import { IDriftService, semanticEqual } from '../src/services/drift';
-import { IEnvironmentService } from '../src/services/environment';
 import { IProfileService } from '../src/services/profiles';
-import { expectHttpError } from './support/http-error';
+import { createSandbox, createTestServices, expectHttpError, type Sandbox } from './support';
 
-let homeDir = '';
-let services: ReturnType<typeof createServices>;
+let sandbox: Sandbox;
+let services: InstantiationService;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-drift-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  process.env.CODEX_HOME = join(homeDir, '.codex');
-  services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
+  sandbox = createSandbox('hsw-drift', { env: (home) => ({ CODEX_HOME: home('.codex') }) });
+  services = createTestServices();
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  delete process.env.CODEX_HOME;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 function drift() {
@@ -43,7 +33,7 @@ function activation() {
 }
 
 function claudeSettings(): string {
-  return join(homeDir, '.claude', 'settings.json');
+  return sandbox.home('.claude', 'settings.json');
 }
 
 function activateClaude(name = 'main') {
@@ -242,7 +232,7 @@ describe('drift adopt', () => {
   });
 
   test('adopting a codex config with semantic drift keeps the file parseable', () => {
-    mkdirSync(join(homeDir, '.codex'), { recursive: true });
+    mkdirSync(sandbox.home('.codex'), { recursive: true });
     profiles().upsert(
       'codex',
       {
@@ -254,7 +244,7 @@ describe('drift adopt', () => {
       true,
     );
     activation().activate('codex', 'main');
-    const configPath = join(homeDir, '.codex', 'config.toml');
+    const configPath = sandbox.home('.codex', 'config.toml');
     writeFileSync(
       configPath,
       'model_provider = "main"\n\n[model_providers.main]\nname = "main"\nbase_url = "https://edited.example.com/v1"\nwire_api = "responses"\nexperimental_bearer_token = "sk-edited"\n',

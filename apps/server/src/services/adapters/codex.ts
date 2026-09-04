@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
-import type { IEnvironmentService } from '../environment';
+import { BaseAdapter } from './base';
 import {
   providerId as baseProviderId,
   compact,
@@ -54,7 +54,7 @@ export type CodexAuthMode = 'bearer_token' | 'env_key' | 'openai_auth';
  * reads. Only the user-level file is written because Codex ignores `model_provider`
  * and `model_providers` coming from a project-level `.codex/config.toml`.
  */
-export class CodexAdapter implements HarnessAdapter {
+export class CodexAdapter extends BaseAdapter implements HarnessAdapter {
   readonly id = 'codex' as const;
   readonly mode: HarnessMode = 'replace';
   readonly envVarNames = [DEFAULT_ENV_KEY];
@@ -134,8 +134,6 @@ export class CodexAdapter implements HarnessAdapter {
       ],
     },
   ];
-
-  constructor(private readonly environment: IEnvironmentService) {}
 
   targets(): AdapterTarget[] {
     return [

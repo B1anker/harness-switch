@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
-import type { IEnvironmentService } from '../environment';
+import { BaseAdapter } from './base';
 import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
   ensureObject,
@@ -29,6 +29,11 @@ const AUTH_VARS = ['ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY'] as const;
  * separate flag per tier instead of being typed into the model field.
  */
 const ONE_M_SUFFIX = '[1m]';
+/**
+ * One model tier Claude Code can be pointed at, and everything the form needs to render
+ * it. The three fields per tier (id, display name, 1M flag) follow the same shape, so
+ * they are generated from this table rather than written out fifteen times.
+ */
 type ModelMapping = {
   field: string;
   envVar: string;
@@ -36,13 +41,31 @@ type ModelMapping = {
   nameEnvVar?: string;
   /** Absent for tiers whose models have no 1M variant, such as Haiku. */
   oneMField?: string;
+  /** Tier name as it appears in labels and as the `role` catalog parameter. */
+  role: string;
+  /** Label of the model-id field; the tiers do not phrase it uniformly enough to derive. */
+  label: string;
+  /** Model id shown as the field's example placeholder. */
+  example: string;
+  /** Tiers Claude Code always resolves. The rest are newer or opt-in. */
+  required?: boolean;
+  /** Set when the model-id field needs its own help entry instead of the shared one. */
+  help?: string;
+  helpCode?: string;
+  /** Set when the 1M toggle's role is prose rather than a tier name. */
+  oneMLabelCode?: string;
 };
+
 const MODEL_MAPPINGS: readonly ModelMapping[] = [
   {
     field: 'haikuModel',
     envVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
     nameField: 'haikuModelName',
     nameEnvVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME',
+    role: 'Haiku',
+    label: 'Haiku 模型映射',
+    example: 'glm-5-air',
+    required: true,
   },
   {
     field: 'sonnetModel',
@@ -50,6 +73,10 @@ const MODEL_MAPPINGS: readonly ModelMapping[] = [
     nameField: 'sonnetModelName',
     nameEnvVar: 'ANTHROPIC_DEFAULT_SONNET_MODEL_NAME',
     oneMField: 'sonnetModel1m',
+    role: 'Sonnet',
+    label: 'Sonnet 模型映射',
+    example: 'glm-5',
+    required: true,
   },
   {
     field: 'opusModel',
@@ -57,6 +84,10 @@ const MODEL_MAPPINGS: readonly ModelMapping[] = [
     nameField: 'opusModelName',
     nameEnvVar: 'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME',
     oneMField: 'opusModel1m',
+    role: 'Opus',
+    label: 'Opus 模型映射',
+    example: 'glm-5',
+    required: true,
   },
   {
     field: 'fableModel',
@@ -64,8 +95,23 @@ const MODEL_MAPPINGS: readonly ModelMapping[] = [
     nameField: 'fableModelName',
     nameEnvVar: 'ANTHROPIC_DEFAULT_FABLE_MODEL_NAME',
     oneMField: 'fableModel1m',
+    role: 'Fable',
+    label: 'Fable 模型映射（可选）',
+    example: 'glm-5',
+    help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL；用于支持 Fable 档位的新版 Claude Code。',
+    helpCode: 'harness.field.claude.fableModel.help',
   },
-  { field: 'subagentModel', envVar: 'CLAUDE_CODE_SUBAGENT_MODEL', oneMField: 'subagentModel1m' },
+  {
+    field: 'subagentModel',
+    envVar: 'CLAUDE_CODE_SUBAGENT_MODEL',
+    oneMField: 'subagentModel1m',
+    role: '子代理',
+    label: '子代理模型（可选）',
+    example: 'glm-5-air',
+    help: '写入 CLAUDE_CODE_SUBAGENT_MODEL，可让子代理使用更快或成本更低的模型。',
+    helpCode: 'harness.field.claude.subagentModel.help',
+    oneMLabelCode: 'harness.field.claude.oneM.subagentLabel',
+  },
 ];
 
 const ONE_M_OPTIONS = [
@@ -93,12 +139,54 @@ function oneMField(role: string, key: string, labelCode?: string): FieldSpec {
 }
 
 /**
+ * The model-id field, its optional display-name companion and its optional 1M toggle,
+ * in the order the form shows them.
+ */
+function tierFields(tier: ModelMapping): FieldSpec[] {
+  const fields: FieldSpec[] = [
+    {
+      key: tier.field,
+      label: tier.label,
+      labelCode: `harness.field.claude.${tier.field}.label`,
+      kind: 'text',
+      ...(tier.required ? { required: true } : {}),
+      placeholder: `例如：${tier.example}`,
+      placeholderCode: 'harness.field.claude.example.placeholder',
+      help: tier.help ?? `写入 ${tier.envVar}。`,
+      helpCode: tier.helpCode ?? 'harness.field.claude.modelMapping.help',
+      // The shared help entry names the variable it writes; a tier with its own entry
+      // already spells the variable out in its prose.
+      params: tier.helpCode
+        ? { value: tier.example }
+        : { value: tier.example, envVar: tier.envVar },
+    },
+  ];
+  if (tier.nameField && tier.nameEnvVar) {
+    fields.push({
+      key: tier.nameField,
+      label: `${tier.role} 显示名称（选填）`,
+      labelCode: `harness.field.claude.${tier.nameField}.label`,
+      kind: 'text',
+      placeholder: `留空则使用 ${tier.role} 模型 ID`,
+      placeholderCode: 'harness.field.claude.modelName.placeholder',
+      help: `写入 ${tier.nameEnvVar}；留空时 Claude Code 默认显示对应模型 ID。`,
+      helpCode: 'harness.field.claude.modelName.help',
+      params: { role: tier.role, envVar: tier.nameEnvVar },
+    });
+  }
+  if (tier.oneMField) {
+    fields.push(oneMField(tier.role, tier.oneMField, tier.oneMLabelCode));
+  }
+  return fields;
+}
+
+/**
  * Claude Code reads the `env` block of settings.json itself, so a switch takes effect
  * without touching any shell. The settings value also wins over a variable inherited
  * from the shell, which is what makes this work for long-lived daemons that spawn
  * `claude` as a child process.
  */
-export class ClaudeAdapter implements HarnessAdapter {
+export class ClaudeAdapter extends BaseAdapter implements HarnessAdapter {
   readonly id = 'claude' as const;
   readonly mode: HarnessMode = 'replace';
   readonly envVarNames = [
@@ -142,112 +230,7 @@ export class ClaudeAdapter implements HarnessAdapter {
         },
       ],
     },
-    {
-      key: 'haikuModel',
-      label: 'Haiku 模型映射',
-      labelCode: 'harness.field.claude.haikuModel.label',
-      kind: 'text',
-      required: true,
-      placeholder: '例如：glm-5-air',
-      placeholderCode: 'harness.field.claude.example.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_HAIKU_MODEL。',
-      helpCode: 'harness.field.claude.modelMapping.help',
-      params: { value: 'glm-5-air', envVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL' },
-    },
-    {
-      key: 'haikuModelName',
-      label: 'Haiku 显示名称（选填）',
-      labelCode: 'harness.field.claude.haikuModelName.label',
-      kind: 'text',
-      placeholder: '留空则使用 Haiku 模型 ID',
-      placeholderCode: 'harness.field.claude.modelName.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
-      helpCode: 'harness.field.claude.modelName.help',
-      params: { role: 'Haiku', envVar: 'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME' },
-    },
-    {
-      key: 'sonnetModel',
-      label: 'Sonnet 模型映射',
-      labelCode: 'harness.field.claude.sonnetModel.label',
-      kind: 'text',
-      required: true,
-      placeholder: '例如：glm-5',
-      placeholderCode: 'harness.field.claude.example.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_SONNET_MODEL。',
-      helpCode: 'harness.field.claude.modelMapping.help',
-      params: { value: 'glm-5', envVar: 'ANTHROPIC_DEFAULT_SONNET_MODEL' },
-    },
-    {
-      key: 'sonnetModelName',
-      label: 'Sonnet 显示名称（选填）',
-      labelCode: 'harness.field.claude.sonnetModelName.label',
-      kind: 'text',
-      placeholder: '留空则使用 Sonnet 模型 ID',
-      placeholderCode: 'harness.field.claude.modelName.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_SONNET_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
-      helpCode: 'harness.field.claude.modelName.help',
-      params: { role: 'Sonnet', envVar: 'ANTHROPIC_DEFAULT_SONNET_MODEL_NAME' },
-    },
-    oneMField('Sonnet', 'sonnetModel1m'),
-    {
-      key: 'opusModel',
-      label: 'Opus 模型映射',
-      labelCode: 'harness.field.claude.opusModel.label',
-      kind: 'text',
-      required: true,
-      placeholder: '例如：glm-5',
-      placeholderCode: 'harness.field.claude.example.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_OPUS_MODEL。',
-      helpCode: 'harness.field.claude.modelMapping.help',
-      params: { value: 'glm-5', envVar: 'ANTHROPIC_DEFAULT_OPUS_MODEL' },
-    },
-    {
-      key: 'opusModelName',
-      label: 'Opus 显示名称（选填）',
-      labelCode: 'harness.field.claude.opusModelName.label',
-      kind: 'text',
-      placeholder: '留空则使用 Opus 模型 ID',
-      placeholderCode: 'harness.field.claude.modelName.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_OPUS_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
-      helpCode: 'harness.field.claude.modelName.help',
-      params: { role: 'Opus', envVar: 'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME' },
-    },
-    oneMField('Opus', 'opusModel1m'),
-    {
-      key: 'fableModel',
-      label: 'Fable 模型映射（可选）',
-      labelCode: 'harness.field.claude.fableModel.label',
-      kind: 'text',
-      placeholder: '例如：glm-5',
-      placeholderCode: 'harness.field.claude.example.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL；用于支持 Fable 档位的新版 Claude Code。',
-      helpCode: 'harness.field.claude.fableModel.help',
-      params: { value: 'glm-5' },
-    },
-    {
-      key: 'fableModelName',
-      label: 'Fable 显示名称（选填）',
-      labelCode: 'harness.field.claude.fableModelName.label',
-      kind: 'text',
-      placeholder: '留空则使用 Fable 模型 ID',
-      placeholderCode: 'harness.field.claude.modelName.placeholder',
-      help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL_NAME；留空时 Claude Code 默认显示对应模型 ID。',
-      helpCode: 'harness.field.claude.modelName.help',
-      params: { role: 'Fable', envVar: 'ANTHROPIC_DEFAULT_FABLE_MODEL_NAME' },
-    },
-    oneMField('Fable', 'fableModel1m'),
-    {
-      key: 'subagentModel',
-      label: '子代理模型（可选）',
-      labelCode: 'harness.field.claude.subagentModel.label',
-      kind: 'text',
-      placeholder: '例如：glm-5-air',
-      placeholderCode: 'harness.field.claude.example.placeholder',
-      help: '写入 CLAUDE_CODE_SUBAGENT_MODEL，可让子代理使用更快或成本更低的模型。',
-      helpCode: 'harness.field.claude.subagentModel.help',
-      params: { value: 'glm-5-air' },
-    },
-    oneMField('子代理', 'subagentModel1m', 'harness.field.claude.oneM.subagentLabel'),
+    ...MODEL_MAPPINGS.flatMap(tierFields),
     {
       key: 'extraEnv',
       label: '追加环境变量（可选）',
@@ -258,8 +241,6 @@ export class ClaudeAdapter implements HarnessAdapter {
       helpCode: 'harness.field.claude.extraEnv.help',
     },
   ];
-
-  constructor(private readonly environment: IEnvironmentService) {}
 
   targets(): AdapterTarget[] {
     return [

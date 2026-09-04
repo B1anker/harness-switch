@@ -7,6 +7,7 @@ import {
   isHarnessId,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
+import { isRecord } from '../common/guards';
 import { createDecorator, inject } from '../di';
 import { type AdapterTarget, IAdapterRegistry } from './adapters';
 import { IEnvironmentService } from './environment';
@@ -368,8 +369,4 @@ export class BackupService implements IBackupService {
       excess -= 1;
     }
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

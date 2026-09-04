@@ -13,6 +13,7 @@ import { IEnvironmentService } from '../../services/environment';
 import { IUserAccessService } from '../../services/user-access';
 import { IUserSyncService } from '../../services/user-sync';
 import { IUserService } from '../../services/users';
+import { param } from '../params';
 import { readJsonBody } from '../validate';
 
 export function createUserRoutes(services: InstantiationService): Hono {
@@ -64,7 +65,7 @@ export function createUserRoutes(services: InstantiationService): Hono {
   });
 
   app.post('/:username/select', (c) => {
-    const user = users.require(decodeURIComponent(c.req.param('username')));
+    const user = users.require(param(c, 'username'));
     const token = getCookie(c, environment.cookieName);
     if (!token) {
       throw new HttpError(401, 'authentication required', {

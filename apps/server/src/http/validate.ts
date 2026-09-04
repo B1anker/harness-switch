@@ -17,6 +17,14 @@ export async function readJsonBody<T>(c: Context, schema: ZodType<T>): Promise<T
   return parseWith(schema, raw);
 }
 
+/**
+ * The same as {@link readJsonBody} for routes whose body is entirely optional, where an
+ * absent or unparsable body means "no options" rather than a bad request.
+ */
+export async function readOptionalJsonBody<T>(c: Context, schema: ZodType<T>): Promise<T> {
+  return parseWith(schema, await c.req.json().catch(() => ({})));
+}
+
 /** Validates an already-decoded value, for path parameters and CLI input. */
 export function parseWith<T>(schema: ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);

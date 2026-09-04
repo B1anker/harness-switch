@@ -10,6 +10,7 @@ import {
   type OperationState,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
+import { isRecord } from '../common/guards';
 import { createDecorator, inject } from '../di';
 import { IBackupService } from './backup';
 import { IEnvironmentService } from './environment';
@@ -415,8 +416,4 @@ export class JournalService implements IJournalService {
 
 function isFinished(state: OperationState): boolean {
   return state === 'committed' || state === 'rolled-back' || state === 'degraded';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

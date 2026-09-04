@@ -12,18 +12,16 @@ import {
   type ProbeCompletion,
 } from '@seaveyon/harness-switch-shared';
 import { createDecorator, inject } from '../di';
-import { checkForUpdate } from '../update';
 import { IActivationService } from './activation';
 import { IAdapterRegistry } from './adapters';
 import { assertParsable } from './adapters/serialize';
 import { IDriftService } from './drift';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
-import { IProbeService } from './probe';
-import { IProbeCacheService } from './probe-cache';
-import { probeSavedProfile } from './probe-profile';
+import { IProbeProfileService } from './probe-profile';
 import { IProfileService } from './profiles';
 import { IHarnessRegistry } from './registry';
+import { IUpdateService } from './update';
 
 export type DoctorOptions = {
   /** Run the connectivity probe against each harness's active profile. */
@@ -68,8 +66,8 @@ const BIN_NAMES: Partial<Record<HarnessId, string>> = {
   IActivationService,
   IDriftService,
   IProfileService,
-  IProbeService,
-  IProbeCacheService,
+  IProbeProfileService,
+  IUpdateService,
 )
 export class DoctorService implements IDoctorService {
   declare readonly _serviceBrand: undefined;
@@ -82,8 +80,8 @@ export class DoctorService implements IDoctorService {
     private readonly activation: IActivationService,
     private readonly drift: IDriftService,
     private readonly profiles: IProfileService,
-    private readonly probe: IProbeService,
-    private readonly probeCache: IProbeCacheService,
+    private readonly profileProbe: IProbeProfileService,
+    private readonly updates: IUpdateService,
   ) {}
 
   async run(options: DoctorOptions = {}): Promise<DoctorResponse> {
@@ -103,7 +101,7 @@ export class DoctorService implements IDoctorService {
     );
 
     // The registry check is cached and degrades to "no update" when unreachable.
-    const update = await checkForUpdate();
+    const update = await this.updates.check();
     return { items, updatedAvailable: update.updateAvailable };
   }
 
@@ -333,12 +331,7 @@ export class DoctorService implements IDoctorService {
         ),
       ];
     }
-    const result = await probeSavedProfile(
-      { probe: this.probe, cache: this.probeCache, adapter: this.adapters.get(harness) },
-      harness,
-      decrypted,
-      { completion },
-    );
+    const result = await this.profileProbe.probe(harness, decrypted, { completion });
     const detail = {
       probed: true,
       baseUrl: result.requestUrl ?? decrypted.baseUrl,

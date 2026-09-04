@@ -11,7 +11,7 @@ import { IAuthService } from './services/auth';
 import { IEnvironmentService } from './services/environment';
 import { IJournalService } from './services/journal';
 import { ILogService } from './services/log';
-import { serverVersion } from './version';
+import { IVersionService } from './services/version';
 
 /** JSON APIs and encrypted migration bundles are deliberately bounded per request. */
 const MAX_HTTP_BODY_BYTES = 16 * 1024 * 1024;
@@ -149,14 +149,19 @@ async function readResponseBody(response: Response, limit: number): Promise<Buff
 
 const [command, ...rest] = process.argv.slice(2);
 
+/** Resolved on its own container: printing a version must not build the service graph. */
+const printVersion = async (): Promise<void> => {
+  console.log(await createServices().get(IVersionService).version());
+};
+
 if (command === 'help' || command === '--help' || command === '-h') {
   console.log(cliUsage());
 } else if (command === 'version' || command === '--version' || command === '-V') {
-  console.log(await serverVersion());
+  await printVersion();
 } else if (rest.includes('--help') || rest.includes('-h')) {
   console.log(cliUsage());
 } else if (rest.includes('--version') || rest.includes('-V')) {
-  console.log(await serverVersion());
+  await printVersion();
 } else if (command === 'server') {
   await runServer();
 } else if (command === 'stop') {
