@@ -3,10 +3,10 @@ import type { HarnessId } from '@seaveyon/harness-switch-shared';
 /**
  * What a harness calls the things this app manages.
  *
- * dsh registers *providers* and picks a *default* among them, where the other four keep
- * *profiles* and *activate* one. Nothing behaves differently — only the noun changes — so
- * the check lives here instead of at each of the six labels that used to ask
- * `harness.id === 'dsh'` on their own.
+ * dsh and kimi register *providers* and pick a *default* among them (`default_model` /
+ * agent-default-model), where the other three keep *profiles* and *activate* one.
+ * Nothing behaves differently — only the noun changes — so the check lives here instead
+ * of at each of the labels that used to ask `harness.id === 'dsh'` on their own.
  */
 export type HarnessWords = {
   /** Heading over the list. */
@@ -37,6 +37,9 @@ const PROVIDER_WORDS: HarnessWords = {
   add: 'harness.addCustomProvider',
 };
 
+/** Harnesses whose live config is a provider table plus a default pointer. */
+const PROVIDER_DEFAULT_HARNESSES: ReadonlySet<HarnessId> = new Set(['dsh', 'kimi']);
+
 export function harnessWords(id: HarnessId): HarnessWords {
-  return id === 'dsh' ? PROVIDER_WORDS : PROFILE_WORDS;
+  return PROVIDER_DEFAULT_HARNESSES.has(id) ? PROVIDER_WORDS : PROFILE_WORDS;
 }

@@ -836,6 +836,7 @@
   },
   "githubSync": {
     "title": "GitHub Cloud Sync",
+    "loading": "Checking GitHub connection…",
     "intro": "Seamless multi-machine configuration synchronization using your GitHub account. Backups are end-to-end AES-256-GCM encrypted with a master passphrase before storing into a private Gist.",
     "tabDevice": "GitHub OAuth Login",
     "tabToken": "Personal Access Token",

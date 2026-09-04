@@ -33,6 +33,8 @@ type SourceId = (typeof SOURCES)[number]['id'];
  * source; the pane owns the flow, because the sources genuinely differ — the two local
  * ones decide conflicts per item, while the two portable ones share `TransferPreview` and
  * one global policy.
+ *
+ * Height is fixed so switching sources does not resize the shell; each pane scrolls inside.
  */
 export function ConfigTransferDialog({
   open,
@@ -46,13 +48,13 @@ export function ConfigTransferDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[90dvh] sm:w-full">
+      <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:h-[min(90dvh,40rem)] sm:max-h-[90dvh] sm:w-full">
         <DialogHeader className="shrink-0 border-b px-5 py-4 pr-12 text-left sm:px-6">
           <DialogTitle>{t('transfer.title')}</DialogTitle>
           <DialogDescription>{t('transfer.intro')}</DialogDescription>
         </DialogHeader>
 
-        <div className="grid min-h-0 flex-1 sm:grid-cols-[13rem_minmax(0,1fr)]">
+        <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[13rem_minmax(0,1fr)] sm:grid-rows-[minmax(0,1fr)]">
           <TabList
             label={t('transfer.sourceLabel')}
             idPrefix="transfer"

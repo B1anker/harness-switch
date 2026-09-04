@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createBackupSlice } from './slices/backups';
+import { createGithubSlice } from './slices/github';
 import { createHarnessSlice } from './slices/harnesses';
 import { createInsightSlice } from './slices/insights';
 import { createNoticeSlice } from './slices/notice';
@@ -21,5 +22,6 @@ export const useAppStore = create<AppState>()((...args) => ({
   ...createInsightSlice(...args),
   ...createScanSlice(...args),
   ...createOperationSlice(...args),
+  ...createGithubSlice(...args),
   ...createNoticeSlice(...args),
 }));
