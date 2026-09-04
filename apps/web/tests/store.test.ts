@@ -89,8 +89,12 @@ test('switching Unix users refreshes every user-scoped collection', async () => 
         },
       };
     }
-    if (path === '/api/harnesses') return { status: 200, body: harnessResponse() };
-    if (path === '/api/backups') return { status: 200, body: { items: [] } };
+    if (path === '/api/harnesses') {
+      return { status: 200, body: harnessResponse() };
+    }
+    if (path === '/api/backups') {
+      return { status: 200, body: { items: [] } };
+    }
     return { status: 200, body: driftResponse() };
   };
 

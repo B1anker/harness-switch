@@ -162,7 +162,9 @@ type Summary = { ok: number; warn: number; error: number; unknown: number };
 
 function summarize(report: DoctorReport | null): Summary {
   const summary: Summary = { ok: 0, warn: 0, error: 0, unknown: 0 };
-  if (!report) return summary;
+  if (!report) {
+    return summary;
+  }
   for (const check of report.checks) {
     summary[check.status]++;
   }

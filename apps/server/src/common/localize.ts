@@ -32,7 +32,9 @@ export const localizeError = localizeMessage;
 
 function getPath(value: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((current, key) => {
-    if (typeof current !== 'object' || current === null || Array.isArray(current)) return undefined;
+    if (typeof current !== 'object' || current === null || Array.isArray(current)) {
+      return undefined;
+    }
     return (current as Record<string, unknown>)[key];
   }, value);
 }

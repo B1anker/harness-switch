@@ -69,7 +69,9 @@ export function SyncPane({
   });
 
   async function push() {
-    if (!pushPassphrase) return;
+    if (!pushPassphrase) {
+      return;
+    }
     setPushing(true);
     onClear();
     try {

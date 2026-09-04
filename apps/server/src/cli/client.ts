@@ -31,7 +31,9 @@ export class CliClient {
     const setCookie = response.headers.get('set-cookie') ?? '';
     const match = /hsw_session=([^;]+)/.exec(setCookie);
     if (!response.ok || !match) {
-      if (response.ok) throw new CliError('登录失败：服务端未返回会话');
+      if (response.ok) {
+        throw new CliError('登录失败：服务端未返回会话');
+      }
       const error = await responseError(response);
       throw new CliError(`登录失败：${error.message}`, error);
     }
@@ -39,7 +41,9 @@ export class CliClient {
   }
 
   async logout(): Promise<void> {
-    if (!this.cookie) return;
+    if (!this.cookie) {
+      return;
+    }
     try {
       await this.request('POST', '/api/auth/logout');
     } finally {

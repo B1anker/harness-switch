@@ -231,7 +231,9 @@ export class FileService implements IFileService {
     while (!existsSync(cursor)) {
       missing.push(cursor);
       const parent = dirname(cursor);
-      if (parent === cursor) break;
+      if (parent === cursor) {
+        break;
+      }
       cursor = parent;
     }
     mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -293,7 +295,9 @@ export class FileService implements IFileService {
   }
 
   private applyOwner(path: string, uid: number, gid: number): void {
-    if (process.platform === 'win32') return;
+    if (process.platform === 'win32') {
+      return;
+    }
     try {
       chownSync(path, uid, gid);
     } catch (error) {
@@ -306,7 +310,9 @@ export class FileService implements IFileService {
           { code: ERROR_CODES.fileOwnershipRequiresRoot, params: { path } },
         );
       }
-      if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'EPERM') {
+        throw error;
+      }
     }
   }
 }

@@ -58,7 +58,9 @@ export function controlProps(id: string, error?: unknown): FieldControlProps {
 }
 
 export function FieldError({ id, children }: { id: string; children?: React.ReactNode }) {
-  if (!children) return null;
+  if (!children) {
+    return null;
+  }
   return (
     <p id={errorId(id)} className="text-xs text-destructive">
       {children}

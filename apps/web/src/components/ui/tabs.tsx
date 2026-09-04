@@ -39,10 +39,14 @@ export function TabList<T extends { id: string }>({
 }) {
   function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
     const next = nextIndex(event.key, index, items.length);
-    if (next === null) return;
+    if (next === null) {
+      return;
+    }
     event.preventDefault();
     const item = items[next];
-    if (!item) return;
+    if (!item) {
+      return;
+    }
     onChange(item.id);
     const tabs =
       event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
@@ -85,11 +89,17 @@ export function TabList<T extends { id: string }>({
  * on a wide screen and a row on a narrow one and the user cannot be asked to notice.
  */
 function nextIndex(key: string, index: number, length: number): number | null {
-  if (key === 'Home') return 0;
-  if (key === 'End') return length - 1;
+  if (key === 'Home') {
+    return 0;
+  }
+  if (key === 'End') {
+    return length - 1;
+  }
   const forward = key === 'ArrowRight' || key === 'ArrowDown';
   const backward = key === 'ArrowLeft' || key === 'ArrowUp';
-  if (!forward && !backward) return null;
+  if (!forward && !backward) {
+    return null;
+  }
   return (index + (forward ? 1 : -1) + length) % length;
 }
 

@@ -72,7 +72,9 @@ export function UserPane({ onDone }: { onDone: () => void }) {
   }, [sources]);
 
   async function inspect() {
-    if (!sourceUser) return;
+    if (!sourceUser) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -94,7 +96,9 @@ export function UserPane({ onDone }: { onDone: () => void }) {
   }
 
   async function synchronize() {
-    if (!sourceUser || !preview) return;
+    if (!sourceUser || !preview) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {

@@ -10,7 +10,9 @@ export function VersionBadge() {
     let cancelled = false;
     void api<{ version: string }>(versionPath)
       .then((payload) => {
-        if (!cancelled) setVersion(payload.version);
+        if (!cancelled) {
+          setVersion(payload.version);
+        }
       })
       .catch(() => {});
     return () => {

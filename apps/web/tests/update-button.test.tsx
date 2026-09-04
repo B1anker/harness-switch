@@ -34,8 +34,12 @@ test('posts the update and reloads once the new version answers', async () => {
     if (url === '/api/update/check') {
       return { current: '0.9.0', latest: '99.0.0', updateAvailable: true };
     }
-    if (url === '/api/update' && init.method === 'POST') return { status: 'updating' };
-    if (url === '/api/version') return { name: 'harness-switch', version: '99.0.0' };
+    if (url === '/api/update' && init.method === 'POST') {
+      return { status: 'updating' };
+    }
+    if (url === '/api/version') {
+      return { name: 'harness-switch', version: '99.0.0' };
+    }
     return {};
   });
 
@@ -44,7 +48,9 @@ test('posts the update and reloads once the new version answers', async () => {
   expect(await screen.findByText('更新中…')).toBeInTheDocument();
 
   for (let i = 0; i < 80; i++) {
-    if (reloaded) break;
+    if (reloaded) {
+      break;
+    }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   expect(reloaded).toBe(true);

@@ -55,8 +55,12 @@ test('shows the diff against live files before activating', async () => {
 
 test('confirm closes the dialog once the write completes', async () => {
   const { handler, requests } = recordRequests((url) => {
-    if (url.includes('/preview')) return { targets: previewTargets };
-    if (url === '/api/harnesses') return { items: [harnessFixture()], envFile: '' };
+    if (url.includes('/preview')) {
+      return { targets: previewTargets };
+    }
+    if (url === '/api/harnesses') {
+      return { items: [harnessFixture()], envFile: '' };
+    }
     return { ok: true, envFile: '', warnings: [] };
   });
   stubFetch(handler);
@@ -74,7 +78,9 @@ test('confirm closes the dialog once the write completes', async () => {
 
   fireEvent.click(await screen.findByRole('button', { name: '确认激活' }));
   for (let i = 0; i < 100; i++) {
-    if (calls().includes('POST /api/harnesses/claude/profiles/openrouter-main/activate')) break;
+    if (calls().includes('POST /api/harnesses/claude/profiles/openrouter-main/activate')) {
+      break;
+    }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   expect(calls()).toContain('POST /api/harnesses/claude/profiles/openrouter-main/activate');

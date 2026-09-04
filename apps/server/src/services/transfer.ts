@@ -501,7 +501,9 @@ export class TransferService implements ITransferService {
 
   /** Never overwrite a local vault entry: imported entries get isolated copies. */
   private availableProviderId(sourceId: string, vault: VaultStore): string {
-    if (!vault.entries[sourceId]) return sourceId;
+    if (!vault.entries[sourceId]) {
+      return sourceId;
+    }
     const base = `${sourceId}-imported`.slice(0, 60);
     let candidate = base;
     let index = 2;
@@ -587,8 +589,14 @@ function payloadErrorCode(error: ZodError): ErrorCode {
       ? ERROR_CODES.transferTooManyProfiles
       : ERROR_CODES.transferProfilesInvalid;
   }
-  if (issue?.path[0] === 'providers') return ERROR_CODES.transferProvidersInvalid;
-  if (issue?.path[0] === 'active') return ERROR_CODES.transferActiveInvalid;
-  if (issue?.path[0] === 'codexLoginCache') return ERROR_CODES.transferCodexCacheInvalid;
+  if (issue?.path[0] === 'providers') {
+    return ERROR_CODES.transferProvidersInvalid;
+  }
+  if (issue?.path[0] === 'active') {
+    return ERROR_CODES.transferActiveInvalid;
+  }
+  if (issue?.path[0] === 'codexLoginCache') {
+    return ERROR_CODES.transferCodexCacheInvalid;
+  }
   return ERROR_CODES.transferEnvelopeInvalid;
 }

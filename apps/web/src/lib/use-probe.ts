@@ -51,6 +51,8 @@ export function useProbe(signature: string): Probe {
  */
 export function useEnsureLoaded(value: unknown, load: () => Promise<void>, enabled = true): void {
   useEffect(() => {
-    if (enabled && value === null) void load();
+    if (enabled && value === null) {
+      void load();
+    }
   }, [enabled, value, load]);
 }

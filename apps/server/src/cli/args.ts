@@ -40,22 +40,32 @@ export function parseArgs(argv: string[]): ParsedArgs {
       optionsEnded = true;
     } else if (/^-[^-]$/.test(arg)) {
       const name = SHORT_FLAGS[arg.slice(1)];
-      if (!name) throw new CliError(`未知选项：${arg}`);
+      if (!name) {
+        throw new CliError(`未知选项：${arg}`);
+      }
       flags[name] = true;
     } else if (arg.startsWith('--')) {
       const body = arg.slice(2);
-      if (!body) throw new CliError('无效选项：--');
+      if (!body) {
+        throw new CliError('无效选项：--');
+      }
       const separator = body.indexOf('=');
       if (separator !== -1) {
         const name = body.slice(0, separator);
         const value = body.slice(separator + 1);
-        if (!VALUE_FLAGS.has(name)) throw new CliError(`选项 --${name} 不接受值`);
-        if (!value) throw new CliError(`选项 --${name} 需要一个值`);
+        if (!VALUE_FLAGS.has(name)) {
+          throw new CliError(`选项 --${name} 不接受值`);
+        }
+        if (!value) {
+          throw new CliError(`选项 --${name} 需要一个值`);
+        }
         flags[name] = value;
       } else {
         const next = argv[index + 1];
         if (VALUE_FLAGS.has(body)) {
-          if (!next || next.startsWith('-')) throw new CliError(`选项 --${body} 需要一个值`);
+          if (!next || next.startsWith('-')) {
+            throw new CliError(`选项 --${body} 需要一个值`);
+          }
           flags[body] = next;
           index++;
         } else {
@@ -81,7 +91,9 @@ export function hasFlag(flags: CliFlags, name: string): boolean {
 export function validateFlags(flags: CliFlags, allowed: readonly string[]): void {
   const accepted = new Set(['json', 'user', ...allowed]);
   const unknown = Object.keys(flags).find((name) => !accepted.has(name));
-  if (unknown) throw new CliError(`未知选项：--${unknown}`);
+  if (unknown) {
+    throw new CliError(`未知选项：--${unknown}`);
+  }
 }
 
 export function validatePositionals(

@@ -24,7 +24,9 @@ export function UpdateButton() {
     let cancelled = false;
     void api<UpdateCheck>(updatePath.check)
       .then((payload) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         setCurrent(payload.current);
         if (payload.updateAvailable && payload.latest) {
           setLatest(payload.latest);

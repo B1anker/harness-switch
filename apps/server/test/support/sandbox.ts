@@ -98,8 +98,11 @@ export function createSandbox(prefix: string, options: SandboxOptions = {}): San
       restoreFetch?.();
       restoreFetch = undefined;
       for (const [name, value] of restore) {
-        if (value === undefined) delete process.env[name];
-        else process.env[name] = value;
+        if (value === undefined) {
+          delete process.env[name];
+        } else {
+          process.env[name] = value;
+        }
       }
       restore.clear();
       rmSync(rootDir, { recursive: true, force: true });

@@ -69,13 +69,22 @@ export function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
       current.map((endpoint, i) => (i === index ? { ...endpoint, ...patch } : endpoint)),
     );
     setEndpointErrors((current) => {
-      if (!current[index]) return current;
+      if (!current[index]) {
+        return current;
+      }
       const next = { ...current };
       const errors = { ...next[index] };
-      if (patch.key !== undefined) delete errors.key;
-      if (patch.baseUrl !== undefined) delete errors.baseUrl;
-      if (Object.keys(errors).length === 0) delete next[index];
-      else next[index] = errors;
+      if (patch.key !== undefined) {
+        delete errors.key;
+      }
+      if (patch.baseUrl !== undefined) {
+        delete errors.baseUrl;
+      }
+      if (Object.keys(errors).length === 0) {
+        delete next[index];
+      } else {
+        next[index] = errors;
+      }
       return next;
     });
   }
@@ -130,24 +139,30 @@ export function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
     };
     const keyCounts = new Map<string, number>();
     for (const endpoint of normalizedEndpoints) {
-      if (endpoint.key) keyCounts.set(endpoint.key, (keyCounts.get(endpoint.key) ?? 0) + 1);
+      if (endpoint.key) {
+        keyCounts.set(endpoint.key, (keyCounts.get(endpoint.key) ?? 0) + 1);
+      }
     }
     const nextEndpointErrors = Object.fromEntries(
       normalizedEndpoints.flatMap((endpoint, index) => {
         const errors: EndpointFieldErrors = {};
-        if (!endpoint.key) errors.key = { key: 'vault.error.endpointKeyRequired' };
-        else if (
+        if (!endpoint.key) {
+          errors.key = { key: 'vault.error.endpointKeyRequired' };
+        } else if (
           endpoint.key.includes('/') ||
           endpoint.key.includes('\\') ||
           endpoint.key.length > LIMITS.endpointKey
-        )
+        ) {
           errors.key = {
             key: 'vault.error.endpointKeyInvalid',
             params: { max: LIMITS.endpointKey },
           };
-        else if ((keyCounts.get(endpoint.key) ?? 0) > 1)
+        } else if ((keyCounts.get(endpoint.key) ?? 0) > 1) {
           errors.key = { key: 'vault.error.endpointKeyDuplicate' };
-        if (!endpoint.baseUrl) errors.baseUrl = { key: 'vault.error.endpointUrlRequired' };
+        }
+        if (!endpoint.baseUrl) {
+          errors.baseUrl = { key: 'vault.error.endpointUrlRequired' };
+        }
         return Object.keys(errors).length > 0 ? [[index, errors] as const] : [];
       }),
     );

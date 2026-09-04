@@ -19,7 +19,9 @@ const me = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 };
 function canChown(): boolean {
   try {
     const match = /^CapEff:\s*([0-9a-fA-F]+)$/m.exec(readFileSync('/proc/self/status', 'utf8'));
-    if (match) return (BigInt(`0x${match[1]}`) & 1n) !== 0n;
+    if (match) {
+      return (BigInt(`0x${match[1]}`) & 1n) !== 0n;
+    }
   } catch {
     // Not Linux; fall through to the uid.
   }
@@ -63,7 +65,9 @@ function peer(name: string, overrides: Partial<LocalUser> = {}): LocalUser {
 function home(name: string, mode?: number): string {
   const dir = sandbox.root(name);
   mkdirSync(dir, { recursive: true });
-  if (mode !== undefined) chmodSync(dir, mode);
+  if (mode !== undefined) {
+    chmodSync(dir, mode);
+  }
   return dir;
 }
 
@@ -84,7 +88,9 @@ describe('user access probe', () => {
   test('an account whose home is gone is not manageable', () => {
     const verdict = access().inspect(peer('ghost'));
     expect(verdict.ok).toBe(false);
-    if (verdict.ok) return;
+    if (verdict.ok) {
+      return;
+    }
     expect(verdict.code).toBe(USER_BLOCK_CODES.homeMissing);
   });
 
@@ -92,7 +98,9 @@ describe('user access probe', () => {
     home('rohome', 0o500);
     const verdict = access().inspect(peer('rohome'));
     expect(verdict.ok).toBe(false);
-    if (verdict.ok) return;
+    if (verdict.ok) {
+      return;
+    }
     expect(verdict.code).toBe(USER_BLOCK_CODES.homeUnwritable);
   });
 
@@ -101,7 +109,9 @@ describe('user access probe', () => {
     chmodSync(sandbox.root('rostore', '.harness-switch'), 0o500);
     const verdict = access().inspect(peer('rostore'));
     expect(verdict.ok).toBe(false);
-    if (verdict.ok) return;
+    if (verdict.ok) {
+      return;
+    }
     // The home is writable; it is the store the manager would actually write to.
     expect(verdict.code).toBe(USER_BLOCK_CODES.storeInaccessible);
   });
@@ -125,7 +135,9 @@ describe('user access probe', () => {
       return;
     }
     expect(verdict.ok).toBe(false);
-    if (verdict.ok) return;
+    if (verdict.ok) {
+      return;
+    }
     expect(verdict.code).toBe(USER_BLOCK_CODES.ownershipRequiresRoot);
   });
 
@@ -133,7 +145,9 @@ describe('user access probe', () => {
     // `chown(2)` lets an unprivileged caller leave the uid alone and move the file to
     // any of its groups, so demanding an exact gid match would refuse a working switch.
     const supplementary = (process.getgroups?.() ?? []).find((group) => group !== me.gid);
-    if (supplementary === undefined) return;
+    if (supplementary === undefined) {
+      return;
+    }
     home('sibling');
     expect(access().inspect(peer('sibling', { gid: supplementary })).ok).toBe(true);
   });
@@ -142,21 +156,27 @@ describe('user access probe', () => {
     home('outsider');
     const mine = new Set([me.gid, ...(process.getgroups?.() ?? [])]);
     let foreign = me.gid + 4242;
-    while (mine.has(foreign)) foreign += 1;
+    while (mine.has(foreign)) {
+      foreign += 1;
+    }
     const verdict = access().inspect(peer('outsider', { gid: foreign }));
     if (canChown()) {
       expect(verdict.ok).toBe(true);
       return;
     }
     expect(verdict.ok).toBe(false);
-    if (verdict.ok) return;
+    if (verdict.ok) {
+      return;
+    }
     expect(verdict.code).toBe(USER_BLOCK_CODES.ownershipRequiresRoot);
   });
 
   test('a block carries the code and the data its message interpolates', () => {
     const verdict = access().inspect(peer('ghost'));
     expect(verdict.ok).toBe(false);
-    if (verdict.ok) return;
+    if (verdict.ok) {
+      return;
+    }
     expect(verdict.code).toBe(USER_BLOCK_CODES.homeMissing);
     expect(verdict.data.home).toBe(sandbox.root('ghost'));
   });

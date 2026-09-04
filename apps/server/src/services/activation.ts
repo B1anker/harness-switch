@@ -183,7 +183,9 @@ export class ActivationService implements IActivationService {
 
   syncProfile(harness: HarnessId, name: string): void {
     const adapter = this.adapters.get(harness);
-    if (!adapter.renderAvailable) return;
+    if (!adapter.renderAvailable) {
+      return;
+    }
     const profile = this.profiles.decrypt(harness, name);
     adapter.validate?.(profile);
     const targets = adapter.targets();

@@ -19,6 +19,7 @@ bun test apps/server # server suite (bun test)
 npm run --workspace @seaveyon/harness-switch-web test # web suite (rstest)
 npm run typecheck # both tsc projects
 npm run lint # oxlint
+npm run lint:fix # oxlint --fix; writes the braces curly asks for
 npx biome check --write <paths> # formatter + import order; run after bulk edits
 ```
 
@@ -145,6 +146,9 @@ the store after every test, so no file does that itself.
 - Locale catalogs must stay key-for-key identical between `zh-CN` and `en`.
 - Every user-visible string is a catalog key. No Chinese (or English) literals as data in
   server or web source — use constants from `packages/shared`.
+- Every branch takes a block. No `if (x) return;` on one line, and no braceless `else`,
+  `for` or `while` — a later line added under the condition is the classic way to break
+  one. oxlint's `curly` enforces it and `npm run lint:fix` writes them for you.
 - Comments explain **why**, not what. Match the surrounding density; don't narrate the diff.
 - Keep the four baselines green — server tests, web tests, typecheck, lint — and commit
   once they are, rather than at the end of a long branch.

@@ -58,7 +58,9 @@ export function useDeviceFlow(options: {
   }
 
   function start(deviceCode: string, seconds = MIN_POLL_SECONDS) {
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
     setPolling(true);
     setIntervalSeconds(seconds);
     timerRef.current = setInterval(
@@ -79,9 +81,13 @@ export function useDeviceFlow(options: {
       });
       settle(result, deviceCode);
     } catch (caught) {
-      if (manual) handlers.current.onError(errorLine(caught));
+      if (manual) {
+        handlers.current.onError(errorLine(caught));
+      }
     } finally {
-      if (manual) setChecking(false);
+      if (manual) {
+        setChecking(false);
+      }
     }
   }
 
@@ -128,7 +134,9 @@ export function useDeviceFlow(options: {
       }
     },
     checkNow: async () => {
-      if (code?.deviceCode) await poll(code.deviceCode, true);
+      if (code?.deviceCode) {
+        await poll(code.deviceCode, true);
+      }
     },
   };
 }

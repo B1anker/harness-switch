@@ -69,7 +69,9 @@ function isAlive(pid: number): boolean {
 async function waitForExit(pid: number, timeoutMs = STOP_TIMEOUT_MS): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (!isAlive(pid)) return true;
+    if (!isAlive(pid)) {
+      return true;
+    }
     await sleep(100);
   }
   return !isAlive(pid);
@@ -77,9 +79,13 @@ async function waitForExit(pid: number, timeoutMs = STOP_TIMEOUT_MS): Promise<bo
 
 /** SIGTERM the pid, escalate to SIGKILL if it does not exit in time. */
 async function killProcess(pid: number): Promise<boolean> {
-  if (!isAlive(pid)) return true;
+  if (!isAlive(pid)) {
+    return true;
+  }
   process.kill(pid, 'SIGTERM');
-  if (await waitForExit(pid)) return true;
+  if (await waitForExit(pid)) {
+    return true;
+  }
   process.kill(pid, 'SIGKILL');
   return waitForExit(pid, 3_000);
 }
@@ -185,7 +191,9 @@ export async function daemonize(): Promise<number> {
   writeFileSync(daemonPidFile(), `${JSON.stringify(record, null, 2)}\n`, { mode: 0o600 });
 
   if (!(await waitForReady(record, START_TIMEOUT_MS))) {
-    if (isAlive(record.pid)) await killProcess(record.pid);
+    if (isAlive(record.pid)) {
+      await killProcess(record.pid);
+    }
     removeRecordIfMatches(token);
     console.error(`daemon failed its health check; tail of ${logPath}:`);
     try {
@@ -205,9 +213,15 @@ export async function daemonize(): Promise<number> {
 }
 
 async function isOwnedDaemon(record: StoredDaemon): Promise<boolean> {
-  if (!isAlive(record.pid)) return false;
-  if (record.version === 0) return processLooksLikeHarnessSwitch(record.pid);
-  if (processHasToken(record.pid, record.token)) return true;
+  if (!isAlive(record.pid)) {
+    return false;
+  }
+  if (record.version === 0) {
+    return processLooksLikeHarnessSwitch(record.pid);
+  }
+  if (processHasToken(record.pid, record.token)) {
+    return true;
+  }
   return checkHealth(record);
 }
 
@@ -232,8 +246,12 @@ function processLooksLikeHarnessSwitch(pid: number): boolean {
 async function waitForReady(record: DaemonRecord, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (!isAlive(record.pid)) return false;
-    if (await checkHealth(record)) return true;
+    if (!isAlive(record.pid)) {
+      return false;
+    }
+    if (await checkHealth(record)) {
+      return true;
+    }
     await sleep(100);
   }
   return false;
@@ -258,7 +276,9 @@ function httpOrigin(host: string, port: number): string {
 
 function removeRecordIfMatches(token: string): void {
   const record = readRecord();
-  if (record?.version !== 1 || record.token !== token) return;
+  if (record?.version !== 1 || record.token !== token) {
+    return;
+  }
   try {
     unlinkSync(daemonPidFile());
   } catch {

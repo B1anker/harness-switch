@@ -199,8 +199,11 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
     const settings = parseYamlDocument(rendered[SETTINGS]);
     const currentSettings = parseYamlDocument(current[SETTINGS]);
     const currentDefault = currentSettings.getIn(['agent-default-model']);
-    if (currentDefault === undefined) settings.deleteIn(['agent-default-model']);
-    else settings.setIn(['agent-default-model'], currentDefault);
+    if (currentDefault === undefined) {
+      settings.deleteIn(['agent-default-model']);
+    } else {
+      settings.setIn(['agent-default-model'], currentDefault);
+    }
     rendered[SETTINGS] = settings.toString();
     return rendered;
   }
@@ -227,7 +230,9 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
 
   official(current: CurrentFiles): OfficialCapability | undefined {
     const official = this.readOfficialRoute(current);
-    if (!official) return undefined;
+    if (!official) {
+      return undefined;
+    }
     return {
       kind: 'native-api',
       available: true,
@@ -259,8 +264,11 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
     if (current[SETTINGS] !== undefined) {
       const settings = tryParseYamlDocument(current[SETTINGS]);
       if (settings) {
-        if (official) settings.deleteIn(['llm-deepseek']);
-        else settings.deleteIn(['llm-pi-ai', 'providers', providerId]);
+        if (official) {
+          settings.deleteIn(['llm-deepseek']);
+        } else {
+          settings.deleteIn(['llm-pi-ai', 'providers', providerId]);
+        }
         if (settings.getIn(['agent-default-model', 'provider']) === providerId) {
           settings.deleteIn(['agent-default-model']);
         }
@@ -406,9 +414,12 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
         !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
         typeof value !== 'string' ||
         !value
-      )
+      ) {
         continue;
-      if (credentials.getIn(['refs', key]) === undefined) credentials.setIn(['refs', key], value);
+      }
+      if (credentials.getIn(['refs', key]) === undefined) {
+        credentials.setIn(['refs', key], value);
+      }
       credentials.deleteIn([key]);
     }
   }

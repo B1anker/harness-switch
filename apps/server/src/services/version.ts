@@ -56,7 +56,9 @@ async function readManifest(): Promise<PackageInfo | undefined> {
         version: typeof parsed.version === 'string' ? parsed.version : FALLBACK.version,
       };
     }
-    if (dir === root) return undefined;
+    if (dir === root) {
+      return undefined;
+    }
     dir = dirname(dir);
   }
 }

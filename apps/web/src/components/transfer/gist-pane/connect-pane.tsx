@@ -37,7 +37,9 @@ export function ConnectPane({
   });
 
   async function connectToken() {
-    if (!token.trim()) return;
+    if (!token.trim()) {
+      return;
+    }
     setConnecting(true);
     onClear();
     try {
@@ -98,7 +100,9 @@ function DeviceStep({ device }: { device: DeviceFlow }) {
   const [copied, setCopied] = useState(false);
 
   function copyUserCode() {
-    if (!device.code?.userCode) return;
+    if (!device.code?.userCode) {
+      return;
+    }
     void navigator.clipboard.writeText(device.code.userCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

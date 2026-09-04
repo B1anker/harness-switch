@@ -111,7 +111,9 @@ export class GitHubSyncService implements IGitHubSyncService {
 
   private getToken(): string | undefined {
     const store = this.readStore();
-    if (!store.token) return undefined;
+    if (!store.token) {
+      return undefined;
+    }
     const token = this.crypto.decrypt(store.token);
     return token ? token.trim() : undefined;
   }

@@ -12,12 +12,16 @@ export function createLocalizeMiddleware(): MiddlewareHandler {
   return async (c, next) => {
     await next();
     const contentType = c.res.headers.get('content-type') ?? '';
-    if (!contentType.includes('application/json') || !c.res.ok) return;
+    if (!contentType.includes('application/json') || !c.res.ok) {
+      return;
+    }
     const payload = await c.res
       .clone()
       .json()
       .catch(() => undefined);
-    if (payload === undefined) return;
+    if (payload === undefined) {
+      return;
+    }
     const localized = localizeResponsePayload(
       payload,
       requestLanguage(c.req.header('Accept-Language')),
@@ -35,14 +39,20 @@ export function createLocalizeMiddleware(): MiddlewareHandler {
  * separates a message node from a record that happens to have a `code` column.
  */
 function localizeResponsePayload(value: unknown, language: Language): unknown {
-  if (Array.isArray(value)) return value.map((item) => localizeResponsePayload(item, language));
-  if (!isRecord(value)) return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => localizeResponsePayload(item, language));
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
   const next = Object.fromEntries(
     Object.entries(value).map(([key, child]) => [key, localizeResponsePayload(child, language)]),
   ) as Record<string, unknown>;
   for (const [key, code] of Object.entries(value)) {
     const prefix = codeFieldPrefix(key);
-    if (prefix === undefined || !isMessageCode(code)) continue;
+    if (prefix === undefined || !isMessageCode(code)) {
+      continue;
+    }
     const raw = value[sibling(prefix, 'data')];
     next[sibling(prefix, 'msg')] = localizeMessage(
       language,
@@ -55,7 +65,9 @@ function localizeResponsePayload(value: unknown, language: Language): unknown {
 
 /** The family a code field names: `code` heads the bare one, `noteCode` the `note` one. */
 function codeFieldPrefix(key: string): string | undefined {
-  if (key === 'code') return '';
+  if (key === 'code') {
+    return '';
+  }
   return key.endsWith('Code') ? key.slice(0, -'Code'.length) : undefined;
 }
 

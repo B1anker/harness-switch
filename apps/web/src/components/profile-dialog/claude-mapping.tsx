@@ -71,7 +71,9 @@ export function ClaudeModelMappingFields({
         {CLAUDE_MODEL_ROWS.map(({ role, modelKey, nameKey, oneMKey }) => {
           const modelField = fieldByKey.get(modelKey);
           const nameField = fieldByKey.get(nameKey);
-          if (!modelField || !nameField) return null;
+          if (!modelField || !nameField) {
+            return null;
+          }
           const modelError = errors[`extra:${modelKey}`];
           const nameError = errors[`extra:${nameKey}`];
           return (

@@ -313,7 +313,9 @@ export class ClaudeAdapter extends BaseAdapter implements HarnessAdapter {
     }
     for (const { envVar, nameEnvVar } of MODEL_MAPPINGS) {
       delete env[envVar];
-      if (nameEnvVar) delete env[nameEnvVar];
+      if (nameEnvVar) {
+        delete env[nameEnvVar];
+      }
     }
     for (const [key] of parseEnvLines(profile?.extras.extraEnv)) {
       delete env[key];

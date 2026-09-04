@@ -340,7 +340,9 @@ async function readBody(response: Response): Promise<string | null> {
   if (declaredLength && Number(declaredLength) > MAX_BODY_BYTES) {
     return null;
   }
-  if (!response.body) return '';
+  if (!response.body) {
+    return '';
+  }
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -348,7 +350,9 @@ async function readBody(response: Response): Promise<string | null> {
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       size += value.byteLength;
       if (size > MAX_BODY_BYTES) {
         await reader.cancel('catalog body too large');
@@ -456,7 +460,9 @@ export function extractCompletionText(body: string): string | null {
   if (Array.isArray(parsed.choices)) {
     return parsed.choices
       .map((choice) => {
-        if (!isRecord(choice)) return '';
+        if (!isRecord(choice)) {
+          return '';
+        }
         const message = isRecord(choice.message) ? choice.message : undefined;
         return (
           contentText(message?.content) ||
@@ -497,8 +503,12 @@ function contentText(content: unknown): string {
   }
   return content
     .map((block) => {
-      if (typeof block === 'string') return block;
-      if (!isRecord(block)) return '';
+      if (typeof block === 'string') {
+        return block;
+      }
+      if (!isRecord(block)) {
+        return '';
+      }
       return firstString(block, ['text', 'output_text', 'content']);
     })
     .join('');

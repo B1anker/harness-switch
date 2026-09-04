@@ -95,7 +95,9 @@ export const createSessionSlice: Slice<SessionSlice> = (set, get) => ({
   },
 
   switchUser: async (username) => {
-    if (!username || username === get().currentUser) return;
+    if (!username || username === get().currentUser) {
+      return;
+    }
     set({ usersLoading: true, loading: true, error: null });
     try {
       await api(userSelectPath(username), { method: 'POST' });

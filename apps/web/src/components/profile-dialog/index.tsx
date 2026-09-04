@@ -150,9 +150,13 @@ export function ProfileDialog({
 
   function clearFieldErrors(...keys: string[]) {
     setFieldErrors((current) => {
-      if (!keys.some((key) => current[key])) return current;
+      if (!keys.some((key) => current[key])) {
+        return current;
+      }
       const next = { ...current };
-      for (const key of keys) delete next[key];
+      for (const key of keys) {
+        delete next[key];
+      }
       return next;
     });
   }
@@ -217,21 +221,32 @@ export function ProfileDialog({
     const next: ProfileFieldErrors = {};
     const trimmedName = name.trim();
 
-    if (!trimmedName) next.name = { key: 'profile.error.nameRequired' };
-    else if (trimmedName.includes('/') || trimmedName.includes('\\'))
+    if (!trimmedName) {
+      next.name = { key: 'profile.error.nameRequired' };
+    } else if (trimmedName.includes('/') || trimmedName.includes('\\')) {
       next.name = { key: 'profile.error.nameSlash' };
-    else if (trimmedName.length > LIMITS.name)
+    } else if (trimmedName.length > LIMITS.name) {
       next.name = { key: 'profile.error.nameTooLong', params: { max: LIMITS.name } };
-    else if (
+    } else if (
       harness.profiles.some((item) => item.name === trimmedName && item.name !== profile?.name)
-    )
+    ) {
       next.name = { key: 'profile.error.nameDuplicate' };
-    if (!effectiveBaseUrl().trim()) next.baseUrl = { key: 'profile.error.baseUrlRequired' };
-    if (!isEdit && !isCopy && selectedProvider === null && !apiKey.trim())
+    }
+    if (!effectiveBaseUrl().trim()) {
+      next.baseUrl = { key: 'profile.error.baseUrlRequired' };
+    }
+    if (!isEdit && !isCopy && selectedProvider === null && !apiKey.trim()) {
       next.apiKey = { key: 'profile.error.apiKeyRequired' };
-    if (harness.modelRequired && !model.trim()) next.model = { key: 'profile.error.modelRequired' };
-    if (providerMissing) next.providerId = { key: 'profile.error.providerGone' };
-    if (endpointMissing) next.providerEndpoint = { key: 'profile.error.endpointGone' };
+    }
+    if (harness.modelRequired && !model.trim()) {
+      next.model = { key: 'profile.error.modelRequired' };
+    }
+    if (providerMissing) {
+      next.providerId = { key: 'profile.error.providerGone' };
+    }
+    if (endpointMissing) {
+      next.providerEndpoint = { key: 'profile.error.endpointGone' };
+    }
     for (const field of harness.fields) {
       if (field.required && !extras[field.key]?.trim()) {
         // Resolve the label first: interpolating the raw prose would leave the server's
@@ -253,7 +268,9 @@ export function ProfileDialog({
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!validateForm()) return;
+    if (!validateForm()) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -719,8 +736,12 @@ function initialExtras(fields: FieldSpec[], profile: ProfilePublic | null): Reco
 function nextCopyName(sourceName: string, profiles: ProfilePublic[]): string {
   const names = new Set(profiles.map((profile) => profile.name));
   const base = `${sourceName}-copy`;
-  if (!names.has(base)) return base;
+  if (!names.has(base)) {
+    return base;
+  }
   let suffix = 2;
-  while (names.has(`${base}-${suffix}`)) suffix++;
+  while (names.has(`${base}-${suffix}`)) {
+    suffix++;
+  }
   return `${base}-${suffix}`;
 }

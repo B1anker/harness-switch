@@ -19,7 +19,9 @@ const realFetch = globalThis.fetch;
 let handler: FetchHandler | null = null;
 
 globalThis.fetch = ((input: string | URL | Request, init: RequestInit = {}) => {
-  if (!handler) return realFetch(input as RequestInfo, init);
+  if (!handler) {
+    return realFetch(input as RequestInfo, init);
+  }
   return Promise.resolve(handler(requestUrl(input), init)).then(asResponse);
 }) as typeof globalThis.fetch;
 
@@ -49,7 +51,9 @@ export function status(code: number, body: unknown = {}): Response {
  */
 export function routes(table: Record<string, unknown>): FetchHandler {
   return (url, init) => {
-    if (!(url in table)) return status(404, { code: 'notFound' });
+    if (!(url in table)) {
+      return status(404, { code: 'notFound' });
+    }
     const route = table[url];
     return typeof route === 'function' ? (route as FetchHandler)(url, init) : route;
   };
@@ -83,7 +87,9 @@ export type RecordedRequest = { path: string; method: string; body: string };
  * what the two hand-rolled `json()` helpers in the old suites spelled out each time.
  */
 function asResponse(value: unknown): unknown {
-  if (value instanceof Response || isResponseLike(value)) return value;
+  if (value instanceof Response || isResponseLike(value)) {
+    return value;
+  }
   return status(200, value ?? {});
 }
 

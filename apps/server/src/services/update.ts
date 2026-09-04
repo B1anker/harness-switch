@@ -32,7 +32,9 @@ export function compareVersions(a: string, b: string): number {
   for (let i = 0; i < len; i++) {
     const da = pa[i] ?? 0;
     const db = pb[i] ?? 0;
-    if (da !== db) return da > db ? 1 : -1;
+    if (da !== db) {
+      return da > db ? 1 : -1;
+    }
   }
   return 0;
 }

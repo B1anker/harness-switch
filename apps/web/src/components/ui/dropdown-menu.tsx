@@ -25,7 +25,9 @@ export function DropdownMenu({
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
 
     function closeOnOutsidePointer(event: PointerEvent) {
       if (!menuRef.current?.contains(event.target as Node)) {

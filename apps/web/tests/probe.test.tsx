@@ -28,12 +28,16 @@ function setupProfileDialog(
     loadProviders: async () => {},
     probeDraft: async (...args: unknown[]) => {
       calls.draft.push(args);
-      if (overrides.draft instanceof Error) throw overrides.draft;
+      if (overrides.draft instanceof Error) {
+        throw overrides.draft;
+      }
       return overrides.draft ?? OK_RESULT;
     },
     probeProfile: async (...args: unknown[]) => {
       calls.saved.push(args);
-      if (overrides.saved instanceof Error) throw overrides.saved;
+      if (overrides.saved instanceof Error) {
+        throw overrides.saved;
+      }
       return overrides.saved ?? OK_RESULT;
     },
   });

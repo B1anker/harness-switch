@@ -43,7 +43,9 @@ function ageEntry(harness: HarnessId, profile: string, ms: number): void {
   const files = services.get(IFileService);
   const store = files.readJson<Record<string, Record<string, { at: string }>>>(path, {});
   const entry = store[harness]?.[profile];
-  if (!entry) throw new Error('no entry to age');
+  if (!entry) {
+    throw new Error('no entry to age');
+  }
   entry.at = new Date(Date.now() - ms).toISOString();
   files.writeJson(path, store);
 }

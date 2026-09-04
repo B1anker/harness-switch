@@ -203,8 +203,12 @@ function countByStatus(report: DoctorReport): Record<DoctorCheckStatus, number> 
 }
 
 function badgeVariant(status: DoctorCheckStatus): 'secondary' | 'outline' | 'destructive' {
-  if (status === 'error') return 'destructive';
-  if (status === 'ok') return 'secondary';
+  if (status === 'error') {
+    return 'destructive';
+  }
+  if (status === 'ok') {
+    return 'secondary';
+  }
   return 'outline';
 }
 

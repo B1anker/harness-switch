@@ -856,7 +856,9 @@ describe('form field localization', () => {
         for (const key of keys.filter((value): value is string => value !== undefined)) {
           for (const language of LANGUAGES) {
             const template = lookup(CATALOGS[language], key);
-            if (typeof template !== 'string') continue;
+            if (typeof template !== 'string') {
+              continue;
+            }
             for (const name of [...template.matchAll(/{{\s*([\w.]+)\s*}}/g)].map((m) => m[1])) {
               if (field.params?.[name as string] === undefined) {
                 unresolved.push(`${adapter.id}.${field.key}: ${key} wants ${name}`);
@@ -886,7 +888,9 @@ function catalogKeys(adapter: HarnessAdapter): string[] {
 
 function lookup(catalog: Record<string, unknown>, key: string): unknown {
   return key.split('.').reduce<unknown>((current, part) => {
-    if (typeof current !== 'object' || current === null || Array.isArray(current)) return undefined;
+    if (typeof current !== 'object' || current === null || Array.isArray(current)) {
+      return undefined;
+    }
     return (current as Record<string, unknown>)[part];
   }, catalog);
 }
