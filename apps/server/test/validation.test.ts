@@ -1,60 +1,20 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { createApp } from '../src/app';
+import { readFile, writeFile } from 'node:fs/promises';
 import { createServices } from '../src/bootstrap';
 import { IAuthService } from '../src/services/auth';
 import { IEnvironmentService } from '../src/services/environment';
+import { createSandbox, createTestApp, type Sandbox, type TestApp } from './support';
 
-let homeDir = '';
+let sandbox: Sandbox;
 
-type TestApp = {
-  app: ReturnType<typeof createApp>;
-  cookie: string;
-  dataDir: string;
-};
-
-async function createTestApp(): Promise<TestApp> {
-  homeDir = await mkdtemp(join(tmpdir(), 'hsw-valid-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  const services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
-  const password = services.get(IAuthService).ensurePassword();
-  const app = createApp(services);
-  const login = await app.request('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  expect(login.status).toBe(200);
-  return {
-    app,
-    cookie: login.headers.get('set-cookie') ?? '',
-    dataDir: process.env.HSW_DATA_DIR,
-  };
-}
-
-async function post({ app, cookie }: TestApp, path: string, body: unknown): Promise<Response> {
-  return app.request(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify(body),
-  });
-}
-
-async function patch({ app, cookie }: TestApp, path: string, body: unknown): Promise<Response> {
-  return app.request(path, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify(body),
-  });
+async function boot(): Promise<TestApp> {
+  sandbox = createSandbox('hsw-valid');
+  return createTestApp();
 }
 
 /** Reads the raw store so a test can prove a rejected body never reached disk. */
-async function profileStore(context: TestApp): Promise<string> {
-  return readFile(join(context.dataDir, 'profiles.json'), 'utf8').catch(() => '');
+async function profileStore(): Promise<string> {
+  return readFile(sandbox.data('profiles.json'), 'utf8').catch(() => '');
 }
 
 async function errorOf(response: Response): Promise<string> {
@@ -63,17 +23,13 @@ async function errorOf(response: Response): Promise<string> {
 }
 
 describe('request validation', () => {
-  afterEach(async () => {
-    delete process.env.HSW_HOME_DIR;
-    delete process.env.HSW_DATA_DIR;
-    if (homeDir) {
-      await rm(homeDir, { recursive: true, force: true });
-    }
+  afterEach(() => {
+    sandbox?.dispose();
   });
 
   test('a non-string extras value is refused instead of reaching the store', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/harnesses/claude/profiles', {
+    const context = await boot();
+    const response = await context.post('/api/harnesses/claude/profiles', {
       name: 'broken',
       baseUrl: 'https://api.example.com',
       apiKey: 'sk-test',
@@ -83,11 +39,11 @@ describe('request validation', () => {
     // Previously this was persisted and only blew up as a 500 on the next activation.
     expect(response.status).toBe(400);
     expect(await errorOf(response)).toContain('extras.authVar');
-    expect(await profileStore(context)).toBe('');
+    expect(await profileStore()).toBe('');
   });
 
   test('rejects an empty login password before authentication', async () => {
-    const { app } = await createTestApp();
+    const { app } = await boot();
     const response = await app.request('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -97,18 +53,16 @@ describe('request validation', () => {
   });
 
   test('refuses to use an empty password file', async () => {
-    homeDir = await mkdtemp(join(tmpdir(), 'hsw-empty-password-'));
-    process.env.HSW_HOME_DIR = homeDir;
-    process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
+    sandbox = createSandbox('hsw-empty-password');
     const services = createServices();
     services.get(IEnvironmentService).ensureDataDir();
-    await writeFile(join(process.env.HSW_DATA_DIR, 'web_password'), '  \n');
+    await writeFile(sandbox.data('web_password'), '  \n');
     expect(() => services.get(IAuthService).ensurePassword()).toThrow(/password file is empty/);
   });
 
   test('an override that is not file content is refused', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/harnesses/claude/profiles', {
+    const context = await boot();
+    const response = await context.post('/api/harnesses/claude/profiles', {
       name: 'broken',
       apiKey: 'sk-test',
       overrides: { settings: { env: {} } },
@@ -116,31 +70,31 @@ describe('request validation', () => {
 
     expect(response.status).toBe(400);
     expect(await errorOf(response)).toContain('overrides.settings');
-    expect(await profileStore(context)).toBe('');
+    expect(await profileStore()).toBe('');
   });
 
   test('a profile name with a slash is refused before it becomes a store key', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/harnesses/claude/profiles', {
+    const context = await boot();
+    const response = await context.post('/api/harnesses/claude/profiles', {
       name: '../escape',
       apiKey: 'sk-test',
     });
 
     expect(response.status).toBe(400);
     expect(await errorOf(response)).toContain('name');
-    expect(await profileStore(context)).toBe('');
+    expect(await profileStore()).toBe('');
   });
 
   test('a missing name is refused', async () => {
-    const context = await createTestApp();
-    expect((await post(context, '/api/harnesses/claude/profiles', { apiKey: 'sk' })).status).toBe(
+    const context = await boot();
+    expect((await context.post('/api/harnesses/claude/profiles', { apiKey: 'sk' })).status).toBe(
       400,
     );
   });
 
   test('an unknown field is dropped rather than rejected or stored', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/harnesses/claude/profiles', {
+    const context = await boot();
+    const response = await context.post('/api/harnesses/claude/profiles', {
       name: 'ok',
       baseUrl: 'https://api.example.com',
       apiKey: 'sk-test',
@@ -149,14 +103,14 @@ describe('request validation', () => {
 
     // An older client sending a dropped field still works, but nothing unknown lands.
     expect(response.status).toBe(201);
-    expect(await profileStore(context)).not.toContain('somethingThisVersionDoesNotKnow');
+    expect(await profileStore()).not.toContain('somethingThisVersionDoesNotKnow');
   });
 
   test('a patch keeps validating the fields it does mention', async () => {
-    const context = await createTestApp();
+    const context = await boot();
     expect(
       (
-        await post(context, '/api/harnesses/claude/profiles', {
+        await context.post('/api/harnesses/claude/profiles', {
           name: 'main',
           baseUrl: 'https://api.example.com',
           apiKey: 'sk-test',
@@ -164,18 +118,18 @@ describe('request validation', () => {
       ).status,
     ).toBe(201);
 
-    const before = await profileStore(context);
-    const response = await patch(context, '/api/harnesses/claude/profiles/main', {
+    const before = await profileStore();
+    const response = await context.patch('/api/harnesses/claude/profiles/main', {
       extras: { authVar: ['not', 'a', 'string'] },
     });
 
     expect(response.status).toBe(400);
-    expect(await profileStore(context)).toBe(before);
+    expect(await profileStore()).toBe(before);
   });
 
   test('duplicate provider endpoint keys are refused', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/providers', {
+    const context = await boot();
+    const response = await context.post('/api/providers', {
       name: 'dup',
       apiKey: 'sk-test',
       endpoints: [
@@ -189,8 +143,8 @@ describe('request validation', () => {
   });
 
   test('a provider endpoint without a baseUrl is refused', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/providers', {
+    const context = await boot();
+    const response = await context.post('/api/providers', {
       name: 'incomplete',
       apiKey: 'sk-test',
       endpoints: [{ key: 'cn', label: '中国' }],
@@ -201,8 +155,8 @@ describe('request validation', () => {
   });
 
   test('an unknown harness in a sync request is refused', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/users/sync', {
+    const context = await boot();
+    const response = await context.post('/api/users/sync', {
       sourceUser: 'someone',
       overwriteHarnesses: ['claude', 'not-a-harness'],
     });
@@ -212,8 +166,8 @@ describe('request validation', () => {
   });
 
   test('a transfer import with a malformed envelope is refused', async () => {
-    const context = await createTestApp();
-    const response = await post(context, '/api/transfer/import', {
+    const context = await boot();
+    const response = await context.post('/api/transfer/import', {
       envelope: { format: 'harness-switch-encrypted-export', version: 1 },
       passphrase: 'secret',
     });
@@ -223,10 +177,10 @@ describe('request validation', () => {
   });
 
   test('a body that is not an object at all is refused', async () => {
-    const context = await createTestApp();
-    expect((await post(context, '/api/harnesses/claude/profiles', 'just a string')).status).toBe(
+    const context = await boot();
+    expect((await context.post('/api/harnesses/claude/profiles', 'just a string')).status).toBe(
       400,
     );
-    expect((await post(context, '/api/providers', [1, 2, 3])).status).toBe(400);
+    expect((await context.post('/api/providers', [1, 2, 3])).status).toBe(400);
   });
 });

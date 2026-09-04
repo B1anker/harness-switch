@@ -1,8 +1,6 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createCipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import type {
   HarnessSummary,
   PreviewResponse,
@@ -10,20 +8,31 @@ import type {
   TransferEnvelope,
   TransferPreview,
 } from '@seaveyon/harness-switch-shared';
-import { createApp } from '../src/app';
-import { createServices } from '../src/bootstrap';
-import { IAuthService } from '../src/services/auth';
-import { IEnvironmentService } from '../src/services/environment';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
+import {
+  asSession,
+  createSandbox,
+  createTestApp,
+  loginAgain,
+  restartApp,
+  type Sandbox,
+  type TestApp,
+} from './support';
 
-let homeDir = '';
-const originalCodexHome = process.env.CODEX_HOME;
+let sandbox: Sandbox;
 
-type TestApp = {
-  app: ReturnType<typeof createApp>;
-  cookie: string;
-  password: string;
-  dataDir: string;
-};
+/** A restarted app carrying the session cookie the pre-restart app handed out. */
+function afterRestart(context: TestApp): TestApp {
+  return asSession(restartApp(), context.cookie);
+}
+
+beforeEach(() => {
+  sandbox = createSandbox('hsw-home', { env: (home) => ({ CODEX_HOME: home('.codex') }) });
+});
+
+afterEach(() => {
+  sandbox.dispose();
+});
 
 type PortableTestPayload = {
   format: 'harness-switch-portable-config';
@@ -77,68 +86,24 @@ function portableClaudeProfile(name = 'portable') {
   };
 }
 
-async function createTestApp(): Promise<TestApp> {
-  homeDir = await mkdtemp(join(tmpdir(), 'hsw-home-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  process.env.CODEX_HOME = join(homeDir, '.codex');
-  const services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
-  const password = services.get(IAuthService).ensurePassword();
-  const app = createApp(services);
-  const login = await app.request('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  expect(login.status).toBe(200);
-  return {
-    app,
-    cookie: login.headers.get('set-cookie') ?? '',
-    password,
-    dataDir: process.env.HSW_DATA_DIR,
-  };
-}
-
-/** Rebuilds the services and app over the same data directory, as a process restart would. */
-function restartApp(): ReturnType<typeof createApp> {
-  const services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
-  services.get(IAuthService).ensurePassword();
-  return createApp(services);
-}
-
 function claudeSettings(): string {
-  return join(homeDir, '.claude', 'settings.json');
+  return sandbox.home('.claude', 'settings.json');
 }
 
-async function createProfile(
-  { app, cookie }: TestApp,
+function createProfile(
+  context: TestApp,
   harness: string,
   body: Record<string, unknown>,
 ): Promise<Response> {
-  return app.request(`/api/harnesses/${harness}/profiles`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Cookie: cookie },
-    body: JSON.stringify(body),
-  });
+  return context.post(`/api/harnesses/${harness}/profiles`, body);
 }
 
-async function activate(
-  { app, cookie }: TestApp,
-  harness: string,
-  name: string,
-): Promise<Response> {
-  return app.request(`/api/harnesses/${harness}/profiles/${name}/activate`, {
-    method: 'POST',
-    headers: { Cookie: cookie },
-  });
+function activate(context: TestApp, harness: string, name: string): Promise<Response> {
+  return context.post(`/api/harnesses/${harness}/profiles/${name}/activate`);
 }
 
-async function summary({ app, cookie }: TestApp, harness: string): Promise<HarnessSummary> {
-  const response = await app.request(`/api/harnesses/${harness}`, { headers: { Cookie: cookie } });
-  expect(response.status).toBe(200);
-  return (await response.json()) as HarnessSummary;
+function summary(context: TestApp, harness: string): Promise<HarnessSummary> {
+  return context.json<HarnessSummary>(`/api/harnesses/${harness}`);
 }
 
 function profileOf(harness: HarnessSummary, name: string): ProfilePublic {
@@ -150,19 +115,6 @@ function profileOf(harness: HarnessSummary, name: string): ProfilePublic {
 }
 
 describe('rest api', () => {
-  afterEach(async () => {
-    delete process.env.HSW_HOME_DIR;
-    delete process.env.HSW_DATA_DIR;
-    if (originalCodexHome === undefined) {
-      delete process.env.CODEX_HOME;
-    } else {
-      process.env.CODEX_HOME = originalCodexHome;
-    }
-    if (homeDir) {
-      await rm(homeDir, { recursive: true, force: true });
-    }
-  });
-
   test('reports its version without authentication', async () => {
     const { app } = await createTestApp();
     const response = await app.request('/api/version');
@@ -267,29 +219,17 @@ describe('rest api', () => {
 
   test('logging out invalidates the session immediately', async () => {
     const context = await createTestApp();
-    expect(
-      (await context.app.request('/api/auth/session', { headers: { Cookie: context.cookie } }))
-        .status,
-    ).toBe(200);
+    expect((await context.get('/api/auth/session')).status).toBe(200);
 
-    await context.app.request('/api/auth/logout', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    await context.post('/api/auth/logout');
 
-    expect(
-      (await context.app.request('/api/auth/session', { headers: { Cookie: context.cookie } }))
-        .status,
-    ).toBe(401);
+    expect((await context.get('/api/auth/session')).status).toBe(401);
   });
 
   test('keeps a session valid across a restart', async () => {
     const context = await createTestApp();
 
-    expect(
-      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
-        .status,
-    ).toBe(200);
+    expect((await afterRestart(context).get('/api/auth/session')).status).toBe(200);
   });
 
   test('does not persist the raw token, so a leaked store cannot be replayed', async () => {
@@ -297,82 +237,57 @@ describe('rest api', () => {
     const token = /hsw_session=([^;]+)/.exec(context.cookie)?.[1] ?? '';
     expect(token).not.toBe('');
 
-    const stored = await readFile(join(context.dataDir, 'sessions.json'), 'utf8');
+    const stored = await readFile(sandbox.data('sessions.json'), 'utf8');
     expect(stored).not.toContain(token);
+    // Replaying the stored key as if it were the token must not authenticate.
+    const storedKey = Object.keys(JSON.parse(stored).sessions)[0];
     expect(
-      (
-        await restartApp().request('/api/auth/session', {
-          headers: { Cookie: `hsw_session=${Object.keys(JSON.parse(stored).sessions)[0]}` },
-        })
-      ).status,
+      (await asSession(restartApp(), `hsw_session=${storedKey}`).get('/api/auth/session')).status,
     ).toBe(401);
   });
 
   test('a logout survives the restart it outlived', async () => {
     const context = await createTestApp();
-    await context.app.request('/api/auth/logout', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    await context.post('/api/auth/logout');
 
-    expect(
-      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
-        .status,
-    ).toBe(401);
+    expect((await afterRestart(context).get('/api/auth/session')).status).toBe(401);
   });
 
   test('changing the web password invalidates sessions that outlived it', async () => {
     const context = await createTestApp();
-    await writeFile(join(context.dataDir, 'web_password'), 'rotated-password\n', { mode: 0o600 });
+    await writeFile(sandbox.data('web_password'), 'rotated-password\n', { mode: 0o600 });
 
-    expect(
-      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
-        .status,
-    ).toBe(401);
+    expect((await afterRestart(context).get('/api/auth/session')).status).toBe(401);
   });
 
   test('an expired session is rejected after a restart', async () => {
     const context = await createTestApp();
-    const file = join(context.dataDir, 'sessions.json');
+    const file = sandbox.data('sessions.json');
     const store = JSON.parse(await readFile(file, 'utf8'));
     for (const key of Object.keys(store.sessions)) {
       store.sessions[key].expires = Date.now() - 1000;
     }
     await writeFile(file, JSON.stringify(store), { mode: 0o600 });
 
-    expect(
-      (await restartApp().request('/api/auth/session', { headers: { Cookie: context.cookie } }))
-        .status,
-    ).toBe(401);
+    expect((await afterRestart(context).get('/api/auth/session')).status).toBe(401);
   });
 
   test('survives a corrupt session store instead of crashing', async () => {
     const context = await createTestApp();
-    await writeFile(join(context.dataDir, 'sessions.json'), 'not json', { mode: 0o600 });
+    await writeFile(sandbox.data('sessions.json'), 'not json', { mode: 0o600 });
 
-    const app = restartApp();
-    expect(
-      (await app.request('/api/auth/session', { headers: { Cookie: context.cookie } })).status,
-    ).toBe(401);
+    const restarted = restartApp();
+    expect((await asSession(restarted, context.cookie).get('/api/auth/session')).status).toBe(401);
 
-    const login = await app.request('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: context.password }),
-    });
-    expect(login.status).toBe(200);
+    // A store it could not read must not lock the operator out of logging in again.
+    expect(await loginAgain({ ...restarted, password: context.password })).not.toBe('');
   });
 
   test('denies a state-changing request from another origin', async () => {
     const context = await createTestApp();
-    const response = await context.app.request('/api/harnesses/claude/profiles', {
+    const response = await context.request('/api/harnesses/claude/profiles', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: context.cookie,
-        Origin: 'https://evil.example.com',
-        Host: '127.0.0.1:8787',
-      },
+      headers: { Origin: 'https://evil.example.com', Host: '127.0.0.1:8787' },
       body: JSON.stringify({ name: 'x', baseUrl: 'https://a', apiKey: 'sk' }),
     });
     expect(response.status).toBe(403);
@@ -380,31 +295,14 @@ describe('rest api', () => {
 
   test('reports unknown harnesses, profiles and bodies without a 500', async () => {
     const context = await createTestApp();
-    const { app, cookie } = context;
 
-    expect(
-      (await app.request('/api/harnesses/gemini', { headers: { Cookie: cookie } })).status,
-    ).toBe(404);
+    expect((await context.get('/api/harnesses/gemini')).status).toBe(404);
     expect((await activate(context, 'claude', 'ghost')).status).toBe(404);
-    expect(
-      (
-        await app.request('/api/harnesses/claude/profiles/ghost/preview', {
-          headers: { Cookie: cookie },
-        })
-      ).status,
-    ).toBe(404);
-    expect(
-      (
-        await app.request('/api/harnesses/claude/profiles/ghost', {
-          method: 'DELETE',
-          headers: { Cookie: cookie },
-        })
-      ).status,
-    ).toBe(404);
+    expect((await context.get('/api/harnesses/claude/profiles/ghost/preview')).status).toBe(404);
+    expect((await context.del('/api/harnesses/claude/profiles/ghost')).status).toBe(404);
 
-    const badBody = await app.request('/api/harnesses/claude/profiles', {
+    const badBody = await context.request('/api/harnesses/claude/profiles', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
       body: 'not json',
     });
     expect(badBody.status).toBe(400);
@@ -443,8 +341,8 @@ describe('rest api', () => {
     expect(pi.mode).toBe('additive');
     expect(pi.modelRequired).toBe(true);
     expect(pi.targets.map((target) => target.path)).toEqual([
-      join(homeDir, '.pi', 'agent', 'models.json'),
-      join(homeDir, '.pi', 'agent', 'settings.json'),
+      sandbox.home('.pi', 'agent', 'models.json'),
+      sandbox.home('.pi', 'agent', 'settings.json'),
     ]);
   });
 
@@ -465,7 +363,7 @@ describe('rest api', () => {
     expect((await activate(context, 'pi', 'main')).status).toBe(200);
 
     const models = JSON.parse(
-      await readFile(join(homeDir, '.pi', 'agent', 'models.json'), 'utf8'),
+      await readFile(sandbox.home('.pi', 'agent', 'models.json'), 'utf8'),
     ) as {
       providers: Record<string, { apiKey: string; models: Array<{ reasoning?: boolean }> }>;
     };
@@ -473,7 +371,7 @@ describe('rest api', () => {
     expect(models.providers.main.models[0]?.reasoning).toBe(true);
 
     const settings = JSON.parse(
-      await readFile(join(homeDir, '.pi', 'agent', 'settings.json'), 'utf8'),
+      await readFile(sandbox.home('.pi', 'agent', 'settings.json'), 'utf8'),
     ) as { defaultProvider: string; defaultModel: string };
     expect(settings.defaultProvider).toBe('main');
     expect(settings.defaultModel).toBe('gpt-5.6-sol');
@@ -499,7 +397,7 @@ describe('rest api', () => {
     expect(settings.env.ANTHROPIC_BASE_URL).toBe('https://api.example.com/v1');
     expect(settings.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-test');
 
-    const env = await readFile(join(context.dataDir, 'env.sh'), 'utf8');
+    const env = await readFile(sandbox.data('env.sh'), 'utf8');
     expect(env).toContain("export ANTHROPIC_AUTH_TOKEN='sk-test'");
   });
 
@@ -561,10 +459,7 @@ describe('rest api', () => {
     });
     await activate(context, 'claude', 'relay');
 
-    const response = await context.app.request('/api/harnesses/claude/official/activate', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    const response = await context.post('/api/harnesses/claude/official/activate');
     expect(response.status).toBe(200);
 
     const settings = JSON.parse(await readFile(claudeSettings(), 'utf8'));
@@ -589,7 +484,7 @@ describe('rest api', () => {
     });
     await activate(context, 'kimi', 'relay');
 
-    const configPath = join(homeDir, '.kimi-code', 'config.toml');
+    const configPath = sandbox.home('.kimi-code', 'config.toml');
     // Simulate the provider and models that `/login` had provisioned before the switch.
     await writeFile(
       configPath,
@@ -617,10 +512,7 @@ describe('rest api', () => {
       ].join('\n'),
     );
 
-    const response = await context.app.request('/api/harnesses/kimi/official/activate', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    const response = await context.post('/api/harnesses/kimi/official/activate');
     expect(response.status).toBe(200);
 
     // Additive config keeps the third-party provider; only the pointer moves back.
@@ -641,9 +533,9 @@ describe('rest api', () => {
   test('switches DSH to a detected native DeepSeek official API key', async () => {
     const context = await createTestApp();
     expect((await summary(context, 'dsh')).official).toBeUndefined();
-    const settingsPath = join(homeDir, '.dsh', 'settings.yaml');
-    const credentialsPath = join(homeDir, '.dsh', '.credentials.yaml');
-    await mkdir(join(homeDir, '.dsh'), { recursive: true });
+    const settingsPath = sandbox.home('.dsh', 'settings.yaml');
+    const credentialsPath = sandbox.home('.dsh', '.credentials.yaml');
+    await mkdir(sandbox.home('.dsh'), { recursive: true });
     await writeFile(
       settingsPath,
       [
@@ -660,10 +552,7 @@ describe('rest api', () => {
     );
     await writeFile(credentialsPath, 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n');
 
-    const response = await context.app.request('/api/harnesses/dsh/official/activate', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    const response = await context.post('/api/harnesses/dsh/official/activate');
     expect(response.status).toBe(200);
 
     const settings = await readFile(settingsPath, 'utf8');
@@ -690,15 +579,12 @@ describe('rest api', () => {
     });
     await activate(context, 'kimi', 'relay');
 
-    const response = await context.app.request('/api/harnesses/kimi/official/activate', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    const response = await context.post('/api/harnesses/kimi/official/activate');
     expect(response.status).toBe(400);
     const payload = (await response.json()) as { code: string };
     expect(payload.code).toBe('activation.officialLoginMissing');
 
-    const configPath = join(homeDir, '.kimi-code', 'config.toml');
+    const configPath = sandbox.home('.kimi-code', 'config.toml');
     expect(await readFile(configPath, 'utf8')).toContain('default_model = "relay"');
     expect((await summary(context, 'kimi')).active?.official).toBe(false);
   });
@@ -713,13 +599,10 @@ describe('rest api', () => {
     });
     await activate(context, 'codex', 'via-env');
 
-    const first = await context.app.request('/api/harnesses/codex/official/activate', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    const first = await context.post('/api/harnesses/codex/official/activate');
     expect(first.status).toBe(200);
 
-    const configPath = join(homeDir, '.codex', 'config.toml');
+    const configPath = sandbox.home('.codex', 'config.toml');
     // Simulate Codex UI re-selecting a leftover third-party provider after official switch.
     await writeFile(
       configPath,
@@ -734,10 +617,7 @@ describe('rest api', () => {
       ].join('\n'),
     );
 
-    const second = await context.app.request('/api/harnesses/codex/official/activate', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
+    const second = await context.post('/api/harnesses/codex/official/activate');
     expect(second.status).toBe(200);
 
     const config = await readFile(configPath, 'utf8');
@@ -756,10 +636,7 @@ describe('rest api', () => {
     });
     await activate(context, 'claude', 'main');
 
-    const blocked = await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'DELETE',
-      headers: { Cookie: context.cookie },
-    });
+    const blocked = await context.del('/api/harnesses/claude/profiles/main');
     expect(blocked.status).toBe(409);
 
     await createProfile(context, 'claude', {
@@ -769,10 +646,7 @@ describe('rest api', () => {
     });
     await activate(context, 'claude', 'spare');
 
-    const deleted = await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'DELETE',
-      headers: { Cookie: context.cookie },
-    });
+    const deleted = await context.del('/api/harnesses/claude/profiles/main');
     expect(deleted.status).toBe(200);
   });
 
@@ -785,10 +659,8 @@ describe('rest api', () => {
     });
     await activate(context, 'claude', 'main');
 
-    const patched = await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ baseUrl: 'https://edited.example.com/v1' }),
+    const patched = await context.patch('/api/harnesses/claude/profiles/main', {
+      baseUrl: 'https://edited.example.com/v1',
     });
     expect(patched.status).toBe(200);
 
@@ -805,11 +677,7 @@ describe('rest api', () => {
     });
     await activate(context, 'claude', 'main');
 
-    const patched = await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ name: 'renamed' }),
-    });
+    const patched = await context.patch('/api/harnesses/claude/profiles/main', { name: 'renamed' });
     expect(patched.status).toBe(200);
 
     const claude = await summary(context, 'claude');
@@ -831,14 +699,12 @@ describe('rest api', () => {
 
     // Block every read/write of the live file by replacing its directory with a
     // regular file, so the reconcile step must fail.
-    const claudeDir = join(homeDir, '.claude');
+    const claudeDir = sandbox.home('.claude');
     await rm(claudeDir, { recursive: true, force: true });
     await writeFile(claudeDir, 'not a directory');
 
-    const patched = await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ baseUrl: 'https://edited.example.com/v1' }),
+    const patched = await context.patch('/api/harnesses/claude/profiles/main', {
+      baseUrl: 'https://edited.example.com/v1',
     });
     expect(patched.status).toBeGreaterThanOrEqual(400);
 
@@ -860,13 +726,10 @@ describe('rest api', () => {
     });
 
     // Block the live config so revoking the provider must fail.
-    const kimiHome = join(homeDir, '.kimi-code');
+    const kimiHome = sandbox.home('.kimi-code');
     await writeFile(kimiHome, 'not a directory');
 
-    const deleted = await context.app.request('/api/harnesses/kimi/profiles/victim', {
-      method: 'DELETE',
-      headers: { Cookie: context.cookie },
-    });
+    const deleted = await context.del('/api/harnesses/kimi/profiles/victim');
     expect(deleted.status).toBeGreaterThanOrEqual(400);
 
     await rm(kimiHome, { force: true });
@@ -914,18 +777,14 @@ describe('rest api', () => {
     });
 
     const preview = (await (
-      await context.app.request('/api/harnesses/claude/profiles/main/preview', {
-        headers: { Cookie: context.cookie },
-      })
+      await context.get('/api/harnesses/claude/profiles/main/preview')
     ).json()) as PreviewResponse;
     expect(preview.targets[0]?.overridden).toBe(false);
     expect(preview.targets[0]?.content).toContain('sk-test');
     expect(preview.targets[0]?.currentContent).toBeNull();
 
-    await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ overrides: { settings: '{"env":{"HAND_WRITTEN":"1"}}\n' } }),
+    await context.patch('/api/harnesses/claude/profiles/main', {
+      overrides: { settings: '{"env":{"HAND_WRITTEN":"1"}}\n' },
     });
     await activate(context, 'claude', 'main');
 
@@ -936,11 +795,7 @@ describe('rest api', () => {
       'settings',
     ]);
 
-    await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ overrides: {} }),
-    });
+    await context.patch('/api/harnesses/claude/profiles/main', { overrides: {} });
     await activate(context, 'claude', 'main');
 
     const regenerated = JSON.parse(await readFile(claudeSettings(), 'utf8'));
@@ -956,9 +811,7 @@ describe('rest api', () => {
     });
 
     const before = (await (
-      await context.app.request('/api/harnesses/claude/profiles/main/preview', {
-        headers: { Cookie: context.cookie },
-      })
+      await context.get('/api/harnesses/claude/profiles/main/preview')
     ).json()) as PreviewResponse;
     expect(before.targets[0]?.currentContent).toBeNull();
 
@@ -966,9 +819,7 @@ describe('rest api', () => {
     const live = await readFile(claudeSettings(), 'utf8');
 
     const after = (await (
-      await context.app.request('/api/harnesses/claude/profiles/main/preview', {
-        headers: { Cookie: context.cookie },
-      })
+      await context.get('/api/harnesses/claude/profiles/main/preview')
     ).json()) as PreviewResponse;
     expect(after.targets[0]?.currentContent).toBe(live);
     expect(after.targets[0]?.currentContent).toContain('sk-test');
@@ -981,10 +832,8 @@ describe('rest api', () => {
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'sk-test',
     });
-    await context.app.request('/api/harnesses/claude/profiles/main', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ overrides: { settings: '{ not json' } }),
+    await context.patch('/api/harnesses/claude/profiles/main', {
+      overrides: { settings: '{ not json' },
     });
 
     const activated = await activate(context, 'claude', 'main');
@@ -1008,13 +857,10 @@ describe('rest api', () => {
     await activate(context, 'kimi', 'first');
     await activate(context, 'kimi', 'second');
 
-    const configPath = join(homeDir, '.kimi-code', 'config.toml');
+    const configPath = sandbox.home('.kimi-code', 'config.toml');
     expect(await readFile(configPath, 'utf8')).toContain('[providers.first]');
 
-    const deleted = await context.app.request('/api/harnesses/kimi/profiles/first', {
-      method: 'DELETE',
-      headers: { Cookie: context.cookie },
-    });
+    const deleted = await context.del('/api/harnesses/kimi/profiles/first');
     expect(deleted.status).toBe(200);
 
     const config = await readFile(configPath, 'utf8');
@@ -1033,14 +879,12 @@ describe('rest api', () => {
     });
     await activate(context, 'kimi', 'old-name');
 
-    const patched = await context.app.request('/api/harnesses/kimi/profiles/old-name', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ name: 'new-name' }),
+    const patched = await context.patch('/api/harnesses/kimi/profiles/old-name', {
+      name: 'new-name',
     });
     expect(patched.status).toBe(200);
 
-    const config = await readFile(join(homeDir, '.kimi-code', 'config.toml'), 'utf8');
+    const config = await readFile(sandbox.home('.kimi-code', 'config.toml'), 'utf8');
     expect(config).not.toContain('[providers.old-name]');
     expect(config).toContain('[providers.new-name]');
     expect(config).toContain('default_model = "new-name"');
@@ -1064,20 +908,20 @@ describe('rest api', () => {
     await activate(context, 'codex', 'via-env');
     await activate(context, 'kimi', 'kimi-main');
 
-    const env = await readFile(join(context.dataDir, 'env.sh'), 'utf8');
+    const env = await readFile(sandbox.data('env.sh'), 'utf8');
     expect(env).toContain("export MY_KEY='sk-or'");
     // Kimi Code never reads the shell, so exporting a key would be a lie.
     expect(env).not.toContain('sk-kimi');
 
-    const config = await readFile(join(homeDir, '.codex', 'config.toml'), 'utf8');
+    const config = await readFile(sandbox.home('.codex', 'config.toml'), 'utf8');
     expect(config).toContain('env_key = "MY_KEY"');
     expect(config).not.toContain('sk-or');
   });
 
   test('choosing the auth.json mode backs up the login cache first', async () => {
     const context = await createTestApp();
-    await mkdir(join(homeDir, '.codex'), { recursive: true });
-    const authFile = join(homeDir, '.codex', 'auth.json');
+    await mkdir(sandbox.home('.codex'), { recursive: true });
+    const authFile = sandbox.home('.codex', 'auth.json');
     const original = JSON.stringify({ tokens: { refresh_token: 'official-login' } });
     await writeFile(authFile, original);
 
@@ -1091,15 +935,12 @@ describe('rest api', () => {
 
     expect(JSON.parse(await readFile(authFile, 'utf8')).OPENAI_API_KEY).toBe('sk-or');
 
-    const listed = (await (
-      await context.app.request('/api/backups', { headers: { Cookie: context.cookie } })
-    ).json()) as { items: Array<{ id: string; files: Array<{ path: string }> }> };
+    const listed = (await (await context.get('/api/backups')).json()) as {
+      items: Array<{ id: string; files: Array<{ path: string }> }>;
+    };
     expect(listed.items[0]?.files.map((file) => file.path)).toContain(authFile);
 
-    await context.app.request(
-      `/api/backups/${encodeURIComponent(listed.items[0]?.id ?? '')}/restore`,
-      { method: 'POST', headers: { Cookie: context.cookie } },
-    );
+    await context.post(`/api/backups/${encodeURIComponent(listed.items[0]?.id ?? '')}/restore`);
     expect(await readFile(authFile, 'utf8')).toBe(original);
   });
 
@@ -1128,15 +969,13 @@ describe('rest api', () => {
   test('a profile store left over from a removed harness does not break reads', async () => {
     const context = await createTestApp();
     await writeFile(
-      join(context.dataDir, 'profiles.json'),
+      sandbox.data('profiles.json'),
       JSON.stringify({
         zcode: { legacy: { base_url: 'https://old', api_key: {}, model: '', notes: '' } },
       }),
     );
 
-    const response = await context.app.request('/api/harnesses', {
-      headers: { Cookie: context.cookie },
-    });
+    const response = await context.get('/api/harnesses');
     expect(response.status).toBe(200);
 
     expect(
@@ -1153,7 +992,7 @@ describe('rest api', () => {
 
   test('lists backups and restores the file they captured', async () => {
     const context = await createTestApp();
-    await mkdir(join(homeDir, '.claude'), { recursive: true });
+    await mkdir(sandbox.home('.claude'), { recursive: true });
     await writeFile(claudeSettings(), '{"env":{"ORIGINAL":"1"}}\n');
 
     await createProfile(context, 'claude', {
@@ -1163,14 +1002,13 @@ describe('rest api', () => {
     });
     await activate(context, 'claude', 'main');
 
-    const listed = (await (
-      await context.app.request('/api/backups', { headers: { Cookie: context.cookie } })
-    ).json()) as { items: Array<{ id: string }> };
+    const listed = (await (await context.get('/api/backups')).json()) as {
+      items: Array<{ id: string }>;
+    };
     expect(listed.items).not.toBeEmpty();
 
-    const detail = await context.app.request(
+    const detail = await context.get(
       `/api/backups/${encodeURIComponent(listed.items[0]?.id ?? '')}`,
-      { headers: { Cookie: context.cookie } },
     );
     expect(detail.status).toBe(200);
     const body = (await detail.json()) as {
@@ -1179,9 +1017,8 @@ describe('rest api', () => {
     expect(body.files[0]?.content).toBe('{"env":{"ORIGINAL":"1"}}\n');
     expect(body.files[0]?.currentContent).toContain('ANTHROPIC_BASE_URL');
 
-    const restored = await context.app.request(
+    const restored = await context.post(
       `/api/backups/${encodeURIComponent(listed.items[0]?.id ?? '')}/restore`,
-      { method: 'POST', headers: { Cookie: context.cookie } },
     );
     expect(restored.status).toBe(200);
     expect(await readFile(claudeSettings(), 'utf8')).toBe('{"env":{"ORIGINAL":"1"}}\n');
@@ -1189,77 +1026,59 @@ describe('rest api', () => {
 
   test('exports and imports the Codex login cache only with separate opt-ins', async () => {
     const context = await createTestApp();
-    const authPath = join(homeDir, '.codex', 'auth.json');
+    const authPath = sandbox.home('.codex', 'auth.json');
     const exportedCache = '{"tokens":{"access_token":"portable-login-session"}}\n';
-    await mkdir(join(homeDir, '.codex'), { recursive: true });
+    await mkdir(sandbox.home('.codex'), { recursive: true });
     await writeFile(authPath, exportedCache, { mode: 0o600 });
 
-    const availability = await context.app.request('/api/transfer/export/preview', {
-      headers: { Cookie: context.cookie },
-    });
+    const availability = await context.get('/api/transfer/export/preview');
     expect(await availability.json()).toEqual({ codexLoginCacheAvailable: true });
 
-    const withoutCache = await context.app.request('/api/transfer/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ passphrase: 'portable-secret', includeCodexLoginCache: false }),
+    const withoutCache = await context.post('/api/transfer/export', {
+      passphrase: 'portable-secret',
+      includeCodexLoginCache: false,
     });
     expect(withoutCache.status).toBe(200);
-    const withoutCachePreview = await context.app.request('/api/transfer/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope: await withoutCache.json(),
-        passphrase: 'portable-secret',
-      }),
+    const withoutCachePreview = await context.post('/api/transfer/preview', {
+      envelope: await withoutCache.json(),
+      passphrase: 'portable-secret',
     });
     expect((await withoutCachePreview.json()) as TransferPreview).toMatchObject({
       codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
     });
 
-    const defaultWithCache = await context.app.request('/api/transfer/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ passphrase: 'portable-secret' }),
+    const defaultWithCache = await context.post('/api/transfer/export', {
+      passphrase: 'portable-secret',
     });
     expect(defaultWithCache.status).toBe(200);
     const envelope = await defaultWithCache.json();
     expect(JSON.stringify(envelope)).not.toContain('portable-login-session');
-    const withCachePreview = await context.app.request('/api/transfer/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ envelope, passphrase: 'portable-secret' }),
+    const withCachePreview = await context.post('/api/transfer/preview', {
+      envelope,
+      passphrase: 'portable-secret',
     });
     expect((await withCachePreview.json()) as TransferPreview).toMatchObject({
       codexLoginCache: { available: true, targetExists: true, migrationNeeded: false },
     });
 
     await writeFile(authPath, '{"tokens":{"access_token":"target-session"}}\n', { mode: 0o644 });
-    const preserved = await context.app.request('/api/transfer/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'skip',
-        restoreActive: false,
-        migrateCodexLoginCache: false,
-      }),
+    const preserved = await context.post('/api/transfer/import', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'skip',
+      restoreActive: false,
+      migrateCodexLoginCache: false,
     });
     expect((await preserved.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
       codexLoginCacheMigrated: false,
     });
     expect(await readFile(authPath, 'utf8')).toContain('target-session');
 
-    const migrated = await context.app.request('/api/transfer/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'skip',
-        restoreActive: false,
-      }),
+    const migrated = await context.post('/api/transfer/import', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'skip',
+      restoreActive: false,
     });
     expect((await migrated.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
       codexLoginCacheMigrated: true,
@@ -1267,16 +1086,12 @@ describe('rest api', () => {
     expect(await readFile(authPath, 'utf8')).toBe(exportedCache);
     expect((await stat(authPath)).mode & 0o777).toBe(0o600);
 
-    const redundant = await context.app.request('/api/transfer/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'skip',
-        restoreActive: false,
-        migrateCodexLoginCache: true,
-      }),
+    const redundant = await context.post('/api/transfer/import', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'skip',
+      restoreActive: false,
+      migrateCodexLoginCache: true,
     });
     expect((await redundant.json()) as { codexLoginCacheMigrated: boolean }).toMatchObject({
       codexLoginCacheMigrated: false,
@@ -1324,32 +1139,70 @@ describe('rest api', () => {
 
     for (const item of cases) {
       const envelope = encryptedPortablePayload(item.payload);
-      const preview = await context.app.request('/api/transfer/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-        body: JSON.stringify({ envelope, passphrase: 'portable-secret', restoreActive: true }),
+      const preview = await context.post('/api/transfer/preview', {
+        envelope,
+        passphrase: 'portable-secret',
+        restoreActive: true,
       });
       expect(preview.status, item.label).toBe(400);
 
-      const imported = await context.app.request('/api/transfer/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-        body: JSON.stringify({
-          envelope,
-          passphrase: 'portable-secret',
-          conflictPolicy: 'overwrite',
-          restoreActive: true,
-        }),
+      const imported = await context.post('/api/transfer/import', {
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy: 'overwrite',
+        restoreActive: true,
       });
       expect(imported.status, item.label).toBe(400);
     }
     expect((await summary(context, 'claude')).profiles).toHaveLength(0);
   });
 
+  test('a malformed export names the section that is wrong, not just "invalid"', async () => {
+    const context = await createTestApp();
+    const profile = portableClaudeProfile('main');
+    const base = {
+      format: 'harness-switch-portable-config',
+      version: 1,
+      exportedAt: '2026-08-20T00:00:00.000Z',
+      profiles: [profile],
+      active: [],
+    };
+    // Which section is broken decides what the user has to go fix, so each one keeps
+    // its own code rather than collapsing into a single "bad file".
+    const cases = [
+      { code: ERROR_CODES.transferEnvelopeInvalid, payload: { ...base, version: 2 } },
+      {
+        code: ERROR_CODES.transferProfilesInvalid,
+        payload: { ...base, profiles: [{ ...profile, harness: 'nope' }] },
+      },
+      {
+        code: ERROR_CODES.transferActiveInvalid,
+        payload: { ...base, active: [{ harness: 'claude', name: 'main', official: 'yes' }] },
+      },
+      {
+        code: ERROR_CODES.transferProvidersInvalid,
+        payload: {
+          ...base,
+          providers: [{ id: '__proto__', name: 'p', apiKey: 'k', endpoints: [] }],
+        },
+      },
+      { code: ERROR_CODES.transferCodexCacheInvalid, payload: { ...base, codexLoginCache: 7 } },
+    ];
+
+    for (const item of cases) {
+      const response = await context.post('/api/transfer/preview', {
+        envelope: encryptedPortablePayload(item.payload as unknown as PortableTestPayload),
+        passphrase: 'portable-secret',
+      });
+      expect(response.status, item.code).toBe(400);
+      expect(await response.json(), item.code).toMatchObject({ code: item.code });
+    }
+  });
+
   test('previews and restores an active Codex openai_auth profile without copying its login cache', async () => {
     const context = await createTestApp();
-    const authPath = join(homeDir, '.codex', 'auth.json');
-    await mkdir(join(homeDir, '.codex'), { recursive: true });
+    const authPath = sandbox.home('.codex', 'auth.json');
+    await mkdir(sandbox.home('.codex'), { recursive: true });
     await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
     await createProfile(context, 'codex', {
       name: 'third-party',
@@ -1359,54 +1212,34 @@ describe('rest api', () => {
     });
     await activate(context, 'codex', 'third-party');
 
-    const exported = await context.app.request('/api/transfer/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ passphrase: 'portable-secret' }),
-    });
+    const exported = await context.post('/api/transfer/export', { passphrase: 'portable-secret' });
     const envelope = await exported.json();
     expect(exported.status).toBe(200);
 
-    await context.app.request('/api/harnesses/codex/official/activate', {
-      method: 'POST',
-      headers: { Cookie: context.cookie },
-    });
-    await context.app.request('/api/harnesses/codex/profiles/third-party', {
-      method: 'DELETE',
-      headers: { Cookie: context.cookie },
-    });
+    await context.post('/api/harnesses/codex/official/activate');
+    await context.del('/api/harnesses/codex/profiles/third-party');
     await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
     const backupsBeforeImport = (
-      (await (
-        await context.app.request('/api/backups', { headers: { Cookie: context.cookie } })
-      ).json()) as { items: Array<{ id: string }> }
+      (await (await context.get('/api/backups')).json()) as { items: Array<{ id: string }> }
     ).items.length;
 
-    const preview = await context.app.request('/api/transfer/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'skip',
-        restoreActive: true,
-      }),
+    const preview = await context.post('/api/transfer/preview', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'skip',
+      restoreActive: true,
     });
     expect((await preview.json()) as TransferPreview).toMatchObject({
       codexActivationAuthEffect: 'openai-api-key',
       codexLoginCache: { available: true },
     });
 
-    const imported = await context.app.request('/api/transfer/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'skip',
-        restoreActive: true,
-        migrateCodexLoginCache: false,
-      }),
+    const imported = await context.post('/api/transfer/import', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'skip',
+      restoreActive: true,
+      migrateCodexLoginCache: false,
     });
     expect(
       (await imported.json()) as { activeRestored: number; codexLoginCacheMigrated: boolean },
@@ -1419,9 +1252,9 @@ describe('rest api', () => {
       OPENAI_API_KEY: 'sk-portable-openai',
     });
 
-    const backups = (await (
-      await context.app.request('/api/backups', { headers: { Cookie: context.cookie } })
-    ).json()) as { items: Array<{ files: Array<{ path: string }> }> };
+    const backups = (await (await context.get('/api/backups')).json()) as {
+      items: Array<{ files: Array<{ path: string }> }>;
+    };
     expect(backups.items).toHaveLength(backupsBeforeImport + 1);
     expect(
       backups.items.some((backup) => backup.files.some((file) => file.path === authPath)),
@@ -1430,8 +1263,8 @@ describe('rest api', () => {
 
   test('plans Codex activation effects from the profile selected by the conflict policy', async () => {
     const context = await createTestApp();
-    const authPath = join(homeDir, '.codex', 'auth.json');
-    await mkdir(join(homeDir, '.codex'), { recursive: true });
+    const authPath = sandbox.home('.codex', 'auth.json');
+    await mkdir(sandbox.home('.codex'), { recursive: true });
     await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
     await createProfile(context, 'codex', {
       name: 'same-name',
@@ -1440,62 +1273,44 @@ describe('rest api', () => {
       extras: { authMode: 'openai_auth' },
     });
     await activate(context, 'codex', 'same-name');
-    const exported = await context.app.request('/api/transfer/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ passphrase: 'portable-secret' }),
-    });
+    const exported = await context.post('/api/transfer/export', { passphrase: 'portable-secret' });
     const envelope = await exported.json();
 
-    const changed = await context.app.request('/api/harnesses/codex/profiles/same-name', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ extras: { authMode: 'bearer_token' } }),
+    const changed = await context.patch('/api/harnesses/codex/profiles/same-name', {
+      extras: { authMode: 'bearer_token' },
     });
     expect(changed.status).toBe(200);
     await writeFile(authPath, JSON.stringify({ tokens: { refresh_token: 'target-session' } }));
 
     const preview = async (conflictPolicy: 'skip' | 'overwrite') => {
-      const response = await context.app.request('/api/transfer/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-        body: JSON.stringify({
-          envelope,
-          passphrase: 'portable-secret',
-          conflictPolicy,
-          restoreActive: true,
-        }),
+      const response = await context.post('/api/transfer/preview', {
+        envelope,
+        passphrase: 'portable-secret',
+        conflictPolicy,
+        restoreActive: true,
       });
       return (await response.json()) as TransferPreview;
     };
     expect((await preview('skip')).codexActivationAuthEffect).toBe('none');
     expect((await preview('overwrite')).codexActivationAuthEffect).toBe('openai-api-key');
 
-    const skipped = await context.app.request('/api/transfer/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'skip',
-        restoreActive: true,
-        migrateCodexLoginCache: false,
-      }),
+    const skipped = await context.post('/api/transfer/import', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'skip',
+      restoreActive: true,
+      migrateCodexLoginCache: false,
     });
     expect(skipped.status).toBe(200);
     expect(JSON.parse(await readFile(authPath, 'utf8'))).toEqual({
       tokens: { refresh_token: 'target-session' },
     });
 
-    const overwritten = await context.app.request('/api/transfer/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'overwrite',
-        restoreActive: true,
-      }),
+    const overwritten = await context.post('/api/transfer/import', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'overwrite',
+      restoreActive: true,
     });
     expect(overwritten.status).toBe(200);
     expect(JSON.parse(await readFile(authPath, 'utf8'))).toMatchObject({
@@ -1515,52 +1330,39 @@ describe('rest api', () => {
       overrides: { settings: '{"env":{"FROM_EXPORT":"1"}}\n' },
     });
 
-    const exported = await context.app.request('/api/transfer/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ passphrase: 'portable-secret' }),
-    });
+    const exported = await context.post('/api/transfer/export', { passphrase: 'portable-secret' });
     expect(exported.status).toBe(200);
     const envelope = await exported.json();
     expect(JSON.stringify(envelope)).not.toContain('sk-portable-secret');
 
-    const conflictPreview = await context.app.request('/api/transfer/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ envelope, passphrase: 'portable-secret' }),
+    const conflictPreview = await context.post('/api/transfer/preview', {
+      envelope,
+      passphrase: 'portable-secret',
     });
     expect(conflictPreview.status).toBe(200);
     expect(((await conflictPreview.json()) as TransferPreview).conflicts).toEqual([
       { harness: 'claude', name: 'portable' },
     ]);
 
-    const wrongPassword = await context.app.request('/api/transfer/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({ envelope, passphrase: 'wrong-password' }),
+    const wrongPassword = await context.post('/api/transfer/preview', {
+      envelope,
+      passphrase: 'wrong-password',
     });
     expect(wrongPassword.status).toBe(400);
 
-    await context.app.request('/api/harnesses/claude/profiles/portable', {
-      method: 'DELETE',
-      headers: { Cookie: context.cookie },
-    });
-    const imported = await context.app.request('/api/transfer/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: context.cookie },
-      body: JSON.stringify({
-        envelope,
-        passphrase: 'portable-secret',
-        conflictPolicy: 'skip',
-        restoreActive: false,
-      }),
+    await context.del('/api/harnesses/claude/profiles/portable');
+    const imported = await context.post('/api/transfer/import', {
+      envelope,
+      passphrase: 'portable-secret',
+      conflictPolicy: 'skip',
+      restoreActive: false,
     });
     expect(imported.status).toBe(200);
     expect(await imported.json()).toMatchObject({ imported: 1, overwritten: 0, skipped: 0 });
 
     expect((await activate(context, 'claude', 'portable')).status).toBe(200);
     expect(await readFile(claudeSettings(), 'utf8')).toContain('FROM_EXPORT');
-    expect(await readFile(join(context.dataDir, 'env.sh'), 'utf8')).toContain(
+    expect(await readFile(sandbox.data('env.sh'), 'utf8')).toContain(
       "ANTHROPIC_AUTH_TOKEN='sk-portable-secret'",
     );
   });

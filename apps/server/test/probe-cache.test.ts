@@ -1,32 +1,27 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { writeFileSync } from 'node:fs';
 import type { HarnessId, ProbeCompletion, ProbeResult } from '@seaveyon/harness-switch-shared';
 import { PROBE_CODES } from '@seaveyon/harness-switch-shared';
-import { createServices } from '../src/bootstrap';
+import type { InstantiationService } from '../src/di';
+import type { IAdapterRegistry } from '../src/services/adapters';
 import type { AdapterProfile, HarnessAdapter } from '../src/services/adapters/types';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import type { IProbeService, ProbeInput } from '../src/services/probe';
 import { IProbeCacheService } from '../src/services/probe-cache';
-import { probeSavedProfile } from '../src/services/probe-profile';
+import { type IProbeProfileService, ProbeProfileService } from '../src/services/probe-profile';
+import { createSandbox, createTestServices, type Sandbox } from './support';
 
-let homeDir = '';
-let services: ReturnType<typeof createServices>;
+let sandbox: Sandbox;
+let services: InstantiationService;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-probe-cache-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
+  sandbox = createSandbox('hsw-probe-cache');
+  services = createTestServices();
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 function cache(): IProbeCacheService {
@@ -48,7 +43,9 @@ function ageEntry(harness: HarnessId, profile: string, ms: number): void {
   const files = services.get(IFileService);
   const store = files.readJson<Record<string, Record<string, { at: string }>>>(path, {});
   const entry = store[harness]?.[profile];
-  if (!entry) throw new Error('no entry to age');
+  if (!entry) {
+    throw new Error('no entry to age');
+  }
   entry.at = new Date(Date.now() - ms).toISOString();
   files.writeJson(path, store);
 }
@@ -165,7 +162,7 @@ describe('probe cache', () => {
 });
 
 /* ------------------------------------------------------------------ */
-/* probeSavedProfile                                                   */
+/* ProbeProfileService                                                 */
 /* ------------------------------------------------------------------ */
 
 /** Records what it was asked and answers with a fixed catalog plus optional completion. */
@@ -190,6 +187,13 @@ function fakeAdapter(protocol?: 'openai-chat' | 'anthropic-messages'): HarnessAd
   } as unknown as HarnessAdapter;
 }
 
+/** The service under test, wired to a recording probe and a single fixed adapter. */
+function profileProbe(probe: IProbeService, adapter: HarnessAdapter): IProbeProfileService {
+  return new ProbeProfileService(probe, cache(), {
+    get: () => adapter,
+  } as unknown as IAdapterRegistry);
+}
+
 const PROFILE: AdapterProfile = {
   name: 'main',
   baseUrl: 'https://api.example.com/v1',
@@ -198,14 +202,10 @@ const PROFILE: AdapterProfile = {
   extras: {},
 };
 
-describe('probeSavedProfile', () => {
+describe('ProbeProfileService', () => {
   test('without a completion request it is a plain catalog read', async () => {
     const probe = recordingProbe();
-    const result = await probeSavedProfile(
-      { probe, cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      PROFILE,
-    );
+    const result = await profileProbe(probe, fakeAdapter('openai-chat')).probe('claude', PROFILE);
     expect(result.ok).toBe(true);
     expect(result.completion).toBeUndefined();
     expect(probe.inputs[0]?.completion).toBeUndefined();
@@ -215,39 +215,31 @@ describe('probeSavedProfile', () => {
 
   test('the harness protocol is used so the probe tests the shape the tool will call', async () => {
     const probe = recordingProbe();
-    await probeSavedProfile(
-      { probe, cache: cache(), adapter: fakeAdapter('anthropic-messages') },
-      'claude',
-      PROFILE,
-      { completion: true },
-    );
+    await profileProbe(probe, fakeAdapter('anthropic-messages')).probe('claude', PROFILE, {
+      completion: true,
+    });
     expect(probe.inputs[0]?.protocol).toBe('anthropic-messages');
 
     // An explicit request still wins over the adapter's own answer.
     const explicit = recordingProbe();
-    await probeSavedProfile(
-      { probe: explicit, cache: cache(), adapter: fakeAdapter('anthropic-messages') },
-      'claude',
-      PROFILE,
-      { completion: true, protocol: 'openai-chat', refresh: true },
-    );
+    await profileProbe(explicit, fakeAdapter('anthropic-messages')).probe('claude', PROFILE, {
+      completion: true,
+      protocol: 'openai-chat',
+      refresh: true,
+    });
     expect(explicit.inputs[0]?.protocol).toBe('openai-chat');
   });
 
   test('a second run replays the completion instead of paying for another', async () => {
     const first = recordingProbe();
-    const fresh = await probeSavedProfile(
-      { probe: first, cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      PROFILE,
-      { completion: true },
-    );
+    const fresh = await profileProbe(first, fakeAdapter('openai-chat')).probe('claude', PROFILE, {
+      completion: true,
+    });
     expect(fresh.completion?.ok).toBe(true);
     expect(fresh.completion?.cachedAt).toBeUndefined();
 
     const second = recordingProbe();
-    const replayed = await probeSavedProfile(
-      { probe: second, cache: cache(), adapter: fakeAdapter('openai-chat') },
+    const replayed = await profileProbe(second, fakeAdapter('openai-chat')).probe(
       'claude',
       PROFILE,
       { completion: true },
@@ -260,33 +252,24 @@ describe('probeSavedProfile', () => {
   });
 
   test('refresh bypasses a cached verdict the user asked to redo', async () => {
-    await probeSavedProfile(
-      { probe: recordingProbe(), cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      PROFILE,
-      { completion: true },
-    );
+    await profileProbe(recordingProbe(), fakeAdapter('openai-chat')).probe('claude', PROFILE, {
+      completion: true,
+    });
     const again = recordingProbe();
-    const result = await probeSavedProfile(
-      { probe: again, cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      PROFILE,
-      { completion: true, refresh: true },
-    );
+    const result = await profileProbe(again, fakeAdapter('openai-chat')).probe('claude', PROFILE, {
+      completion: true,
+      refresh: true,
+    });
     expect(again.inputs[0]?.completion).toBe(true);
     expect(result.completion?.cachedAt).toBeUndefined();
   });
 
   test('an edited endpoint is a cache miss, not a stale replay', async () => {
-    await probeSavedProfile(
-      { probe: recordingProbe(), cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      PROFILE,
-      { completion: true },
-    );
+    await profileProbe(recordingProbe(), fakeAdapter('openai-chat')).probe('claude', PROFILE, {
+      completion: true,
+    });
     const moved = recordingProbe();
-    const result = await probeSavedProfile(
-      { probe: moved, cache: cache(), adapter: fakeAdapter('openai-chat') },
+    const result = await profileProbe(moved, fakeAdapter('openai-chat')).probe(
       'claude',
       { ...PROFILE, baseUrl: 'https://elsewhere.example.com/v1' },
       { completion: true },
@@ -300,17 +283,13 @@ describe('probeSavedProfile', () => {
     // which is not the same model from one run to the next — not a repeatable test.
     const modelless = { ...PROFILE, model: '' };
     const first = recordingProbe();
-    await probeSavedProfile(
-      { probe: first, cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      modelless,
-      { completion: true },
-    );
+    await profileProbe(first, fakeAdapter('openai-chat')).probe('claude', modelless, {
+      completion: true,
+    });
     expect(first.inputs[0]?.model).toBeUndefined();
 
     const second = recordingProbe();
-    const result = await probeSavedProfile(
-      { probe: second, cache: cache(), adapter: fakeAdapter('openai-chat') },
+    const result = await profileProbe(second, fakeAdapter('openai-chat')).probe(
       'claude',
       modelless,
       { completion: true },
@@ -320,19 +299,14 @@ describe('probeSavedProfile', () => {
   });
 
   test('an option-named model is cached separately from the profile default', async () => {
-    await probeSavedProfile(
-      { probe: recordingProbe(), cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      PROFILE,
-      { completion: true },
-    );
+    await profileProbe(recordingProbe(), fakeAdapter('openai-chat')).probe('claude', PROFILE, {
+      completion: true,
+    });
     const other = recordingProbe();
-    await probeSavedProfile(
-      { probe: other, cache: cache(), adapter: fakeAdapter('openai-chat') },
-      'claude',
-      PROFILE,
-      { completion: true, model: 'gpt-y' },
-    );
+    await profileProbe(other, fakeAdapter('openai-chat')).probe('claude', PROFILE, {
+      completion: true,
+      model: 'gpt-y',
+    });
     // Testing a different model has to send a request, however recent the other verdict is.
     expect(other.inputs[0]?.completion).toBe(true);
     expect(other.inputs[0]?.model).toBe('gpt-y');
@@ -340,12 +314,9 @@ describe('probeSavedProfile', () => {
 
   test('an adapter with no protocol opinion leaves the probe to try each in turn', async () => {
     const probe = recordingProbe();
-    await probeSavedProfile(
-      { probe, cache: cache(), adapter: fakeAdapter(undefined) },
-      'claude',
-      PROFILE,
-      { completion: true },
-    );
+    await profileProbe(probe, fakeAdapter(undefined)).probe('claude', PROFILE, {
+      completion: true,
+    });
     expect(probe.inputs[0]?.protocol).toBeUndefined();
   });
 });

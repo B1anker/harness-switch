@@ -1,17 +1,20 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import {
   type CodexAuthJsonEffect,
+  ERROR_CODES,
+  type ErrorCode,
   HARNESS_IDS,
   type HarnessId,
-  isHarnessId,
   type LocalizedMessage,
+  portablePayloadSchema,
   type TransferConflictPolicy,
   type TransferEnvelope,
   type TransferExportPreview,
   type TransferImportResponse,
   type TransferPreview,
+  transferEnvelopeSchema,
   WARNING_CODES,
 } from '@seaveyon/harness-switch-shared';
+import type { ZodError, z } from 'zod';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IActivationService } from './activation';
@@ -22,52 +25,23 @@ import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { ILiveWriteService, type PlannedWrite } from './live-write';
 import type { ProfileStore, StoredProfile } from './profiles';
-import type { VaultEntry, VaultStore } from './vault';
+import type { VaultStore } from './vault';
 import { IVaultService } from './vault';
 
 const FORMAT = 'harness-switch-encrypted-export' as const;
 const VERSION = 1 as const;
 const MAX_ENCRYPTED_BYTES = 10 * 1024 * 1024;
 
-type PortableProfile = {
-  harness: HarnessId;
-  name: string;
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  notes: string;
-  extras: Record<string, string>;
-  overrides: Record<string, string>;
-  /** Preserve the shared-credential relationship when its vault entry is bundled. */
-  providerId?: string;
-  providerEndpoint?: string;
-};
-
-/** Plaintext only inside the passphrase-encrypted transfer payload. */
-type PortableProvider = Omit<
-  VaultEntry,
-  'api_key' | 'created_at' | 'updated_at' | 'synced_from'
-> & {
-  apiKey: string;
-};
-
-type PortableActive = {
-  harness: HarnessId;
-  name: string;
-  official: boolean;
-};
-
-type PortablePayload = {
-  format: 'harness-switch-portable-config';
-  version: 1;
-  exportedAt: string;
-  profiles: PortableProfile[];
-  /** Optional so exports made before vault support remain importable. */
-  providers?: PortableProvider[];
-  active: PortableActive[];
-  /** Present only when the user explicitly included the native Codex login session. */
-  codexLoginCache?: string;
-};
+/**
+ * The export shapes, taken from the schema that validates them on the way back in.
+ *
+ * Declaring them separately is how an export ends up writing a field the importer
+ * then rejects, so the writer and the reader share one definition. `PortableProvider`
+ * is a vault entry with its credential in plaintext — only ever inside the envelope.
+ */
+type PortablePayload = z.infer<typeof portablePayloadSchema>;
+type PortableProfile = PortablePayload['profiles'][number];
+type PortableActive = PortablePayload['active'][number];
 
 type ImportPlan = {
   store: ProfileStore;
@@ -175,7 +149,7 @@ export class TransferService implements ITransferService {
           ]
         : [];
     });
-    return encrypt(
+    return this.seal(
       {
         format: 'harness-switch-portable-config',
         version: VERSION,
@@ -300,9 +274,8 @@ export class TransferService implements ITransferService {
         } catch (error) {
           const reason = (error as Error).message;
           warnings.push({
-            message: `${active.harness}/${active.name} 未能恢复激活状态：${reason}`,
             code: WARNING_CODES.transferActiveRestoreFailed,
-            params: { harness: active.harness, profile: active.name, reason },
+            data: { harness: active.harness, profile: active.name, reason },
           });
         }
       }
@@ -322,43 +295,14 @@ export class TransferService implements ITransferService {
 
   private decrypt(envelope: TransferEnvelope, passphrase: string): PortablePayload {
     this.assertPassphrase(passphrase);
-    const payload = decrypt(envelope, passphrase);
-    if (
-      payload.format !== 'harness-switch-portable-config' ||
-      payload.version !== VERSION ||
-      !Array.isArray(payload.profiles) ||
-      !Array.isArray(payload.active) ||
-      typeof payload.exportedAt !== 'string'
-    ) {
-      throw new HttpError(400, '不支持的导出文件格式');
+    const parsed = portablePayloadSchema.safeParse(this.open(envelope, passphrase));
+    if (!parsed.success) {
+      throw new HttpError(400, 'invalid export payload', {
+        code: payloadErrorCode(parsed.error),
+      });
     }
-    if (payload.profiles.length > 10_000) {
-      throw new HttpError(400, '导出文件包含过多配置');
-    }
-    for (const profile of payload.profiles) {
-      if (!isPortableProfile(profile)) {
-        throw new HttpError(400, '导出文件中的配置数据无效');
-      }
-    }
-    for (const active of payload.active) {
-      if (!isPortableActive(active)) {
-        throw new HttpError(400, '导出文件中的激活状态无效');
-      }
-    }
-    if (payload.providers !== undefined) {
-      if (!Array.isArray(payload.providers) || payload.providers.length > 10_000) {
-        throw new HttpError(400, '导出文件中的凭据库数据无效');
-      }
-      for (const provider of payload.providers) {
-        if (!isPortableProvider(provider)) {
-          throw new HttpError(400, '导出文件中的凭据库数据无效');
-        }
-      }
-    }
+    const payload = parsed.data;
     if (payload.codexLoginCache !== undefined) {
-      if (typeof payload.codexLoginCache !== 'string') {
-        throw new HttpError(400, '导出文件中的 Codex 登录缓存无效');
-      }
       this.codexLoginCache.validate(payload.codexLoginCache);
     }
     this.validatePayload(payload);
@@ -367,7 +311,9 @@ export class TransferService implements ITransferService {
 
   private assertConflictPolicy(conflictPolicy: TransferConflictPolicy): void {
     if (conflictPolicy !== 'skip' && conflictPolicy !== 'overwrite') {
-      throw new HttpError(400, 'invalid conflict policy');
+      throw new HttpError(400, 'invalid conflict policy', {
+        code: ERROR_CODES.invalidConflictPolicy,
+      });
     }
   }
 
@@ -376,7 +322,9 @@ export class TransferService implements ITransferService {
     const providerIds = new Set<string>();
     for (const provider of payload.providers ?? []) {
       if (providerIds.has(provider.id)) {
-        throw new HttpError(400, '导出文件包含重复的凭据库条目');
+        throw new HttpError(400, '导出文件包含重复的凭据库条目', {
+          code: ERROR_CODES.transferDuplicateProvider,
+        });
       }
       providerIds.add(provider.id);
     }
@@ -384,27 +332,37 @@ export class TransferService implements ITransferService {
       this.validateProfile(profile);
       const id = profileId(profile.harness, profile.name);
       if (profileIds.has(id)) {
-        throw new HttpError(400, '导出文件包含重复的配置');
+        throw new HttpError(400, '导出文件包含重复的配置', {
+          code: ERROR_CODES.transferDuplicateProfile,
+        });
       }
       profileIds.add(id);
       if (profile.providerId && !providerIds.has(profile.providerId)) {
-        throw new HttpError(400, '导出文件中的配置引用了不存在的凭据库条目');
+        throw new HttpError(400, '导出文件中的配置引用了不存在的凭据库条目', {
+          code: ERROR_CODES.transferProviderMissing,
+        });
       }
     }
 
     const activeHarnesses = new Set<HarnessId>();
     for (const active of payload.active) {
       if (activeHarnesses.has(active.harness)) {
-        throw new HttpError(400, '导出文件包含重复的激活状态');
+        throw new HttpError(400, '导出文件包含重复的激活状态', {
+          code: ERROR_CODES.transferDuplicateActive,
+        });
       }
       activeHarnesses.add(active.harness);
       const adapter = this.adapters.get(active.harness);
       if (active.official) {
         if (active.name !== '官方登录' || !adapter.renderOfficial) {
-          throw new HttpError(400, '导出文件中的官方登录状态无效');
+          throw new HttpError(400, '导出文件中的官方登录状态无效', {
+            code: ERROR_CODES.transferOfficialActiveInvalid,
+          });
         }
       } else if (!profileIds.has(profileId(active.harness, active.name))) {
-        throw new HttpError(400, '导出文件中的激活状态引用了不存在的配置');
+        throw new HttpError(400, '导出文件中的激活状态引用了不存在的配置', {
+          code: ERROR_CODES.transferActiveProfileMissing,
+        });
       }
     }
   }
@@ -505,7 +463,9 @@ export class TransferService implements ITransferService {
 
   private validateProfile(profile: PortableProfile): void {
     if (!profile.name || profile.name.length > 120 || /[\\/]/.test(profile.name)) {
-      throw new HttpError(400, '导出文件包含无效的配置名称');
+      throw new HttpError(400, '导出文件包含无效的配置名称', {
+        code: ERROR_CODES.transferProfileNameInvalid,
+      });
     }
     this.adapters.get(profile.harness).validate?.({
       name: profile.name,
@@ -541,7 +501,9 @@ export class TransferService implements ITransferService {
 
   /** Never overwrite a local vault entry: imported entries get isolated copies. */
   private availableProviderId(sourceId: string, vault: VaultStore): string {
-    if (!vault.entries[sourceId]) return sourceId;
+    if (!vault.entries[sourceId]) {
+      return sourceId;
+    }
     const base = `${sourceId}-imported`.slice(0, 60);
     let candidate = base;
     let index = 2;
@@ -554,8 +516,7 @@ export class TransferService implements ITransferService {
 
   private restore(path: string, snapshot: string | undefined): void {
     try {
-      if (snapshot === undefined) this.files.remove(path);
-      else this.files.writeSecure(path, snapshot);
+      this.files.restore(path, snapshot);
     } catch {
       // Preserve the original import failure; the cache transaction rolls its own write back.
     }
@@ -575,60 +536,38 @@ export class TransferService implements ITransferService {
 
   private assertPassphrase(passphrase: string): void {
     if (passphrase.length < 8) {
-      throw new HttpError(400, '迁移密码至少需要 8 个字符');
+      throw new HttpError(400, '迁移密码至少需要 8 个字符', {
+        code: ERROR_CODES.transferPassphraseTooShort,
+      });
     }
   }
-}
 
-function encrypt(payload: PortablePayload, passphrase: string): TransferEnvelope {
-  const salt = randomBytes(16);
-  const iv = randomBytes(12);
-  const key = scryptSync(passphrase, salt, 32);
-  const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const data = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()]);
-  return {
-    format: FORMAT,
-    version: VERSION,
-    kdf: { name: 'scrypt', salt: salt.toString('base64url') },
-    cipher: {
-      name: 'aes-256-gcm',
-      iv: iv.toString('base64url'),
-      tag: cipher.getAuthTag().toString('base64url'),
-      data: data.toString('base64url'),
-    },
-  };
-}
+  private seal(payload: PortablePayload, passphrase: string): TransferEnvelope {
+    const { salt, iv, tag, data } = this.crypto.seal(JSON.stringify(payload), passphrase);
+    return {
+      format: FORMAT,
+      version: VERSION,
+      kdf: { name: 'scrypt', salt },
+      cipher: { name: 'aes-256-gcm', iv, tag, data },
+    };
+  }
 
-function decrypt(envelope: TransferEnvelope, passphrase: string): PortablePayload {
-  try {
-    if (
-      envelope?.format !== FORMAT ||
-      envelope.version !== VERSION ||
-      envelope.kdf?.name !== 'scrypt' ||
-      envelope.cipher?.name !== 'aes-256-gcm' ||
-      typeof envelope.kdf.salt !== 'string' ||
-      typeof envelope.cipher.iv !== 'string' ||
-      typeof envelope.cipher.tag !== 'string' ||
-      typeof envelope.cipher.data !== 'string' ||
-      envelope.cipher.data.length > MAX_ENCRYPTED_BYTES
-    ) {
-      throw new Error('invalid envelope');
+  /**
+   * Opens the envelope. The result is still untrusted JSON — knowing the passphrase
+   * proves nothing about the shape of what was sealed — so the caller validates it.
+   */
+  private open(envelope: TransferEnvelope, passphrase: string): unknown {
+    try {
+      const sealed = transferEnvelopeSchema.parse(envelope);
+      if (sealed.cipher.data.length > MAX_ENCRYPTED_BYTES) {
+        throw new Error('envelope too large');
+      }
+      return JSON.parse(this.crypto.open({ salt: sealed.kdf.salt, ...sealed.cipher }, passphrase));
+    } catch {
+      throw new HttpError(400, '迁移密码错误或导出文件已损坏', {
+        code: ERROR_CODES.transferDecryptFailed,
+      });
     }
-    const salt = Buffer.from(envelope.kdf.salt, 'base64url');
-    const key = scryptSync(passphrase, salt, 32);
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      key,
-      Buffer.from(envelope.cipher.iv, 'base64url'),
-    );
-    decipher.setAuthTag(Buffer.from(envelope.cipher.tag, 'base64url'));
-    const plain = Buffer.concat([
-      decipher.update(Buffer.from(envelope.cipher.data, 'base64url')),
-      decipher.final(),
-    ]).toString('utf8');
-    return JSON.parse(plain) as PortablePayload;
-  } catch {
-    throw new HttpError(400, '迁移密码错误或导出文件已损坏');
   }
 }
 
@@ -636,69 +575,28 @@ function profileId(harness: HarnessId, name: string): string {
   return `${harness} ${name}`;
 }
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.values(value).every((item) => typeof item === 'string')
-  );
-}
-
-function isPortableProfile(value: unknown): value is PortableProfile {
-  if (typeof value !== 'object' || value === null) {
-    return false;
+/**
+ * Which part of the export the importer should be told about.
+ *
+ * The schema reports one issue per bad field, but the user needs to know *what* in
+ * their file is wrong — a bad profile and a bad vault entry are fixed differently.
+ * The first issue's path names the section it came from.
+ */
+function payloadErrorCode(error: ZodError): ErrorCode {
+  const [issue] = error.issues;
+  if (issue?.path[0] === 'profiles') {
+    return issue.code === 'too_big'
+      ? ERROR_CODES.transferTooManyProfiles
+      : ERROR_CODES.transferProfilesInvalid;
   }
-  const profile = value as Partial<PortableProfile>;
-  return (
-    typeof profile.harness === 'string' &&
-    isHarnessId(profile.harness) &&
-    typeof profile.name === 'string' &&
-    typeof profile.baseUrl === 'string' &&
-    typeof profile.apiKey === 'string' &&
-    typeof profile.model === 'string' &&
-    typeof profile.notes === 'string' &&
-    isStringRecord(profile.extras) &&
-    isStringRecord(profile.overrides) &&
-    (profile.providerId === undefined || typeof profile.providerId === 'string') &&
-    (profile.providerEndpoint === undefined || typeof profile.providerEndpoint === 'string')
-  );
-}
-
-function isPortableProvider(value: unknown): value is PortableProvider {
-  if (typeof value !== 'object' || value === null) return false;
-  const provider = value as Partial<PortableProvider>;
-  return (
-    typeof provider.id === 'string' &&
-    provider.id.length > 0 &&
-    provider.id.length <= 64 &&
-    !/[\\/]/.test(provider.id) &&
-    provider.id !== '__proto__' &&
-    provider.id !== 'constructor' &&
-    typeof provider.name === 'string' &&
-    provider.name.length > 0 &&
-    typeof provider.apiKey === 'string' &&
-    provider.apiKey.length > 0 &&
-    (provider.notes === undefined || typeof provider.notes === 'string') &&
-    Array.isArray(provider.endpoints) &&
-    provider.endpoints.every(
-      (endpoint) =>
-        typeof endpoint?.key === 'string' &&
-        typeof endpoint.label === 'string' &&
-        typeof endpoint.baseUrl === 'string',
-    )
-  );
-}
-
-function isPortableActive(value: unknown): value is PortableActive {
-  if (typeof value !== 'object' || value === null) {
-    return false;
+  if (issue?.path[0] === 'providers') {
+    return ERROR_CODES.transferProvidersInvalid;
   }
-  const active = value as Partial<PortableActive>;
-  return (
-    typeof active.harness === 'string' &&
-    isHarnessId(active.harness) &&
-    typeof active.name === 'string' &&
-    typeof active.official === 'boolean'
-  );
+  if (issue?.path[0] === 'active') {
+    return ERROR_CODES.transferActiveInvalid;
+  }
+  if (issue?.path[0] === 'codexLoginCache') {
+    return ERROR_CODES.transferCodexCacheInvalid;
+  }
+  return ERROR_CODES.transferEnvelopeInvalid;
 }

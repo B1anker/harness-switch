@@ -145,7 +145,7 @@ function CheckList({ checks }: { checks: DoctorCheck[] }) {
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <p className="text-sm leading-relaxed">
-                {lineText(t, { key: checkKey(check), params: check.params, fallback: check.label })}
+                {lineText(t, { key: check.code, params: check.data })}
               </p>
               <span className="font-mono text-[10px] uppercase text-muted-foreground">
                 {t(`doctor.status.${check.status}`)}
@@ -158,19 +158,13 @@ function CheckList({ checks }: { checks: DoctorCheck[] }) {
   );
 }
 
-/**
- * Catalog key for a check. A server that predates the code contract sends none, and
- * `lineText` then renders the `label` prose it did send.
- */
-function checkKey(check: DoctorCheck): string {
-  return check.code ?? 'doctor.unknownCheck';
-}
-
 type Summary = { ok: number; warn: number; error: number; unknown: number };
 
 function summarize(report: DoctorReport | null): Summary {
   const summary: Summary = { ok: 0, warn: 0, error: 0, unknown: 0 };
-  if (!report) return summary;
+  if (!report) {
+    return summary;
+  }
   for (const check of report.checks) {
     summary[check.status]++;
   }

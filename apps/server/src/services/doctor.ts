@@ -12,18 +12,16 @@ import {
   type ProbeCompletion,
 } from '@seaveyon/harness-switch-shared';
 import { createDecorator, inject } from '../di';
-import { checkForUpdate } from '../update';
 import { IActivationService } from './activation';
 import { IAdapterRegistry } from './adapters';
 import { assertParsable } from './adapters/serialize';
 import { IDriftService } from './drift';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
-import { IProbeService } from './probe';
-import { IProbeCacheService } from './probe-cache';
-import { probeSavedProfile } from './probe-profile';
+import { IProbeProfileService } from './probe-profile';
 import { IProfileService } from './profiles';
 import { IHarnessRegistry } from './registry';
+import { IUpdateService } from './update';
 
 export type DoctorOptions = {
   /** Run the connectivity probe against each harness's active profile. */
@@ -68,8 +66,8 @@ const BIN_NAMES: Partial<Record<HarnessId, string>> = {
   IActivationService,
   IDriftService,
   IProfileService,
-  IProbeService,
-  IProbeCacheService,
+  IProbeProfileService,
+  IUpdateService,
 )
 export class DoctorService implements IDoctorService {
   declare readonly _serviceBrand: undefined;
@@ -82,8 +80,8 @@ export class DoctorService implements IDoctorService {
     private readonly activation: IActivationService,
     private readonly drift: IDriftService,
     private readonly profiles: IProfileService,
-    private readonly probe: IProbeService,
-    private readonly probeCache: IProbeCacheService,
+    private readonly profileProbe: IProbeProfileService,
+    private readonly updates: IUpdateService,
   ) {}
 
   async run(options: DoctorOptions = {}): Promise<DoctorResponse> {
@@ -103,7 +101,7 @@ export class DoctorService implements IDoctorService {
     );
 
     // The registry check is cached and degrades to "no update" when unreachable.
-    const update = await checkForUpdate();
+    const update = await this.updates.check();
     return { items, updatedAvailable: update.updateAvailable };
   }
 
@@ -118,24 +116,12 @@ export class DoctorService implements IDoctorService {
     const bin = BIN_NAMES[harness];
     if (bin === undefined) {
       const label = HARNESS_LABELS[harness];
-      checks.push(
-        ok(
-          `${harness}.install`,
-          `${label} 以 Web 服务部署，不要求 PATH 上有 CLI`,
-          DOCTOR_CODES.installNotRequired,
-          { harness: label },
-        ),
-      );
+      checks.push(ok(`${harness}.install`, DOCTOR_CODES.installNotRequired, { harness: label }));
     } else {
       checks.push(
         this.commandExists(bin)
-          ? ok(`${harness}.install`, `已找到可执行文件 ${bin}`, DOCTOR_CODES.installFound, { bin })
-          : error(
-              `${harness}.install`,
-              `未找到可执行文件 ${bin}（PATH 中不存在），工具可能未安装`,
-              DOCTOR_CODES.installMissing,
-              { bin },
-            ),
+          ? ok(`${harness}.install`, DOCTOR_CODES.installFound, { bin })
+          : error(`${harness}.install`, DOCTOR_CODES.installMissing, { bin }),
       );
     }
 
@@ -149,35 +135,18 @@ export class DoctorService implements IDoctorService {
       const exists = this.files.exists(path);
       const fileParams = { target: target.label, path };
       if (!exists) {
-        checks.push(
-          warn(
-            `${harness}.files.${target.key}`,
-            `${target.label} 不存在（${path}）`,
-            DOCTOR_CODES.fileMissing,
-            fileParams,
-          ),
-        );
+        checks.push(warn(`${harness}.files.${target.key}`, DOCTOR_CODES.fileMissing, fileParams));
         continue;
       }
       if (!this.isReadable(path)) {
         checks.push(
-          error(
-            `${harness}.files.${target.key}`,
-            `${target.label} 不可读（${path}）`,
-            DOCTOR_CODES.fileUnreadable,
-            fileParams,
-          ),
+          error(`${harness}.files.${target.key}`, DOCTOR_CODES.fileUnreadable, fileParams),
         );
         continue;
       }
       if (!this.isWritable(path)) {
         checks.push(
-          warn(
-            `${harness}.files.${target.key}`,
-            `${target.label} 不可写（${path}）`,
-            DOCTOR_CODES.fileUnwritable,
-            fileParams,
-          ),
+          warn(`${harness}.files.${target.key}`, DOCTOR_CODES.fileUnwritable, fileParams),
         );
         continue;
       }
@@ -185,33 +154,18 @@ export class DoctorService implements IDoctorService {
       const mode = this.modeOf(path);
       if (mode === undefined) {
         // The file vanished between the checks above and this one.
-        checks.push(
-          warn(
-            `${harness}.files.${target.key}`,
-            `${target.label} 不存在（${path}）`,
-            DOCTOR_CODES.fileMissing,
-            fileParams,
-          ),
-        );
+        checks.push(warn(`${harness}.files.${target.key}`, DOCTOR_CODES.fileMissing, fileParams));
       } else if ((mode & 0o077) !== 0) {
         checks.push(
           warn(
             `${harness}.files.${target.key}`,
-            `${target.label} 存在可读写，但权限为 ${octal(mode)}，group/other 可读，建议 0600`,
             DOCTOR_CODES.filePermissive,
             { ...fileParams, mode: octal(mode) },
             { mode },
           ),
         );
       } else {
-        checks.push(
-          ok(
-            `${harness}.files.${target.key}`,
-            `${target.label} 存在且可读可写（${path}）`,
-            DOCTOR_CODES.fileOk,
-            fileParams,
-          ),
-        );
+        checks.push(ok(`${harness}.files.${target.key}`, DOCTOR_CODES.fileOk, fileParams));
       }
     }
 
@@ -224,7 +178,6 @@ export class DoctorService implements IDoctorService {
         checks.push(
           error(
             `${harness}.parse.${target.key}`,
-            `${target.label} 无法读取：${read.reason}`,
             DOCTOR_CODES.parseUnreadable,
             { target: target.label, reason: read.reason },
             { code: read.code ?? null },
@@ -239,18 +192,16 @@ export class DoctorService implements IDoctorService {
       try {
         assertParsable(target.format, target.path, content);
         checks.push(
-          ok(`${harness}.parse.${target.key}`, `${target.label} 解析正常`, DOCTOR_CODES.parseOk, {
+          ok(`${harness}.parse.${target.key}`, DOCTOR_CODES.parseOk, {
             target: target.label,
           }),
         );
       } catch (err) {
         checks.push(
-          error(
-            `${harness}.parse.${target.key}`,
-            `${target.label} 无法解析：${(err as Error).message}`,
-            DOCTOR_CODES.parseFailed,
-            { target: target.label, reason: (err as Error).message },
-          ),
+          error(`${harness}.parse.${target.key}`, DOCTOR_CODES.parseFailed, {
+            target: target.label,
+            reason: (err as Error).message,
+          }),
         );
       }
     }
@@ -258,25 +209,19 @@ export class DoctorService implements IDoctorService {
     // Drift: does the live state match what the active profile would render?
     const summary = this.drift.inspect(harness);
     if (!summary.active) {
-      checks.push(
-        ok(`${harness}.drift`, '未激活任何配置，无漂移可检查', DOCTOR_CODES.driftNoProfile),
-      );
+      checks.push(ok(`${harness}.drift`, DOCTOR_CODES.driftNoProfile));
     } else if (summary.status === 'invalid') {
-      checks.push(
-        error(`${harness}.drift`, 'live 文件存在无法解析的内容', DOCTOR_CODES.driftInvalid),
-      );
+      checks.push(error(`${harness}.drift`, DOCTOR_CODES.driftInvalid));
     } else if (summary.status === 'drifted' || summary.status === 'missing') {
       const affected = summary.files.filter((file) => file.status !== 'in-sync').length;
       checks.push(
-        warn(
-          `${harness}.drift`,
-          `${affected} 个文件与激活配置不一致（${summary.status}）`,
-          DOCTOR_CODES.driftMismatch,
-          { count: affected, status: summary.status },
-        ),
+        warn(`${harness}.drift`, DOCTOR_CODES.driftMismatch, {
+          count: affected,
+          status: summary.status,
+        }),
       );
     } else {
-      checks.push(ok(`${harness}.drift`, 'live 文件与激活配置一致', DOCTOR_CODES.driftInSync));
+      checks.push(ok(`${harness}.drift`, DOCTOR_CODES.driftInSync));
     }
 
     // Connectivity probe: a real request against the active profile's base URL with
@@ -299,26 +244,14 @@ export class DoctorService implements IDoctorService {
     const active = this.activation.getActive(harness);
     if (!active) {
       return [
-        unknown(
-          `${harness}.probe`,
-          '未激活任何配置，跳过连通性探测',
-          DOCTOR_CODES.probeNoProfile,
-          undefined,
-          { probed: false },
-        ),
+        unknown(`${harness}.probe`, DOCTOR_CODES.probeNoProfile, undefined, { probed: false }),
       ];
     }
     // Official-login mode points at the tool's own service, not a profile-owned
     // endpoint; there is nothing of ours to probe, and no stored credential either.
     if (active.official === true) {
       return [
-        unknown(
-          `${harness}.probe`,
-          `${HARNESS_LABELS[harness]} 处于官方账号登录状态，无自定义端点可探测`,
-          DOCTOR_CODES.probeOfficialLogin,
-          undefined,
-          { probed: false },
-        ),
+        unknown(`${harness}.probe`, DOCTOR_CODES.probeOfficialLogin, undefined, { probed: false }),
       ];
     }
     const decrypted = this.profiles.decrypt(harness, active.name);
@@ -326,19 +259,13 @@ export class DoctorService implements IDoctorService {
       return [
         warn(
           `${harness}.probe`,
-          `配置 ${active.name} 缺少 Base URL 或 API Key，无法探测`,
           DOCTOR_CODES.probeMissingCredential,
           { profile: active.name },
           { probed: false, baseUrl: decrypted.baseUrl || null },
         ),
       ];
     }
-    const result = await probeSavedProfile(
-      { probe: this.probe, cache: this.probeCache, adapter: this.adapters.get(harness) },
-      harness,
-      decrypted,
-      { completion },
-    );
+    const result = await this.profileProbe.probe(harness, decrypted, { completion });
     const detail = {
       probed: true,
       baseUrl: result.requestUrl ?? decrypted.baseUrl,
@@ -348,16 +275,9 @@ export class DoctorService implements IDoctorService {
       reason: result.code ?? null,
     };
     const catalog = result.ok
-      ? ok(
-          `${harness}.probe`,
-          `端点可达（${result.latencyMs ?? '?'}ms，${result.models?.length ?? 0} 个模型）`,
-          DOCTOR_CODES.probeOk,
-          { profile: active.name },
-          detail,
-        )
+      ? ok(`${harness}.probe`, DOCTOR_CODES.probeOk, { profile: active.name }, detail)
       : error(
           `${harness}.probe`,
-          `连通性探测失败：${result.message ?? '未知原因'}`,
           DOCTOR_CODES.probeFailed,
           { profile: active.name, reason: result.code ?? PROBE_CODES.networkError },
           detail,
@@ -409,63 +329,33 @@ export class DoctorService implements IDoctorService {
 }
 
 /**
- * `label` stays the server's prose so the CLI keeps printing a sentence; `code` and
- * `params` carry the same fact in translatable form for the web UI. `detail` keeps the
+ * `code` and `data` carry the fact in translatable form; `detail` keeps the
  * machine-readable extras (raw mode bits, probe state) that callers inspect.
  */
 function makeCheck(
   id: string,
-  label: string,
   status: DoctorCheck['status'],
   code: string,
-  params?: MessageParams,
+  data?: MessageParams,
   detail?: unknown,
 ): DoctorCheck {
-  const detailObject =
-    detail === undefined
-      ? { message: label }
-      : { message: label, ...(detail as Record<string, unknown>) };
-  return { id, label, status, code, params, detail: detailObject };
+  return { id, status, code, data, detail };
 }
 
-function ok(
-  id: string,
-  message: string,
-  code: string,
-  params?: MessageParams,
-  detail?: unknown,
-): DoctorCheck {
-  return makeCheck(id, message, 'ok', code, params, detail);
+function ok(id: string, code: string, data?: MessageParams, detail?: unknown): DoctorCheck {
+  return makeCheck(id, 'ok', code, data, detail);
 }
 
-function warn(
-  id: string,
-  message: string,
-  code: string,
-  params?: MessageParams,
-  detail?: unknown,
-): DoctorCheck {
-  return makeCheck(id, message, 'warn', code, params, detail);
+function warn(id: string, code: string, data?: MessageParams, detail?: unknown): DoctorCheck {
+  return makeCheck(id, 'warn', code, data, detail);
 }
 
-function error(
-  id: string,
-  message: string,
-  code: string,
-  params?: MessageParams,
-  detail?: unknown,
-): DoctorCheck {
-  return makeCheck(id, message, 'error', code, params, detail);
+function error(id: string, code: string, data?: MessageParams, detail?: unknown): DoctorCheck {
+  return makeCheck(id, 'error', code, data, detail);
 }
 
-function unknown(
-  id: string,
-  message: string,
-  code: string,
-  params?: MessageParams,
-  detail?: unknown,
-): DoctorCheck {
-  return makeCheck(id, message, 'unknown', code, params, detail);
+function unknown(id: string, code: string, data?: MessageParams, detail?: unknown): DoctorCheck {
+  return makeCheck(id, 'unknown', code, data, detail);
 }
 
 /**
@@ -488,19 +378,17 @@ function completionCheck(
     reason: completion.code ?? null,
   };
   const model = completion.model ?? '?';
-  const cached = completion.cachedAt ? '（缓存结果）' : '';
+  const cached = completion.cachedAt !== undefined;
   return completion.ok
     ? ok(
         `${harness}.completion`,
-        `模型 ${model} 补全成功（${completion.latencyMs ?? '?'}ms）${cached}`,
-        DOCTOR_CODES.completionOk,
+        cached ? DOCTOR_CODES.completionOkCached : DOCTOR_CODES.completionOk,
         { profile, model, latencyMs: completion.latencyMs ?? 0 },
         detail,
       )
     : error(
         `${harness}.completion`,
-        `模型 ${model} 补全失败：${completion.message ?? '未知原因'}${cached}`,
-        DOCTOR_CODES.completionFailed,
+        cached ? DOCTOR_CODES.completionFailedCached : DOCTOR_CODES.completionFailed,
         { profile, model, reason: completion.code ?? PROBE_CODES.networkError },
         detail,
       );

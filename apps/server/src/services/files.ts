@@ -69,6 +69,12 @@ export interface IFileService {
   writeUserSecretFile(file: string, text: string): void;
   readJson<T>(file: string, fallback: T): T;
   writeJson(file: string, value: unknown): void;
+  /**
+   * Puts a file back to a snapshot taken with {@link IFileService.readOptional}, where
+   * `undefined` means it did not exist. Used to unwind a partially applied multi-file
+   * write.
+   */
+  restore(file: string, snapshot: string | undefined): void;
   ensureDir(dir: string): void;
   remove(file: string): void;
   listDirectories(dir: string): string[];
@@ -210,6 +216,14 @@ export class FileService implements IFileService {
     this.writeSecure(file, `${JSON.stringify(value, null, 2)}\n`);
   }
 
+  restore(file: string, snapshot: string | undefined): void {
+    if (snapshot === undefined) {
+      this.remove(file);
+      return;
+    }
+    this.writeSecure(file, snapshot);
+  }
+
   ensureDir(dir: string): void {
     this.assertManaged(dir);
     const missing: string[] = [];
@@ -217,7 +231,9 @@ export class FileService implements IFileService {
     while (!existsSync(cursor)) {
       missing.push(cursor);
       const parent = dirname(cursor);
-      if (parent === cursor) break;
+      if (parent === cursor) {
+        break;
+      }
       cursor = parent;
     }
     mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -279,7 +295,9 @@ export class FileService implements IFileService {
   }
 
   private applyOwner(path: string, uid: number, gid: number): void {
-    if (process.platform === 'win32') return;
+    if (process.platform === 'win32') {
+      return;
+    }
     try {
       chownSync(path, uid, gid);
     } catch (error) {
@@ -292,7 +310,9 @@ export class FileService implements IFileService {
           { code: ERROR_CODES.fileOwnershipRequiresRoot, params: { path } },
         );
       }
-      if ((error as NodeJS.ErrnoException).code !== 'EPERM') throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'EPERM') {
+        throw error;
+      }
     }
   }
 }

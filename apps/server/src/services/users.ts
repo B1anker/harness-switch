@@ -37,8 +37,12 @@ export class UserService implements IUserService {
           allow.has(user.username),
       )
       .toSorted((left, right) => {
-        if (left.username === this.environment.defaultUser.username) return -1;
-        if (right.username === this.environment.defaultUser.username) return 1;
+        if (left.username === this.environment.defaultUser.username) {
+          return -1;
+        }
+        if (right.username === this.environment.defaultUser.username) {
+          return 1;
+        }
         return left.uid - right.uid || left.username.localeCompare(right.username);
       });
   }
@@ -69,9 +73,13 @@ function discoverUsers(): LocalUser[] {
   const uidMin = readUidMin();
   const users: LocalUser[] = [];
   for (const line of text.split('\n')) {
-    if (!line || line.startsWith('#')) continue;
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
     const fields = line.split(':');
-    if (fields.length < 7) continue;
+    if (fields.length < 7) {
+      continue;
+    }
     const [username, , uidText, gidText, , homeDir, shell] = fields;
     const uid = Number(uidText);
     const gid = Number(gidText);

@@ -7,7 +7,7 @@ import type {
   ScanImportSelection,
   ScanSource,
 } from '@seaveyon/harness-switch-shared';
-import { ERROR_CODES, SCAN_NOTE_CODES } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, SCAN_NOTE_CODES, WARNING_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import type { CurrentFiles, HarnessAdapter } from './adapters';
@@ -82,13 +82,19 @@ export class ScanService implements IScanService {
       const entry = found.get(selection.id);
       if (!entry) {
         // The tool's config changed between the scan and the import.
-        warnings.push({ message: `${selection.name}：配置已不在磁盘上，已跳过` });
+        warnings.push({
+          scope: selection.name,
+          code: WARNING_CODES.scanProfileGone,
+        });
         skipped += 1;
         continue;
       }
       const exists = this.profiles.get(entry.harness, selection.name) !== undefined;
       if (exists && !selection.overwrite) {
-        warnings.push({ message: `${selection.name}：同名配置已存在，已跳过` });
+        warnings.push({
+          scope: selection.name,
+          code: WARNING_CODES.scanProfileExists,
+        });
         skipped += 1;
         continue;
       }
@@ -97,8 +103,11 @@ export class ScanService implements IScanService {
         imported += 1;
       } catch (error) {
         this.log.error(`scan import failed for ${entry.harness}/${selection.name}`, error);
+        const reason = error instanceof Error ? error.message : String(error);
         warnings.push({
-          message: `${selection.name}：${error instanceof Error ? error.message : String(error)}`,
+          scope: selection.name,
+          code: WARNING_CODES.scanImportFailed,
+          data: { reason },
         });
         skipped += 1;
       }
@@ -193,7 +202,6 @@ export class ScanService implements IScanService {
         label,
         sources,
         candidates: [],
-        note: '该工具暂不支持扫描导入',
         noteCode: SCAN_NOTE_CODES.unsupported,
       };
     }
@@ -203,7 +211,6 @@ export class ScanService implements IScanService {
         label,
         sources,
         candidates: [],
-        note: '磁盘上没有找到该工具的配置文件',
         noteCode: SCAN_NOTE_CODES.noConfigFiles,
       };
     }
@@ -213,7 +220,6 @@ export class ScanService implements IScanService {
         label,
         sources,
         candidates: [],
-        note: '配置文件存在但无法解析，导入前请先修复它',
         noteCode: SCAN_NOTE_CODES.unparsable,
       };
     }
@@ -226,7 +232,6 @@ export class ScanService implements IScanService {
       label,
       sources,
       candidates,
-      note: candidates.length === 0 ? '配置文件里没有找到可导入的 provider' : undefined,
       noteCode: candidates.length === 0 ? SCAN_NOTE_CODES.noCandidates : undefined,
     };
   }

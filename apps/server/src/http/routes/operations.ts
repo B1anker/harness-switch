@@ -2,6 +2,7 @@ import type { OperationsResponse, OperationUndoResponse } from '@seaveyon/harnes
 import { Hono } from 'hono';
 import type { InstantiationService } from '../../di';
 import { IJournalService } from '../../services/journal';
+import { param } from '../params';
 
 /** Receipts for completed operations, plus the one-click undo built on top of them. */
 export function createOperationRoutes(services: InstantiationService): Hono {
@@ -17,12 +18,12 @@ export function createOperationRoutes(services: InstantiationService): Hono {
     return c.json({ items } satisfies OperationsResponse);
   });
 
-  app.get('/:id', (c) => c.json(journal.detail(decodeURIComponent(c.req.param('id')))));
+  app.get('/:id', (c) => c.json(journal.detail(param(c, 'id'))));
 
   app.post('/:id/undo', (c) =>
     c.json({
       ok: true,
-      receipt: journal.undo(decodeURIComponent(c.req.param('id'))),
+      receipt: journal.undo(param(c, 'id')),
     } satisfies OperationUndoResponse),
   );
 

@@ -4,8 +4,9 @@ import {
   type BackupEntry,
   ERROR_CODES,
   type HarnessId,
-  isHarnessId,
+  harnessIdSchema,
 } from '@seaveyon/harness-switch-shared';
+import { z } from 'zod';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { type AdapterTarget, IAdapterRegistry } from './adapters';
@@ -21,24 +22,37 @@ export type FileSnapshot = {
   content: string | undefined;
 };
 
-type StoredFile = {
-  key: string;
-  existed: boolean;
-  /** File name inside the backup directory; absent when the file did not exist. */
-  stored?: string;
-  /**
-   * Only written by versions that recorded absolute paths. It is matched back to a
-   * target to keep those backups restorable and is never used as a destination.
-   */
-  path?: string;
-};
+/**
+ * A manifest as it sits on disk, next to the payloads it indexes.
+ *
+ * A restore writes over the user's live config, so an entry that names no destination
+ * is rejected outright rather than restored to a guess: `key` resolves through the
+ * adapter and `path` is absolute, and an entry with neither points nowhere.
+ */
+const manifestSchema = z.object({
+  createdAt: z.string(),
+  harness: harnessIdSchema,
+  profile: z.string(),
+  files: z.array(
+    z
+      .object({
+        key: z.string().catch(''),
+        existed: z.boolean(),
+        stored: z.string().optional().catch(undefined),
+        path: z.string().optional().catch(undefined),
+      })
+      .refine((file) => file.key !== '' || file.path !== undefined),
+  ),
+});
 
-type BackupManifest = {
-  createdAt: string;
-  harness: HarnessId;
-  profile: string;
-  files: StoredFile[];
-};
+type BackupManifest = z.infer<typeof manifestSchema>;
+
+/**
+ * One entry in a manifest. `stored` is the file name inside the backup directory,
+ * absent when the file did not exist; `path` is only written by versions that recorded
+ * absolute paths, and is matched back to a target rather than used as a destination.
+ */
+type StoredFile = BackupManifest['files'][number];
 
 type LoadedBackup = {
   /** The directory name, which is the only trustworthy id: the manifest is user-writable. */
@@ -314,30 +328,8 @@ export class BackupService implements IBackupService {
   }
 
   private parse(value: unknown): BackupManifest | null {
-    if (!isRecord(value)) {
-      return null;
-    }
-    const { createdAt, harness, profile, files } = value;
-    if (typeof createdAt !== 'string' || typeof harness !== 'string' || !isHarnessId(harness)) {
-      return null;
-    }
-    if (typeof profile !== 'string' || !Array.isArray(files)) {
-      return null;
-    }
-    const parsed: StoredFile[] = [];
-    for (const file of files) {
-      if (!isRecord(file) || typeof file.existed !== 'boolean') {
-        return null;
-      }
-      const key = typeof file.key === 'string' ? file.key : '';
-      const path = typeof file.path === 'string' ? file.path : undefined;
-      const stored = typeof file.stored === 'string' ? file.stored : undefined;
-      if (!key && !path) {
-        return null;
-      }
-      parsed.push({ key, existed: file.existed, stored, path });
-    }
-    return { createdAt, harness, profile, files: parsed };
+    const parsed = manifestSchema.safeParse(value);
+    return parsed.success ? parsed.data : null;
   }
 
   /** Ids start with a sortable timestamp, so lexicographic order is chronological. */
@@ -368,8 +360,4 @@ export class BackupService implements IBackupService {
       excess -= 1;
     }
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

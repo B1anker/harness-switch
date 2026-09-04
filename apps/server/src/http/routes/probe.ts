@@ -29,11 +29,7 @@ export function createProbeRoutes(services: InstantiationService): Hono {
       // Not a request-shape error the schema could have caught: report it as a
       // structured outcome so the UI renders it next to the button.
       return c.json({
-        result: {
-          ok: false,
-          code: PROBE_CODES.missingApiKey,
-          message: '未提供 API Key，也无法从凭据库解析，无法测试',
-        },
+        result: { ok: false, code: PROBE_CODES.missingApiKey },
       } satisfies ProbeResponse);
     }
     return c.json({

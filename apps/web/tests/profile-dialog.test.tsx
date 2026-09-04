@@ -3,14 +3,13 @@ import type { PreviewTarget } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { i18n } from '@/lib/i18n';
-import { useAppStore } from '@/stores/app-store';
-import { harnessFixture, profileFixture, stubStoreActions } from './fixtures';
+import { harnessFixture, profileFixture, setStoreState, stubStoreActions } from './support';
 
 type Recorded = { created: unknown[][]; updated: unknown[][] };
 
 function setup(preview: PreviewTarget[] = []): Recorded {
   const recorded: Recorded = { created: [], updated: [] };
-  useAppStore.setState({
+  setStoreState({
     providers: [],
     createProfile: async (...args: unknown[]) => {
       recorded.created.push(args);
@@ -20,7 +19,7 @@ function setup(preview: PreviewTarget[] = []): Recorded {
     },
     previewProfile: async () => preview,
     loadProviders: async () => {},
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return recorded;
 }
 
@@ -52,12 +51,12 @@ test('explains that a DeepSeek official profile accepts an official API key', ()
         fields: [
           {
             key: 'providerType',
-            label: '提供方类型',
+            labelCode: 'harness.field.dsh.providerType.label',
             kind: 'select',
             defaultValue: 'custom',
             options: [
-              { value: 'custom', label: '自定义提供方' },
-              { value: 'official', label: 'DeepSeek 官方 API' },
+              { value: 'custom', labelCode: 'harness.field.dsh.providerType.option.custom' },
+              { value: 'official', labelCode: 'harness.field.dsh.providerType.option.official' },
             ],
           },
         ],
@@ -122,8 +121,19 @@ test('validates the adapter model and required dynamic fields consistently', () 
         label: 'Kimi Code',
         modelRequired: true,
         fields: [
-          { key: 'region', label: '区域', kind: 'select', required: true, options: [] },
-          { key: 'headers', label: '请求头', kind: 'textarea', required: true },
+          {
+            key: 'region',
+            labelCode: 'harness.field.dsh.reasoningEfforts.label',
+            kind: 'select',
+            required: true,
+            options: [],
+          },
+          {
+            key: 'headers',
+            labelCode: 'harness.field.claude.extraEnv.label',
+            kind: 'textarea',
+            required: true,
+          },
         ],
       })}
       profile={null}
@@ -137,11 +147,14 @@ test('validates the adapter model and required dynamic fields consistently', () 
   fireEvent.click(screen.getByRole('button', { name: '保存配置' }));
 
   expect(screen.getByLabelText('模型')).toHaveAttribute('aria-invalid', 'true');
-  expect(screen.getByRole('combobox', { name: '区域' })).toHaveAttribute('aria-invalid', 'true');
-  expect(screen.getByLabelText('请求头')).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('combobox', { name: '支持的思考程度' })).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
+  expect(screen.getByLabelText('追加环境变量（可选）')).toHaveAttribute('aria-invalid', 'true');
   expect(screen.getByText('请输入模型名称')).toBeInTheDocument();
-  expect(screen.getByText('请填写区域')).toBeInTheDocument();
-  expect(screen.getByText('请填写请求头')).toBeInTheDocument();
+  expect(screen.getByText('请填写支持的思考程度')).toBeInTheDocument();
+  expect(screen.getByText('请填写追加环境变量（可选）')).toBeInTheDocument();
   expect(recorded.created).toEqual([]);
 });
 
@@ -566,13 +579,13 @@ function chineseIn(root: ParentNode): string[] {
 }
 
 test('shows the reason a save failed instead of closing silently', async () => {
-  useAppStore.setState({
+  setStoreState({
     providers: [],
     createProfile: async () => {
       throw new Error('profile already exists');
     },
     loadProviders: async () => {},
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   const closes: boolean[] = [];
   render(
     <ProfileDialog

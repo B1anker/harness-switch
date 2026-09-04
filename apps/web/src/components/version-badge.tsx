@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, versionPath } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n';
 
 /** Shows the server package version in a small muted badge. */
@@ -8,9 +8,11 @@ export function VersionBadge() {
 
   useEffect(() => {
     let cancelled = false;
-    void api<{ version: string }>('/api/version')
+    void api<{ version: string }>(versionPath)
       .then((payload) => {
-        if (!cancelled) setVersion(payload.version);
+        if (!cancelled) {
+          setVersion(payload.version);
+        }
       })
       .catch(() => {});
     return () => {

@@ -9,12 +9,14 @@ import {
   type TransferConflictPolicy,
   type TransferEnvelope,
   type TransferImportResponse,
+  transferEnvelopeSchema,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { type EncryptedValue, ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
+import { IHttpClient } from './http-client';
 import { ILogService } from './log';
 import { IProfileService } from './profiles';
 import { ITransferService } from './transfer';
@@ -83,6 +85,7 @@ export const IGitHubSyncService = createDecorator<IGitHubSyncService>('githubSyn
   IProfileService,
   IVaultService,
   ILogService,
+  IHttpClient,
 )
 export class GitHubSyncService implements IGitHubSyncService {
   declare readonly _serviceBrand: undefined;
@@ -95,6 +98,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     private readonly profiles: IProfileService,
     private readonly vault: IVaultService,
     private readonly log: ILogService,
+    private readonly http: IHttpClient,
   ) {}
 
   private readStore(): GitHubStore {
@@ -107,7 +111,9 @@ export class GitHubSyncService implements IGitHubSyncService {
 
   private getToken(): string | undefined {
     const store = this.readStore();
-    if (!store.token) return undefined;
+    if (!store.token) {
+      return undefined;
+    }
     const token = this.crypto.decrypt(store.token);
     return token ? token.trim() : undefined;
   }
@@ -139,7 +145,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     };
 
     const url = path.startsWith('http') ? path : `https://api.github.com${path}`;
-    const response = await fetch(url, {
+    const response = await this.http.fetch(url, {
       ...options,
       headers,
     });
@@ -236,7 +242,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     const id = clientId || DEFAULT_CLIENT_ID;
     let response: Response;
     try {
-      response = await fetch('https://github.com/login/device/code', {
+      response = await this.http.fetch('https://github.com/login/device/code', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -290,7 +296,7 @@ export class GitHubSyncService implements IGitHubSyncService {
     const id = clientId || DEFAULT_CLIENT_ID;
     let response: Response;
     try {
-      response = await fetch('https://github.com/login/oauth/access_token', {
+      response = await this.http.fetch('https://github.com/login/oauth/access_token', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
@@ -516,7 +522,7 @@ export class GitHubSyncService implements IGitHubSyncService {
 
     let rawContent = file.content;
     if (file.truncated && file.raw_url) {
-      const rawRes = await fetch(file.raw_url, {
+      const rawRes = await this.http.fetch(file.raw_url, {
         headers: { Authorization: `Bearer ${token}`, 'User-Agent': USER_AGENT },
       });
       if (rawRes.ok) {
@@ -531,15 +537,13 @@ export class GitHubSyncService implements IGitHubSyncService {
     }
 
     try {
-      const envelope = JSON.parse(rawContent) as TransferEnvelope;
-      if (envelope.format !== 'harness-switch-encrypted-export') {
-        throw new HttpError(400, '不支持的备份文件格式', {
-          code: ERROR_CODES.transferEnvelopeInvalid,
-        });
-      }
-      return { envelope, updatedAt: gist.updated_at };
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
+      // A gist is editable by hand and by any other tool holding the token, so it gets
+      // the same validation as an uploaded file rather than a check on `format` alone.
+      return {
+        envelope: transferEnvelopeSchema.parse(JSON.parse(rawContent)),
+        updatedAt: gist.updated_at,
+      };
+    } catch {
       throw new HttpError(400, '云端备份文件损坏或非有效 JSON', {
         code: ERROR_CODES.transferEnvelopeInvalid,
       });

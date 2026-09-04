@@ -1,30 +1,23 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { statSync } from 'node:fs';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
-import { createServices } from '../src/bootstrap';
+import type { InstantiationService } from '../src/di';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import { IProfileService } from '../src/services/profiles';
 import { IVaultService } from '../src/services/vault';
-import { expectHttpError } from './support/http-error';
+import { createSandbox, createTestServices, expectHttpError, type Sandbox } from './support';
 
-let homeDir = '';
-let services: ReturnType<typeof createServices>;
+let sandbox: Sandbox;
+let services: InstantiationService;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-vault-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
+  sandbox = createSandbox('hsw-vault');
+  services = createTestServices();
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 function vault() {

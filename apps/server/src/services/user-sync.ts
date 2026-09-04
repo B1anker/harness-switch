@@ -84,7 +84,9 @@ export class UserSyncService implements IUserSyncService {
         ) {
           conflicts.push({ harness: harness as TransferConflict['harness'], name });
         }
-        if (profile.provider_id) referencedProviders.add(profile.provider_id);
+        if (profile.provider_id) {
+          referencedProviders.add(profile.provider_id);
+        }
       }
     }
     return {
@@ -173,14 +175,18 @@ export class UserSyncService implements IUserSyncService {
           if (active[harness]?.name === name) {
             activeProfilesToReapply.set(harness as HarnessId, name);
           }
-        } else imported++;
+        } else {
+          imported++;
+        }
       }
     }
 
     const providerMap = new Map<string, string>();
     for (const { profile } of selected) {
       const sourceId = profile.provider_id;
-      if (!sourceId || providerMap.has(sourceId)) continue;
+      if (!sourceId || providerMap.has(sourceId)) {
+        continue;
+      }
       const provider = portable.providers[sourceId];
       if (!provider) {
         // A cached profile credential is still sufficient; detach below rather
@@ -238,18 +244,13 @@ export class UserSyncService implements IUserSyncService {
         const result = this.activation.activate(harness, name);
         // Nested warnings keep their own code; only the scope prefix is added.
         warnings.push(
-          ...result.warnings.map((warning) => ({
-            ...warning,
-            message: `${harness}/${name}: ${warning.message}`,
-            scope: `${harness}/${name}`,
-          })),
+          ...result.warnings.map((warning) => ({ ...warning, scope: `${harness}/${name}` })),
         );
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         warnings.push({
-          message: `${harness}/${name} 已更新配置库，但自动重新激活失败：${reason}`,
           code: WARNING_CODES.syncReapplyFailed,
-          params: { harness, profile: name, reason },
+          data: { harness, profile: name, reason },
         });
       }
     }
@@ -356,8 +357,12 @@ export class UserSyncService implements IUserSyncService {
         entry.synced_from?.username === sourceUsername &&
         entry.synced_from.provider_id === sourceId,
     );
-    if (previous) return previous.id;
-    if (!target.entries[sourceId]) return sourceId;
+    if (previous) {
+      return previous.id;
+    }
+    if (!target.entries[sourceId]) {
+      return sourceId;
+    }
     const suffix = sourceUsername
       .toLowerCase()
       .replace(/[^a-z0-9_-]+/g, '-')
@@ -374,8 +379,11 @@ export class UserSyncService implements IUserSyncService {
 
   private restore(path: string, snapshot: string | undefined): void {
     try {
-      if (snapshot === undefined) this.files.remove(path);
-      else this.files.writeSecure(path, snapshot);
+      if (snapshot === undefined) {
+        this.files.remove(path);
+      } else {
+        this.files.writeSecure(path, snapshot);
+      }
     } catch {
       // Preserve the original sync failure. The regular backup/diagnostic paths
       // can still surface a failed rollback for manual recovery.

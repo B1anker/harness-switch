@@ -73,18 +73,16 @@ function printCheck(check: DoctorCheck): void {
         : check.status === 'error'
           ? '[error]'
           : '[unknown]';
-  const message = detailMessage(check.detail) ?? check.label;
-  console.log(`  ${tag} ${message}`);
+  console.log(`  ${tag} ${check.msg ?? check.code}`);
 }
 
-function detailMessage(detail: unknown): string | undefined {
-  if (typeof detail === 'object' && detail !== null) {
-    const message = (detail as Record<string, unknown>).message;
-    if (typeof message === 'string') {
-      return message;
-    }
-  }
-  return undefined;
+/**
+ * The server resolves `msg` against the request's `Accept-Language`, so the terminal
+ * prints the same sentence the browser would, without owning a catalog of its own.
+ */
+export function warningText(warning: LocalizedMessage): string {
+  const text = warning.msg ?? warning.code;
+  return warning.scope ? `${warning.scope}: ${text}` : text;
 }
 
 export function printPlanHuman(harness: string, profile: string, targets: PreviewTarget[]): void {
@@ -106,8 +104,7 @@ export function printActivateHuman(
   console.log(`已激活 ${harness}/${profile}`);
   console.log(`env: ${result.envFile}`);
   for (const warning of result.warnings) {
-    // The terminal prints the server's own prose; only the web UI translates codes.
-    console.log(`warning: ${warning.message}`);
+    console.log(`warning: ${warningText(warning)}`);
   }
 }
 
@@ -120,7 +117,7 @@ export function printScanHuman(items: ScanHarnessResult[]): void {
       console.log(`  · ${source.path} [${state}]`);
     }
     if (item.candidates.length === 0) {
-      console.log(`  ${item.note ?? '没有可导入的配置'}`);
+      console.log(`  ${item.noteMsg ?? ''}`);
       continue;
     }
     for (const candidate of item.candidates) {

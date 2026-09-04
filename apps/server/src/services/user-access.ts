@@ -11,9 +11,7 @@ import { IEnvironmentService, type LocalUser } from './environment';
  * `ok: false` carries a stable `code` for the web UI plus the server's own prose for
  * the CLI, matching how every other reported problem travels.
  */
-export type UserAccess =
-  | { ok: true }
-  | { ok: false; code: string; reason: string; params: MessageParams };
+export type UserAccess = { ok: true } | { ok: false; code: string; data: MessageParams };
 
 export interface IUserAccessService {
   readonly _serviceBrand: undefined;
@@ -45,18 +43,17 @@ export class UserAccessService implements IUserAccessService {
       return { ok: true };
     }
     if (!existsSync(user.homeDir)) {
-      return this.blocked(USER_BLOCK_CODES.homeMissing, `主目录 ${user.homeDir} 不存在`, {
+      return this.blocked(USER_BLOCK_CODES.homeMissing, {
         home: user.homeDir,
       });
     }
     // Every path inside the home is resolved before use, so without search permission
     // even `realPath` fails — the manager could not so much as name a config file.
     if (!can(user.homeDir, constants.X_OK)) {
-      return this.blocked(
-        USER_BLOCK_CODES.homeUnsearchable,
-        `无法进入 ${user.username} 的主目录 ${user.homeDir}`,
-        { username: user.username, home: user.homeDir },
-      );
+      return this.blocked(USER_BLOCK_CODES.homeUnsearchable, {
+        username: user.username,
+        home: user.homeDir,
+      });
     }
 
     // Writes go through a temp file renamed into place, so it is the containing
@@ -67,16 +64,11 @@ export class UserAccessService implements IUserAccessService {
     const anchor = existsSync(store) ? store : user.homeDir;
     if (!can(anchor, constants.W_OK) || !can(anchor, constants.X_OK)) {
       return anchor === store
-        ? this.blocked(
-            USER_BLOCK_CODES.storeInaccessible,
-            `${user.username} 的配置目录 ${store} 不可写`,
-            { username: user.username, path: store },
-          )
-        : this.blocked(
-            USER_BLOCK_CODES.homeUnwritable,
-            `${user.username} 的主目录 ${user.homeDir} 不可写`,
-            { username: user.username, home: user.homeDir },
-          );
+        ? this.blocked(USER_BLOCK_CODES.storeInaccessible, { username: user.username, path: store })
+        : this.blocked(USER_BLOCK_CODES.homeUnwritable, {
+            username: user.username,
+            home: user.homeDir,
+          });
     }
 
     // Even with a writable directory, every file the manager creates is chowned to the
@@ -84,11 +76,7 @@ export class UserAccessService implements IUserAccessService {
     // without it would get as far as writing a temp file and then fail — better to say
     // so before switching.
     if (!this.canOwnAs(user)) {
-      return this.blocked(
-        USER_BLOCK_CODES.ownershipRequiresRoot,
-        `把文件所有权设置为 ${user.username} 需要以 root 运行或授予 CAP_CHOWN`,
-        { username: user.username },
-      );
+      return this.blocked(USER_BLOCK_CODES.ownershipRequiresRoot, { username: user.username });
     }
     return { ok: true };
   }
@@ -121,8 +109,8 @@ export class UserAccessService implements IUserAccessService {
     return hasChownCapability(uid);
   }
 
-  private blocked(code: string, reason: string, params: MessageParams): UserAccess {
-    return { ok: false, code, reason, params };
+  private blocked(code: string, data: MessageParams): UserAccess {
+    return { ok: false, code, data };
   }
 }
 

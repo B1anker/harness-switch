@@ -7,22 +7,38 @@ import { i18n } from '@/lib/i18n';
  */
 export class ApiError extends Error {
   readonly code?: string;
-  readonly params?: MessageParams;
+  readonly data?: MessageParams;
 
   constructor(
     readonly status: number,
     message: string,
-    options: { code?: string; data?: MessageParams; params?: MessageParams } = {},
+    options: { code?: string; data?: MessageParams } = {},
   ) {
     super(message);
     this.name = 'ApiError';
     this.code = options.code;
-    this.params = options.data ?? options.params;
+    this.data = options.data;
   }
 }
 
+export function harnessesPath(): string {
+  return '/api/harnesses';
+}
+
 export function profilesCollectionPath(harnessId: HarnessId | string): string {
-  return `/api/harnesses/${harnessId}/profiles`;
+  return `${harnessesPath()}/${harnessId}/profiles`;
+}
+
+export function profileActivatePath(harnessId: HarnessId | string, name: string): string {
+  return `${profilePath(harnessId, name)}/activate`;
+}
+
+export function profilePreviewPath(harnessId: HarnessId | string, name: string): string {
+  return `${profilePath(harnessId, name)}/preview`;
+}
+
+export function officialActivatePath(harnessId: HarnessId | string): string {
+  return `${harnessesPath()}/${harnessId}/official/activate`;
 }
 
 export function profilePath(harnessId: HarnessId | string, name: string): string {
@@ -30,11 +46,15 @@ export function profilePath(harnessId: HarnessId | string, name: string): string
 }
 
 export function officialPreviewPath(harnessId: HarnessId | string): string {
-  return `/api/harnesses/${harnessId}/official/preview`;
+  return `${harnessesPath()}/${harnessId}/official/preview`;
 }
 
 export function backupsPath(id?: string): string {
   return id ? `/api/backups/${encodeURIComponent(id)}` : '/api/backups';
+}
+
+export function backupRestorePath(id: string): string {
+  return `${backupsPath(id)}/restore`;
 }
 
 /** Provider Vault: shared credential entries any profile can reference. */
@@ -44,6 +64,11 @@ export function providersPath(): string {
 
 export function providerPath(id: string): string {
   return `${providersPath()}/${encodeURIComponent(id)}`;
+}
+
+/** Reveals an entry's plaintext key; the only route that returns key material. */
+export function providerRevealPath(id: string): string {
+  return `${providerPath(id)}/reveal`;
 }
 
 /** Connectivity probe for unsaved form values, against an explicit base URL. */
@@ -96,6 +121,54 @@ export function operationUndoPath(id: string): string {
   return `${operationsPath()}/${encodeURIComponent(id)}/undo`;
 }
 
+/** Session and the Unix accounts this process may manage on the user's behalf. */
+export const authPath = {
+  session: '/api/auth/session',
+  login: '/api/auth/login',
+  logout: '/api/auth/logout',
+} as const;
+
+export function usersPath(): string {
+  return '/api/users';
+}
+
+export function userSelectPath(username: string): string {
+  return `${usersPath()}/${encodeURIComponent(username)}/select`;
+}
+
+/** Copying one local account's configuration into another. */
+export const userSyncPath = {
+  preview: '/api/users/sync/preview',
+  run: '/api/users/sync',
+} as const;
+
+/** The encrypted portable package, as a file the user holds. */
+export const transferPath = {
+  preview: '/api/transfer/preview',
+  import: '/api/transfer/import',
+  export: '/api/transfer/export',
+} as const;
+
+/** The same package kept in a private Gist, plus the GitHub connection behind it. */
+export const githubPath = {
+  status: '/api/github/status',
+  token: '/api/github/token',
+  disconnect: '/api/github/disconnect',
+  deviceCode: '/api/github/device/code',
+  devicePoll: '/api/github/device/poll',
+  push: '/api/github/push',
+  pullPreview: '/api/github/pull/preview',
+  pull: '/api/github/pull',
+} as const;
+
+export const versionPath = '/api/version';
+
+/** The self-update check and the update it triggers. */
+export const updatePath = {
+  check: '/api/update/check',
+  run: '/api/update',
+} as const;
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept-Language', i18n.language);
@@ -109,9 +182,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(response.status, payload.msg ?? payload.error ?? '', {
+    throw new ApiError(response.status, payload.msg ?? '', {
       code: payload.code,
-      data: payload.data ?? payload.params,
+      data: payload.data,
     });
   }
   return payload as T;

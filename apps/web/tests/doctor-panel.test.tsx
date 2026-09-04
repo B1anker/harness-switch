@@ -2,13 +2,13 @@ import { expect, test } from '@rstest/core';
 import type { DoctorReport, DriftSummary } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DoctorPanel } from '@/components/doctor-panel';
-import { useAppStore } from '@/stores/app-store';
 import {
   doctorReportFixture,
   driftFileFixture,
   driftSummaryFixture,
   harnessFixture,
-} from './fixtures';
+  setStoreState,
+} from './support';
 
 function setup({
   doctor = [doctorReportFixture()],
@@ -21,7 +21,7 @@ function setup({
   doctorLoads?: string[];
   driftLoads?: number[];
 } = {}) {
-  useAppStore.setState({
+  setStoreState({
     doctor,
     doctorLoading: false,
     doctorError: null,
@@ -41,7 +41,7 @@ function setup({
       summary: driftSummaryFixture(),
       warnings: [],
     }),
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
 }
 
 test('loads doctor and drift on mount when the store has none', async () => {

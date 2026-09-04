@@ -1,51 +1,34 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import type { DoctorCheck, DoctorResponse } from '@seaveyon/harness-switch-shared';
 import { DOCTOR_CODES, PROBE_CODES } from '@seaveyon/harness-switch-shared';
-import { createServices } from '../src/bootstrap';
+import type { InstantiationService } from '../src/di';
 import { IActivationService } from '../src/services/activation';
 import { IDoctorService } from '../src/services/doctor';
-import { IEnvironmentService } from '../src/services/environment';
 import { IProfileService } from '../src/services/profiles';
+import { createSandbox, createTestServices, OFFLINE, type Sandbox } from './support';
 
-let homeDir = '';
-let binDir = '';
-let services: ReturnType<typeof createServices>;
-let originalPath = '';
-let originalFetch: typeof globalThis.fetch;
-let originalUpdateCheck: string | undefined;
+let sandbox: Sandbox;
+let services: InstantiationService;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-doctor-'));
-  binDir = join(homeDir, 'bin');
-  mkdirSync(binDir, { recursive: true });
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  process.env.CODEX_HOME = join(homeDir, '.codex');
-  originalPath = process.env.PATH ?? '';
-  originalUpdateCheck = process.env.HSW_UPDATE_CHECK;
-  process.env.HSW_UPDATE_CHECK = '0';
-  process.env.PATH = binDir;
+  sandbox = createSandbox('hsw-doctor', {
+    env: (home) => ({
+      CODEX_HOME: home('.codex'),
+      HSW_UPDATE_CHECK: '0',
+      // A fake bin directory is the only PATH entry, so a `which` hit means the test put
+      // it there rather than the developer's machine happening to have the CLI installed.
+      PATH: home('bin'),
+    }),
+  });
+  mkdirSync(sandbox.home('bin'), { recursive: true });
   // The registry update check must never hit the real network in tests.
-  originalFetch = globalThis.fetch;
-  globalThis.fetch = (async () => {
-    throw new Error('offline');
-  }) as unknown as typeof globalThis.fetch;
-  services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
+  sandbox.stubFetch(OFFLINE);
+  services = createTestServices();
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  delete process.env.CODEX_HOME;
-  if (originalUpdateCheck === undefined) delete process.env.HSW_UPDATE_CHECK;
-  else process.env.HSW_UPDATE_CHECK = originalUpdateCheck;
-  process.env.PATH = originalPath;
-  globalThis.fetch = originalFetch;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 function doctor() {
@@ -53,7 +36,7 @@ function doctor() {
 }
 
 function fakeBin(name: string): void {
-  writeFileSync(join(binDir, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  writeFileSync(sandbox.home('bin', name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
 }
 
 /**
@@ -63,8 +46,8 @@ function fakeBin(name: string): void {
  */
 function stubEndpoint(options: { completionStatus?: number } = {}): () => string[] {
   const posts: string[] = [];
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = new URL(typeof input === 'string' ? input : input.toString());
+  sandbox.stubFetch((target, init) => {
+    const url = new URL(target);
     if ((init?.method ?? 'GET') === 'POST') {
       posts.push(url.pathname);
       return options.completionStatus
@@ -75,7 +58,7 @@ function stubEndpoint(options: { completionStatus?: number } = {}): () => string
       return Response.json({ data: [{ id: 'claude-sonnet-4-5' }] });
     }
     throw new Error('offline');
-  }) as unknown as typeof globalThis.fetch;
+  });
   return () => posts;
 }
 
@@ -85,11 +68,6 @@ function checksOf(report: DoctorResponse, harness: string, id: string): DoctorCh
       .find((item) => item.harness === harness)
       ?.checks.filter((check) => check.id === id) ?? []
   );
-}
-
-function messageOf(check: DoctorCheck | undefined): string {
-  const detail = check?.detail as { message?: unknown } | undefined;
-  return typeof detail?.message === 'string' ? detail.message : '';
 }
 
 function activateClaude() {
@@ -122,8 +100,7 @@ describe('doctor', () => {
     const report = await doctor().run({ harness: 'dsh' });
     const check = checksOf(report, 'dsh', 'dsh.install')[0];
     expect(check?.status).toBe('ok');
-    expect(check?.code).toBe('doctor.check.installNotRequired');
-    expect(messageOf(check)).toContain('Web 服务');
+    expect(check?.code).toBe(DOCTOR_CODES.installNotRequired);
   });
 
   test('flags a missing target file as a files warning', async () => {
@@ -131,13 +108,13 @@ describe('doctor', () => {
     const report = await doctor().run({ harness: 'claude' });
     const check = checksOf(report, 'claude', 'claude.files.settings')[0];
     expect(check?.status).toBe('warn');
-    expect(messageOf(check)).toContain('不存在');
+    expect(check?.code).toBe(DOCTOR_CODES.fileMissing);
   });
 
   test('flags group/other-readable config files as permission warnings', async () => {
     fakeBin('claude');
     activateClaude();
-    chmodSync(join(homeDir, '.claude', 'settings.json'), 0o644);
+    chmodSync(sandbox.home('.claude', 'settings.json'), 0o644);
     const report = await doctor().run({ harness: 'claude' });
     const check = checksOf(report, 'claude', 'claude.files.settings')[0];
     expect(check?.status).toBe('warn');
@@ -147,8 +124,8 @@ describe('doctor', () => {
 
   test('flags an unparsable live file as a parse error', async () => {
     fakeBin('claude');
-    mkdirSync(join(homeDir, '.claude'), { recursive: true });
-    writeFileSync(join(homeDir, '.claude', 'settings.json'), '{ not json');
+    mkdirSync(sandbox.home('.claude'), { recursive: true });
+    writeFileSync(sandbox.home('.claude', 'settings.json'), '{ not json');
     const report = await doctor().run({ harness: 'claude' });
     const check = checksOf(report, 'claude', 'claude.parse.settings')[0];
     expect(check?.status).toBe('error');
@@ -156,8 +133,8 @@ describe('doctor', () => {
 
   test('reports an unreadable live file without failing the whole run', async () => {
     fakeBin('claude');
-    mkdirSync(join(homeDir, '.claude'), { recursive: true });
-    const settings = join(homeDir, '.claude', 'settings.json');
+    mkdirSync(sandbox.home('.claude'), { recursive: true });
+    const settings = sandbox.home('.claude', 'settings.json');
     writeFileSync(settings, '{}');
     chmodSync(settings, 0o000);
 
@@ -176,7 +153,7 @@ describe('doctor', () => {
   test('an unreadable live file does not crash the drift check', async () => {
     fakeBin('claude');
     activateClaude();
-    chmodSync(join(homeDir, '.claude', 'settings.json'), 0o000);
+    chmodSync(sandbox.home('.claude', 'settings.json'), 0o000);
     const report = await doctor().run({ harness: 'claude' });
     // Unreadable is reported as invalid, never as missing: "missing" would invite a
     // reapply that overwrites a config the manager never managed to read.
@@ -186,8 +163,8 @@ describe('doctor', () => {
   });
 
   test('a full run survives one unreadable harness and still reports the rest', async () => {
-    mkdirSync(join(homeDir, '.claude'), { recursive: true });
-    const settings = join(homeDir, '.claude', 'settings.json');
+    mkdirSync(sandbox.home('.claude'), { recursive: true });
+    const settings = sandbox.home('.claude', 'settings.json');
     writeFileSync(settings, '{}');
     chmodSync(settings, 0o000);
 
@@ -204,7 +181,7 @@ describe('doctor', () => {
     const report = await doctor().run({ harness: 'claude' });
     expect(checksOf(report, 'claude', 'claude.drift')[0]?.status).toBe('ok');
 
-    const settingsPath = join(homeDir, '.claude', 'settings.json');
+    const settingsPath = sandbox.home('.claude', 'settings.json');
     const settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
     settings.env.ANTHROPIC_BASE_URL = 'https://edited.example.com/v1';
     writeFileSync(settingsPath, JSON.stringify(settings));
@@ -260,8 +237,8 @@ describe('doctor', () => {
     const check = checksOf(report, 'claude', 'claude.completion')[0];
     expect(check?.status).toBe('error');
     expect(check?.code).toBe(DOCTOR_CODES.completionFailed);
-    expect(check?.params?.model).toBe('claude-sonnet-4-5');
-    expect(check?.params?.reason).toBe(PROBE_CODES.completionHttpError);
+    expect(check?.data?.model).toBe('claude-sonnet-4-5');
+    expect(check?.data?.reason).toBe(PROBE_CODES.completionHttpError);
     const detail = check?.detail as { model?: string; status?: number } | undefined;
     expect(detail?.model).toBe('claude-sonnet-4-5');
     expect(detail?.status).toBe(500);
@@ -292,10 +269,9 @@ describe('doctor', () => {
     expect(posts()).toHaveLength(1);
     const check = checksOf(second, 'claude', 'claude.completion')[0];
     expect(check?.status).toBe('ok');
-    // A replay says so, in prose and in detail: "answered" and "answered hours ago" differ.
     const detail = check?.detail as { cachedAt?: string } | undefined;
     expect(typeof detail?.cachedAt).toBe('string');
-    expect(messageOf(check)).toContain('缓存');
+    expect(check?.code).toBe(DOCTOR_CODES.completionOkCached);
   });
 
   test('the probe skips harnesses in official-login mode instead of crashing', async () => {

@@ -122,7 +122,6 @@ export class ActivationService implements IActivationService {
     } catch (error) {
       this.log.error('failed to rebuild env file', error);
       warnings.push({
-        message: '原生配置已写入，但重建 env.sh 失败',
         code: WARNING_CODES.envRebuildFailed,
       });
     }
@@ -176,7 +175,6 @@ export class ActivationService implements IActivationService {
     } catch (error) {
       this.log.error('failed to rebuild env file', error);
       warnings.push({
-        message: '已恢复官方登录，但重建 env.sh 失败',
         code: WARNING_CODES.officialEnvRebuildFailed,
       });
     }
@@ -185,7 +183,9 @@ export class ActivationService implements IActivationService {
 
   syncProfile(harness: HarnessId, name: string): void {
     const adapter = this.adapters.get(harness);
-    if (!adapter.renderAvailable) return;
+    if (!adapter.renderAvailable) {
+      return;
+    }
     const profile = this.profiles.decrypt(harness, name);
     adapter.validate?.(profile);
     const targets = adapter.targets();
@@ -324,9 +324,8 @@ export class ActivationService implements IActivationService {
     } catch (error) {
       this.log.error(`failed to backfill ${adapter.id}/${previous.name}`, error);
       warnings.push({
-        message: `未能把 ${previous.name} 的现有配置回填保存`,
         code: WARNING_CODES.backfillFailed,
-        params: { profile: previous.name },
+        data: { profile: previous.name },
       });
     }
   }

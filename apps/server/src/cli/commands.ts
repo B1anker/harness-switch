@@ -36,6 +36,7 @@ import {
   printProfilesHuman,
   printProvidersHuman,
   printScanHuman,
+  warningText,
 } from './output';
 
 /**
@@ -154,7 +155,9 @@ function validateCommand(command: string, positional: string[], flags: CliFlags)
     undo: { min: 1, max: 1, usage: 'undo <operation-id> [options]' },
   };
   const spec = specs[command];
-  if (!spec) return;
+  if (!spec) {
+    return;
+  }
   validateFlags(flags, spec.flags ?? []);
   validatePositionals(positional, spec.min, spec.max, spec.usage);
 }
@@ -171,7 +174,7 @@ async function cmdUsers(client: CliClient, json: OutputMode): Promise<number> {
     for (const user of payload.items) {
       // An unmanageable account is listed but annotated: `--user` on it would be
       // refused, so the reason is more useful than a bare name.
-      const note = user.manageable === false ? `  (${user.blockReason ?? '不可切换'})` : '';
+      const note = user.manageable === false ? `  (${user.blockMsg ?? '不可切换'})` : '';
       console.log(`${user.current ? '*' : ' '} ${user.username.padEnd(20)} ${user.homeDir}${note}`);
     }
   }
@@ -224,8 +227,11 @@ async function cmdProfiles(
   )) as HarnessesResponse | HarnessesResponse['items'][number];
   const items =
     'items' in payload ? payload.items.flatMap((item) => item.profiles) : payload.profiles;
-  if (json === 'json') printJson({ items });
-  else printProfilesHuman(items);
+  if (json === 'json') {
+    printJson({ items });
+  } else {
+    printProfilesHuman(items);
+  }
   return 0;
 }
 
@@ -247,8 +253,11 @@ async function cmdCreate(
     ...(flagValue(flags, 'provider') ? { providerId: flagValue(flags, 'provider') } : {}),
     ...(flagValue(flags, 'endpoint') ? { providerEndpoint: flagValue(flags, 'endpoint') } : {}),
   })) as ProfilePublic;
-  if (json === 'json') printJson(payload);
-  else console.log(`已创建 ${payload.harness}/${payload.name}`);
+  if (json === 'json') {
+    printJson(payload);
+  } else {
+    console.log(`已创建 ${payload.harness}/${payload.name}`);
+  }
   return 0;
 }
 
@@ -260,12 +269,17 @@ async function cmdDelete(
 ): Promise<number> {
   const harness = requirePositional(positional, 0, 'harness');
   const profile = requirePositional(positional, 1, 'profile');
-  if (!(await confirmMutation(`确认删除 ${harness}/${profile}？[y/N] `, flags, json))) return 0;
+  if (!(await confirmMutation(`确认删除 ${harness}/${profile}？[y/N] `, flags, json))) {
+    return 0;
+  }
   const payload = await client.delete(
     `/api/harnesses/${encodeURIComponent(harness)}/profiles/${encodeURIComponent(profile)}`,
   );
-  if (json === 'json') printJson({ harness, profile, ...(payload as object) });
-  else console.log(`已删除 ${harness}/${profile}`);
+  if (json === 'json') {
+    printJson({ harness, profile, ...(payload as object) });
+  } else {
+    console.log(`已删除 ${harness}/${profile}`);
+  }
   return 0;
 }
 
@@ -336,7 +350,9 @@ async function cmdActivate(
     if (json === 'human') {
       printPlanHuman(harness, profile, preview.targets);
     }
-    if (!(await confirmMutation(`确认激活 ${harness}/${profile}？[y/N] `, flags, json))) return 0;
+    if (!(await confirmMutation(`确认激活 ${harness}/${profile}？[y/N] `, flags, json))) {
+      return 0;
+    }
   }
 
   const payload = (await client.post(
@@ -357,12 +373,17 @@ async function cmdOfficial(
   json: OutputMode,
 ): Promise<number> {
   const harness = requirePositional(positional, 0, 'harness');
-  if (!(await confirmMutation(`确认让 ${harness} 恢复官方登录？[y/N] `, flags, json))) return 0;
+  if (!(await confirmMutation(`确认让 ${harness} 恢复官方登录？[y/N] `, flags, json))) {
+    return 0;
+  }
   const payload = (await client.post(
     `/api/harnesses/${encodeURIComponent(harness)}/official/activate`,
   )) as ActivateResponse;
-  if (json === 'json') printJson({ harness, official: true, ...payload });
-  else printActivateHuman(harness, 'official', payload);
+  if (json === 'json') {
+    printJson({ harness, official: true, ...payload });
+  } else {
+    printActivateHuman(harness, 'official', payload);
+  }
   return 0;
 }
 
@@ -409,7 +430,7 @@ async function cmdImport(
       `导入=${payload.imported} 跳过=${payload.skipped} 新建Vault条目=${payload.providersCreated}`,
     );
     for (const warning of payload.warnings) {
-      console.log(`warning: ${warning.message}`);
+      console.log(`warning: ${warningText(warning)}`);
     }
     console.log('工具本身的配置文件未被修改；需要生效请再执行 activate。');
   }
@@ -419,10 +440,16 @@ async function cmdImport(
 function credentialFromFlags(flags: CliFlags): string {
   const inline = flagValue(flags, 'api-key');
   const envName = flagValue(flags, 'api-key-env');
-  if (inline && envName) throw new CliError('--api-key 与 --api-key-env 不能同时使用');
-  if (!envName) return inline;
+  if (inline && envName) {
+    throw new CliError('--api-key 与 --api-key-env 不能同时使用');
+  }
+  if (!envName) {
+    return inline;
+  }
   const value = process.env[envName];
-  if (!value) throw new CliError(`环境变量 ${envName} 未设置或为空`);
+  if (!value) {
+    throw new CliError(`环境变量 ${envName} 未设置或为空`);
+  }
   return value;
 }
 
@@ -431,14 +458,23 @@ async function confirmMutation(
   flags: CliFlags,
   json: OutputMode,
 ): Promise<boolean> {
-  if (hasFlag(flags, 'yes')) return true;
-  if (!stdin.isTTY) throw new CliError('非交互式终端需要 --yes 确认此操作');
+  if (hasFlag(flags, 'yes')) {
+    return true;
+  }
+  if (!stdin.isTTY) {
+    throw new CliError('非交互式终端需要 --yes 确认此操作');
+  }
   const readline = createInterface({ input: stdin, output: stdout });
   const answer = (await readline.question(prompt)).trim().toLowerCase();
   readline.close();
-  if (answer === 'y' || answer === 'yes') return true;
-  if (json === 'json') printJson({ cancelled: true });
-  else console.log('已取消');
+  if (answer === 'y' || answer === 'yes') {
+    return true;
+  }
+  if (json === 'json') {
+    printJson({ cancelled: true });
+  } else {
+    console.log('已取消');
+  }
   return false;
 }
 

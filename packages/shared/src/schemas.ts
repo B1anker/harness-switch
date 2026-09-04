@@ -13,12 +13,27 @@ import { HARNESS_IDS } from './harnesses';
  */
 
 const MAX_NAME = 120;
+const MAX_ENDPOINT_KEY = 60;
 const MAX_URL = 2048;
 const MAX_NOTES = 4096;
 const MAX_KEY = 4096;
 const MAX_EXTRA_VALUE = 4096;
 /** An override is a whole config file the user took over, so it needs real headroom. */
 const MAX_OVERRIDE = 1024 * 1024;
+
+/**
+ * The same limits, for the forms that collect these values.
+ *
+ * A field that lets the user type past the limit only to have the request rejected
+ * wastes the work they just did, so the input caps itself where the schema would.
+ */
+export const LIMITS = {
+  name: MAX_NAME,
+  endpointKey: MAX_ENDPOINT_KEY,
+  url: MAX_URL,
+  notes: MAX_NOTES,
+  apiKey: MAX_KEY,
+} as const;
 
 /** Names become object keys in the store and slugs in backup directory names. */
 const entityName = z
@@ -78,7 +93,7 @@ export const providerEndpointRequestSchema = z.object({
     .string()
     .trim()
     .min(1, 'endpoint key 不能为空')
-    .max(60, 'endpoint key 过长')
+    .max(MAX_ENDPOINT_KEY, 'endpoint key 过长')
     .refine((value) => !value.includes('/') && !value.includes('\\'), 'endpoint key 不能包含斜杠'),
   /** Falls back to the key when absent, which is what the vault service does. */
   label: optionalText(MAX_NAME).optional(),
@@ -129,6 +144,70 @@ export const transferEnvelopeSchema = z.object({
     tag: z.string().min(1),
     data: z.string().min(1),
   }),
+});
+
+/**
+ * The export payload, as it looks once the passphrase envelope is open.
+ *
+ * Not a request body, but validated exactly like one: it is written straight into the
+ * profile store and the vault, and the envelope only proves the passphrase matched —
+ * whoever knew it still could have shaped the plaintext however they liked. Unknown
+ * keys are stripped here too, so nothing unrecognised reaches disk.
+ */
+const portableProfileSchema = z.object({
+  harness: harnessIdSchema,
+  name: entityName,
+  baseUrl: optionalText(MAX_URL),
+  apiKey: optionalText(MAX_KEY),
+  model: optionalText(MAX_NAME),
+  notes: optionalText(MAX_NOTES),
+  extras: extrasSchema,
+  overrides: overridesSchema,
+  providerId: optionalText(MAX_NAME).optional(),
+  providerEndpoint: optionalText(MAX_NAME).optional(),
+});
+
+/** Ids become object keys in the vault store, so a prototype name would poison it. */
+const portableProviderId = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine((value) => !value.includes('/') && !value.includes('\\'), 'provider id 不能包含斜杠')
+  .refine((value) => value !== '__proto__' && value !== 'constructor', 'provider id 不合法');
+
+const portableProviderSchema = z.object({
+  id: portableProviderId,
+  name: z.string().min(1).max(MAX_NAME),
+  apiKey: z.string().min(1).max(MAX_KEY),
+  notes: optionalText(MAX_NOTES).optional(),
+  endpoints: z.array(
+    z.object({
+      key: mapKey,
+      label: optionalText(MAX_NAME),
+      baseUrl: optionalText(MAX_URL),
+    }),
+  ),
+});
+
+const portableActiveSchema = z.object({
+  harness: harnessIdSchema,
+  name: entityName,
+  official: z.boolean(),
+});
+
+/** A malformed export must fail fast rather than stream unbounded work into the store. */
+const MAX_PORTABLE_ITEMS = 10_000;
+
+export const portablePayloadSchema = z.object({
+  format: z.literal('harness-switch-portable-config'),
+  version: z.literal(1),
+  exportedAt: z.string(),
+  profiles: z.array(portableProfileSchema).max(MAX_PORTABLE_ITEMS),
+  /** Optional so exports made before vault support remain importable. */
+  providers: z.array(portableProviderSchema).max(MAX_PORTABLE_ITEMS).optional(),
+  active: z.array(portableActiveSchema),
+  /** Present only when the user explicitly included the native Codex login session. */
+  codexLoginCache: z.string().optional(),
 });
 
 export const transferExportRequestSchema = z.object({

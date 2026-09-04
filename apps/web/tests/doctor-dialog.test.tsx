@@ -2,8 +2,7 @@ import { expect, test } from '@rstest/core';
 import type { DoctorReport } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DoctorDialog } from '@/components/doctor-dialog';
-import { useAppStore } from '@/stores/app-store';
-import { doctorCheckFixture, doctorReportFixture } from './fixtures';
+import { doctorCheckFixture, doctorReportFixture, setStoreState } from './support';
 
 type Recorded = {
   runs: string[];
@@ -11,7 +10,7 @@ type Recorded = {
 
 function setup(reports: DoctorReport[] | null, updatedAvailable = false): Recorded {
   const recorded: Recorded = { runs: [] };
-  useAppStore.setState({
+  setStoreState({
     doctor: reports,
     doctorUpdatedAvailable: updatedAvailable,
     doctorLoading: false,
@@ -19,7 +18,7 @@ function setup(reports: DoctorReport[] | null, updatedAvailable = false): Record
     loadDoctor: async (harnessId) => {
       recorded.runs.push(harnessId);
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return recorded;
 }
 
@@ -38,10 +37,10 @@ test('labels every severity level with a status tag', () => {
   setup([
     doctorReportFixture({
       checks: [
-        doctorCheckFixture({ id: 'ok', label: 'ok check' }),
-        doctorCheckFixture({ id: 'warn', label: 'warn check', status: 'warn' }),
-        doctorCheckFixture({ id: 'error', label: 'error check', status: 'error' }),
-        doctorCheckFixture({ id: 'unknown', label: 'unknown check', status: 'unknown' }),
+        doctorCheckFixture({ id: 'ok' }),
+        doctorCheckFixture({ id: 'warn', status: 'warn' }),
+        doctorCheckFixture({ id: 'error', status: 'error' }),
+        doctorCheckFixture({ id: 'unknown', status: 'unknown' }),
       ],
     }),
   ]);

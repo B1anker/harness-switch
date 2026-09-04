@@ -1,12 +1,10 @@
-import { afterEach, beforeEach, expect, test } from '@rstest/core';
+import { beforeEach, expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
-import { useAppStore } from '@/stores/app-store';
-
-const realFetch = globalThis.fetch;
+import { setStoreState, stubFetch } from '../support';
 
 beforeEach(() => {
-  useAppStore.setState({
+  setStoreState({
     currentUser: 'owner',
     users: [
       {
@@ -34,16 +32,7 @@ beforeEach(() => {
     loadProviders: async () => {},
     loadHarnesses: async () => {},
   });
-  globalThis.fetch = (async (_input: string | URL | Request) =>
-    new Response(JSON.stringify({ connected: false }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })) as typeof globalThis.fetch;
-});
-
-afterEach(() => {
-  globalThis.fetch = realFetch;
-  useAppStore.setState({ currentUser: '', users: [], scan: null, notice: null });
+  stubFetch(() => ({ connected: false }));
 });
 
 const SOURCE_NAMES = ['本机现有配置', '其他本地用户', '加密文件', 'GitHub Gist'];

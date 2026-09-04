@@ -12,9 +12,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { HarnessId } from '@seaveyon/harness-switch-shared';
-import { createServices } from '../src/bootstrap';
+import type { InstantiationService } from '../src/di';
 import { IBackupService } from '../src/services/backup';
-import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import { IJournalService } from '../src/services/journal';
 import {
@@ -22,9 +21,10 @@ import {
   type OperationPlan,
   type PlannedWrite,
 } from '../src/services/live-write';
+import { createSandbox, createTestServices, type Sandbox } from './support';
 
-let homeDir = '';
-let services: ReturnType<typeof createServices>;
+let sandbox: Sandbox;
+let services: InstantiationService;
 
 /** Live writes only ever target a path an adapter owns, so the tests use real ones. */
 let claudeSettings = '';
@@ -35,24 +35,18 @@ let piModels = '';
 let piSettings = '';
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-rel-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-  services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
-  claudeSettings = join(homeDir, '.claude', 'settings.json');
-  codexConfig = join(homeDir, '.codex', 'config.toml');
-  codexAuth = join(homeDir, '.codex', 'auth.json');
-  dshSettings = join(homeDir, '.dsh', 'settings.yaml');
-  piModels = join(homeDir, '.pi', 'agent', 'models.json');
-  piSettings = join(homeDir, '.pi', 'agent', 'settings.json');
+  sandbox = createSandbox('hsw-rel');
+  services = createTestServices();
+  claudeSettings = sandbox.home('.claude', 'settings.json');
+  codexConfig = sandbox.home('.codex', 'config.toml');
+  codexAuth = sandbox.home('.codex', 'auth.json');
+  dshSettings = sandbox.home('.dsh', 'settings.yaml');
+  piModels = sandbox.home('.pi', 'agent', 'models.json');
+  piSettings = sandbox.home('.pi', 'agent', 'settings.json');
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  delete process.env.HSW_BACKUP_RETAIN;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 function seed(file: string, content: string, mode = 0o600): void {
@@ -67,17 +61,16 @@ function plan(harness: HarnessId, profile: string, writes: PlannedWrite[]): Oper
 
 /** The single backup directory a test just produced, so its manifest can be tampered with. */
 function onlyBackupDir(): string {
-  const backupsDir = join(homeDir, '.harness-switch', 'backups');
-  const names = readdirSync(backupsDir);
+  const names = readdirSync(sandbox.data('backups'));
   expect(names).toHaveLength(1);
-  return join(backupsDir, names[0]!);
+  return sandbox.data('backups', names[0]!);
 }
 
 describe('live write', () => {
   test('journals metadata-only transactions so they remain undoable after a crash', () => {
     const live = services.get(ILiveWriteService);
     const journal = services.get(IJournalService);
-    const profiles = join(homeDir, '.harness-switch', 'profiles.json');
+    const profiles = sandbox.data('profiles.json');
     seed(profiles, '{"before":true}\n');
 
     live.transaction(
@@ -223,7 +216,7 @@ describe('live write', () => {
   test('refuses a target whose directory is a symlink out of the home', () => {
     const live = services.get(ILiveWriteService);
     const outside = mkdtempSync(join(tmpdir(), 'hsw-outside-'));
-    symlinkSync(outside, join(homeDir, '.claude'));
+    symlinkSync(outside, sandbox.home('.claude'));
 
     try {
       expect(() =>
@@ -311,10 +304,9 @@ describe('backups', () => {
   });
 
   test('rotates old snapshots away instead of growing without bound', () => {
-    process.env.HSW_BACKUP_RETAIN = '3';
-    const rotating = createServices();
-    rotating.get(IEnvironmentService).ensureDataDir();
-    const backups = rotating.get(IBackupService);
+    sandbox.setEnv('HSW_BACKUP_RETAIN', '3');
+    // A graph built after the limit is set, since the retain count is read at construction.
+    const backups = createTestServices().get(IBackupService);
 
     for (let index = 0; index < 6; index += 1) {
       backups.create('claude', `profile-${index}`, [
@@ -340,7 +332,7 @@ describe('backups', () => {
     const backups = services.get(IBackupService);
     expect(() =>
       backups.create('claude', 'demo', [
-        { key: 'settings', path: join(homeDir, 'elsewhere.json'), content: '{}' },
+        { key: 'settings', path: sandbox.home('elsewhere.json'), content: '{}' },
       ]),
     ).toThrow(/not a claude target/);
   });
@@ -357,7 +349,7 @@ describe('tampered backups', () => {
   test('ignores the path a manifest asks for and rewrites the adapter target', () => {
     const backups = services.get(IBackupService);
     const dir = backupOf(claudeSettings, 'settings', 'claude');
-    const victim = join(homeDir, 'victim.json');
+    const victim = sandbox.home('victim.json');
     seed(victim, 'untouched\n');
 
     const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
@@ -394,7 +386,7 @@ describe('tampered backups', () => {
     manifest.files[0].key = 'credentials';
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
 
-    const id = readdirSync(join(homeDir, '.harness-switch', 'backups'))[0]!;
+    const id = readdirSync(sandbox.data('backups'))[0]!;
     expect(() => backups.restore(id)).toThrow(/does not own/);
     // An unrestorable backup is dropped from the listing rather than breaking it.
     expect(backups.list()).toHaveLength(0);
@@ -408,7 +400,7 @@ describe('tampered backups', () => {
     manifest.harness = 'evil';
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
 
-    const id = readdirSync(join(homeDir, '.harness-switch', 'backups'))[0]!;
+    const id = readdirSync(sandbox.data('backups'))[0]!;
     expect(() => backups.restore(id)).toThrow(/backup not found/);
   });
 
@@ -420,14 +412,14 @@ describe('tampered backups', () => {
     manifest.files[0].stored = '../../../../etc/hostname';
     writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest));
 
-    const id = readdirSync(join(homeDir, '.harness-switch', 'backups'))[0]!;
+    const id = readdirSync(sandbox.data('backups'))[0]!;
     expect(() => backups.detail(id)).toThrow(/invalid backup payload name/);
   });
 
   test('refuses a payload that was swapped for a symlink', () => {
     const backups = services.get(IBackupService);
     const dir = backupOf(claudeSettings, 'settings', 'claude');
-    const secret = join(homeDir, 'secret.txt');
+    const secret = sandbox.home('secret.txt');
     seed(secret, 'root-only\n');
 
     const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
@@ -435,7 +427,7 @@ describe('tampered backups', () => {
     rmSync(payload);
     symlinkSync(secret, payload);
 
-    const id = readdirSync(join(homeDir, '.harness-switch', 'backups'))[0]!;
+    const id = readdirSync(sandbox.data('backups'))[0]!;
     expect(() => backups.detail(id)).toThrow(/不是普通文件/);
   });
 });

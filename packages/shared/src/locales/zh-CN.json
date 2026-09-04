@@ -188,7 +188,10 @@
           "help": "DSH 只会显示这里声明且上游模型实际支持的档位。",
           "option": {
             "unset": "不声明（提供方默认）",
-            "none": "模型不支持思考程度"
+            "none": "模型不支持思考程度",
+            "lowToMax": "Low / Medium / High / XHigh / Max",
+            "lowToXhigh": "Low / Medium / High / XHigh",
+            "minimalToHigh": "Minimal / Low / Medium / High"
           }
         }
       }
@@ -499,7 +502,9 @@
       "probeOk": "配置 {{profile}} 的端点可达",
       "probeFailed": "配置 {{profile}} 的连通性探测失败",
       "completionOk": "模型 {{model}} 补全成功（{{latencyMs}}ms）",
-      "completionFailed": "模型 {{model}} 补全失败：端点可达，但这个模型无法作答"
+      "completionFailed": "模型 {{model}} 补全失败：端点可达，但这个模型无法作答",
+      "completionOkCached": "模型 {{model}} 补全成功（{{latencyMs}}ms，缓存结果）",
+      "completionFailedCached": "模型 {{model}} 补全失败：端点可达，但这个模型无法作答（缓存结果）"
     }
   },
   "notice": {
@@ -614,20 +619,38 @@
       "loginCacheNotRegular": "Codex 登录缓存不是普通文件"
     },
     "transfer": {
-      "envelopeInvalid": "不支持的导出文件格式"
+      "envelopeInvalid": "不支持的导出文件格式",
+      "passphraseTooShort": "迁移密码至少需要 8 个字符",
+      "decryptFailed": "迁移密码错误或导出文件已损坏",
+      "tooManyProfiles": "导出文件包含过多配置",
+      "profilesInvalid": "导出文件中的配置数据无效",
+      "profileNameInvalid": "导出文件包含无效的配置名称",
+      "duplicateProfile": "导出文件包含重复的配置",
+      "providersInvalid": "导出文件中的凭据库数据无效",
+      "duplicateProvider": "导出文件包含重复的凭据库条目",
+      "providerMissing": "导出文件中的配置引用了不存在的凭据库条目",
+      "activeInvalid": "导出文件中的激活状态无效",
+      "duplicateActive": "导出文件包含重复的激活状态",
+      "activeProfileMissing": "导出文件中的激活状态引用了不存在的配置",
+      "officialActiveInvalid": "导出文件中的官方登录状态无效",
+      "codexCacheInvalid": "导出文件中的 Codex 登录缓存无效"
     },
     "sync": {
       "sourceCodexLoginCacheMissing": "源用户没有可用的 Codex 官方登录缓存",
       "sourceEqualsTarget": "源用户与目标用户相同",
       "invalidConflictPolicy": "冲突处理策略无效"
     },
-    "harness": { "notFound": "未找到工具" },
+    "harness": {
+      "notFound": "未找到工具"
+    },
     "file": {
       "notRegular": "{{file}} 不是普通文件",
       "outsideManagedDirectory": "{{file}} 位于可管理目录之外",
       "ownershipRequiresRoot": "修改 {{path}} 的所有权需要以 root 运行"
     },
-    "scan": { "apiKeyRequired": "这条配置里没有可提取的凭据，请先填写 API key" },
+    "scan": {
+      "apiKeyRequired": "这条配置里没有可提取的凭据，请先填写 API key"
+    },
     "backup": {
       "targetInvalid": "{{path}} 不是 {{harness}} 的有效备份目标",
       "invalidId": "备份 ID 无效",
@@ -691,6 +714,11 @@
     },
     "transfer": {
       "activeRestoreFailed": "未能恢复激活状态：{{reason}}"
+    },
+    "scan": {
+      "profileGone": "配置已不在磁盘上，已跳过",
+      "profileExists": "同名配置已存在，已跳过",
+      "importFailed": "导入失败：{{reason}}"
     }
   },
   "update": {

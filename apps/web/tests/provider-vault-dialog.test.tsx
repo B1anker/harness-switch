@@ -3,8 +3,7 @@ import type { ProviderPublic } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ApiError } from '@/lib/api';
-import { useAppStore } from '@/stores/app-store';
-import { providerFixture } from './fixtures';
+import { providerFixture, setStoreState } from './support';
 
 type Recorded = {
   created: unknown[][];
@@ -16,7 +15,7 @@ type Recorded = {
 
 function setup(providers: ProviderPublic[]): Recorded {
   const recorded: Recorded = { created: [], updated: [], deleted: [], loads: [], revealed: [] };
-  useAppStore.setState({
+  setStoreState({
     providers,
     providersLoading: false,
     providersError: null,
@@ -37,7 +36,7 @@ function setup(providers: ProviderPublic[]): Recorded {
       recorded.revealed.push(id);
       return { apiKey: 'sk-secret' };
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return recorded;
 }
 
@@ -191,15 +190,15 @@ test('deleting asks for confirmation first and deletes on confirm', async () => 
 });
 
 test('a referenced provider shows the 409 reason instead of deleting', async () => {
-  useAppStore.setState({
+  setStoreState({
     providers: [providerFixture()],
     deleteProvider: async () => {
       throw new ApiError(409, 'Provider 正被 2 个配置引用，请先移除这些引用再删除', {
         code: 'provider.inUse',
-        params: { count: 2 },
+        data: { count: 2 },
       });
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   renderDialog();
 
   fireEvent.click(screen.getByRole('button', { name: '删除 OpenRouter' }));

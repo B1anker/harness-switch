@@ -1,17 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import {
-  chmodSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ERROR_CODES, USER_BLOCK_CODES } from '@seaveyon/harness-switch-shared';
-import { createApp } from '../src/app';
 import { createServices } from '../src/bootstrap';
 import { IAuthService } from '../src/services/auth';
 import { IEnvironmentService, type LocalUser } from '../src/services/environment';
@@ -19,70 +9,66 @@ import { IFileService } from '../src/services/files';
 import { IProfileService } from '../src/services/profiles';
 import { IUserService } from '../src/services/users';
 import { IVaultService } from '../src/services/vault';
+import {
+  asSession,
+  createSandbox,
+  createTestApp,
+  loginAgain,
+  type Sandbox,
+  type TestApp,
+} from './support';
 
-let rootDir = '';
-const originalCodexHome = process.env.CODEX_HOME;
+let sandbox: Sandbox;
 
 beforeEach(() => {
-  rootDir = mkdtempSync(join(tmpdir(), 'hsw-users-'));
-  process.env.HSW_HOME_DIR = join(rootDir, 'owner');
-  process.env.HSW_DATA_DIR = join(rootDir, 'owner', '.harness-switch');
-  process.env.CODEX_HOME = join(rootDir, 'owner', '.codex');
+  // Peers live beside the service owner's home, so `owner` keeps the manager's store out
+  // of the directories these tests stand up as other accounts.
+  sandbox = createSandbox('hsw-users', {
+    owner: 'owner',
+    env: (home) => ({ CODEX_HOME: home('.codex') }),
+  });
 });
 
 afterEach(() => {
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  if (originalCodexHome === undefined) {
-    delete process.env.CODEX_HOME;
-  } else {
-    process.env.CODEX_HOME = originalCodexHome;
-  }
-  rmSync(rootDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 describe('local Unix users', () => {
   test('keeps each browser session on its own selected user', async () => {
-    const { app, firstCookie, secondCookie, owner, peer } = await setup();
+    const { first, second, owner, peer } = await setup();
 
-    expect((await json(app, '/api/users', firstCookie)).currentUser).toBe(owner.username);
-    expect(
-      (
-        await json(app, `/api/users/${peer.username}/select`, firstCookie, {
-          method: 'POST',
-        })
-      ).currentUser,
-    ).toBe(peer.username);
-    expect((await json(app, '/api/users', firstCookie)).currentUser).toBe(peer.username);
-    expect((await json(app, '/api/users', secondCookie)).currentUser).toBe(owner.username);
+    expect((await first.json<Body>('/api/users')).currentUser).toBe(owner.username);
+    expect((await first.postJson<Body>(`/api/users/${peer.username}/select`)).currentUser).toBe(
+      peer.username,
+    );
+    expect((await first.json<Body>('/api/users')).currentUser).toBe(peer.username);
+    expect((await second.json<Body>('/api/users')).currentUser).toBe(owner.username);
   });
 
   test('refuses to switch to a user whose files this process cannot manage', async () => {
-    const { app, firstCookie, services, owner } = await setup();
+    const { first, services, owner } = await setup();
     const users = services.get(IUserService);
     // A peer with no home on disk: the manager could not create its store.
     const stranger: LocalUser = {
       username: 'stranger-test',
       uid: owner.uid,
       gid: owner.gid,
-      homeDir: join(rootDir, 'stranger-missing'),
+      homeDir: sandbox.root('stranger-missing'),
     };
     users.list = () => [owner, stranger];
 
-    const listed = await json(app, '/api/users', firstCookie);
+    const listed = await first.json<Body>('/api/users');
     expect(listed.items).toMatchObject([
       { username: owner.username, manageable: true },
       { username: stranger.username, manageable: false, blockCode: USER_BLOCK_CODES.homeMissing },
     ]);
-    // The reason travels as prose for the CLI and as params for the web UI.
+    // The message stays path-free for the narrow account menu; the path travels as
+    // data, which is what the UI puts in the tooltip.
     const blocked = listed.items[1];
-    expect(blocked.blockReason).toContain(stranger.homeDir);
-    expect(blocked.blockParams).toMatchObject({ home: stranger.homeDir });
+    expect(blocked.blockData).toMatchObject({ home: stranger.homeDir });
+    expect(blocked.blockMsg).toBe('主目录不存在');
 
-    const response = await app.request(`/api/users/${stranger.username}/select`, {
-      method: 'POST',
-      headers: { Cookie: firstCookie },
-    });
+    const response = await first.post(`/api/users/${stranger.username}/select`);
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({
       code: ERROR_CODES.userNotSwitchable,
@@ -90,11 +76,11 @@ describe('local Unix users', () => {
       msg: expect.any(String),
     });
     // The refusal must not have moved the session.
-    expect((await json(app, '/api/users', firstCookie)).currentUser).toBe(owner.username);
+    expect((await first.json<Body>('/api/users')).currentUser).toBe(owner.username);
   });
 
   test('copies profiles and vault credentials but not active state', async () => {
-    const { app, firstCookie, services, owner, peer } = await setup();
+    const { first, services, owner, peer } = await setup();
     const environment = services.get(IEnvironmentService);
     const vault = services.get(IVaultService);
     const profiles = services.get(IProfileService);
@@ -117,9 +103,8 @@ describe('local Unix users', () => {
       );
     });
 
-    const preview = await json(app, '/api/users/sync/preview', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({ sourceUser: peer.username }),
+    const preview = await first.postJson<Body>('/api/users/sync/preview', {
+      sourceUser: peer.username,
     });
     expect(preview).toMatchObject({
       sourceUser: peer.username,
@@ -129,13 +114,13 @@ describe('local Unix users', () => {
       conflicts: [],
     });
 
-    const result = await json(app, '/api/users/sync', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({ sourceUser: peer.username, conflictPolicy: 'skip' }),
+    const result = await first.postJson<Body>('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
     });
     expect(result).toMatchObject({ imported: 1, providersCopied: 1 });
     expect(profiles.decrypt('claude', 'peer-main').apiKey).toBe('sk-peer-secret');
-    expect(services.get(IAuthService).userForToken(cookieToken(firstCookie))).toBe(owner.username);
+    expect(services.get(IAuthService).userForToken(cookieToken(first.cookie))).toBe(owner.username);
     expect(services.get(IFileService).readOptional(environment.files.active)).toBeUndefined();
 
     const raw = readFileSync(environment.files.profiles, 'utf8');
@@ -143,7 +128,7 @@ describe('local Unix users', () => {
   });
 
   test('overwrites same-name profiles only for explicitly selected harnesses', async () => {
-    const { app, firstCookie, services, peer } = await setup();
+    const { first, services, peer } = await setup();
     const environment = services.get(IEnvironmentService);
     const vault = services.get(IVaultService);
     const profiles = services.get(IProfileService);
@@ -197,22 +182,18 @@ describe('local Unix users', () => {
       );
     });
 
-    const preview = await json(app, '/api/users/sync/preview', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({ sourceUser: peer.username }),
+    const preview = await first.postJson<Body>('/api/users/sync/preview', {
+      sourceUser: peer.username,
     });
     expect(preview.conflicts).toEqual([
       { harness: 'claude', name: 'shared' },
       { harness: 'kimi', name: 'shared' },
     ]);
 
-    const result = await json(app, '/api/users/sync', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({
-        sourceUser: peer.username,
-        conflictPolicy: 'skip',
-        overwriteHarnesses: ['claude'],
-      }),
+    const result = await first.postJson<Body>('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
+      overwriteHarnesses: ['claude'],
     });
     expect(result).toMatchObject({ overwritten: 1, skipped: 1, providersCopied: 1 });
     expect(profiles.get('claude', 'shared')).toMatchObject({
@@ -225,7 +206,7 @@ describe('local Unix users', () => {
   });
 
   test('reports and overwrites only same-name profiles whose content differs', async () => {
-    const { app, firstCookie, services, peer } = await setup();
+    const { first, services, peer } = await setup();
     const environment = services.get(IEnvironmentService);
     const vault = services.get(IVaultService);
     const profiles = services.get(IProfileService);
@@ -272,25 +253,21 @@ describe('local Unix users', () => {
       }
     });
 
-    const preview = await json(app, '/api/users/sync/preview', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({ sourceUser: peer.username }),
+    const preview = await first.postJson<Body>('/api/users/sync/preview', {
+      sourceUser: peer.username,
     });
     expect(preview.conflicts).toEqual([{ harness: 'claude', name: 'cpa' }]);
 
-    const result = await json(app, '/api/users/sync', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({
-        sourceUser: peer.username,
-        conflictPolicy: 'skip',
-        overwriteHarnesses: ['claude', ...matchingHarnesses],
-      }),
+    const result = await first.postJson<Body>('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
+      overwriteHarnesses: ['claude', ...matchingHarnesses],
     });
     expect(result).toMatchObject({ overwritten: 1, skipped: 3, providersCopied: 1 });
   });
 
   test('copies a Codex login cache only with explicit confirmation', async () => {
-    const { app, firstCookie, owner, peer } = await setup();
+    const { first, owner, peer } = await setup();
     const sourceAuth = join(peer.homeDir, '.codex', 'auth.json');
     const targetAuth = join(owner.homeDir, '.codex', 'auth.json');
     const sourceCache = '{"tokens":{"access_token":"source-login-session"}}\n';
@@ -301,9 +278,8 @@ describe('local Unix users', () => {
       mode: 0o644,
     });
 
-    const preview = await json(app, '/api/users/sync/preview', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({ sourceUser: peer.username }),
+    const preview = await first.postJson<Body>('/api/users/sync/preview', {
+      sourceUser: peer.username,
     });
     expect(preview.codexLoginCache).toEqual({
       available: true,
@@ -311,20 +287,17 @@ describe('local Unix users', () => {
       migrationNeeded: true,
     });
 
-    const unchanged = await json(app, '/api/users/sync', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({ sourceUser: peer.username, conflictPolicy: 'skip' }),
+    const unchanged = await first.postJson<Body>('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
     });
     expect(unchanged.codexLoginCacheMigrated).toBe(false);
     expect(readFileSync(targetAuth, 'utf8')).toContain('target-login-session');
 
-    const migrated = await json(app, '/api/users/sync', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({
-        sourceUser: peer.username,
-        conflictPolicy: 'skip',
-        migrateCodexLoginCache: true,
-      }),
+    const migrated = await first.postJson<Body>('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
+      migrateCodexLoginCache: true,
     });
     expect(migrated.codexLoginCacheMigrated).toBe(true);
     expect(readFileSync(sourceAuth, 'utf8')).toBe(sourceCache);
@@ -333,9 +306,8 @@ describe('local Unix users', () => {
 
     const equivalentCache = '{\n  "tokens": { "access_token": "source-login-session" }\n}\n';
     writeFileSync(targetAuth, equivalentCache, { mode: 0o600 });
-    const matchingPreview = await json(app, '/api/users/sync/preview', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({ sourceUser: peer.username }),
+    const matchingPreview = await first.postJson<Body>('/api/users/sync/preview', {
+      sourceUser: peer.username,
     });
     expect(matchingPreview.codexLoginCache).toEqual({
       available: true,
@@ -343,20 +315,17 @@ describe('local Unix users', () => {
       migrationNeeded: false,
     });
 
-    const redundant = await json(app, '/api/users/sync', firstCookie, {
-      method: 'POST',
-      body: JSON.stringify({
-        sourceUser: peer.username,
-        conflictPolicy: 'skip',
-        migrateCodexLoginCache: true,
-      }),
+    const redundant = await first.postJson<Body>('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
+      migrateCodexLoginCache: true,
     });
     expect(redundant.codexLoginCacheMigrated).toBe(false);
     expect(readFileSync(targetAuth, 'utf8')).toBe(equivalentCache);
   });
 
   test('rejects a malformed requested Codex login cache before touching the target', async () => {
-    const { app, firstCookie, owner, peer } = await setup();
+    const { first, owner, peer } = await setup();
     const sourceAuth = join(peer.homeDir, '.codex', 'auth.json');
     const targetAuth = join(owner.homeDir, '.codex', 'auth.json');
     mkdirSync(join(peer.homeDir, '.codex'), { recursive: true, mode: 0o700 });
@@ -364,29 +333,21 @@ describe('local Unix users', () => {
     writeFileSync(sourceAuth, '[]\n', { mode: 0o600 });
     writeFileSync(targetAuth, '{"tokens":{"access_token":"keep-me"}}\n', { mode: 0o600 });
 
-    const response = await app.request('/api/users/sync', {
-      method: 'POST',
-      headers: { Cookie: firstCookie, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sourceUser: peer.username,
-        conflictPolicy: 'skip',
-        migrateCodexLoginCache: true,
-      }),
+    const response = await first.post('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
+      migrateCodexLoginCache: true,
     });
     expect(response.status).toBe(400);
     expect(readFileSync(targetAuth, 'utf8')).toContain('keep-me');
   });
 
   test('rejects unknown harness ids in a selective overwrite request', async () => {
-    const { app, firstCookie, peer } = await setup();
-    const response = await app.request('/api/users/sync', {
-      method: 'POST',
-      headers: { Cookie: firstCookie, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sourceUser: peer.username,
-        conflictPolicy: 'skip',
-        overwriteHarnesses: ['gemini'],
-      }),
+    const { first, peer } = await setup();
+    const response = await first.post('/api/users/sync', {
+      sourceUser: peer.username,
+      conflictPolicy: 'skip',
+      overwriteHarnesses: ['gemini'],
     });
     expect(response.status).toBe(400);
   });
@@ -404,7 +365,7 @@ describe('local Unix users', () => {
         username: 'unreadable-test',
         uid: process.getuid?.() ?? 0,
         gid: process.getgid?.() ?? 0,
-        homeDir: join(rootDir, 'unreadable'),
+        homeDir: sandbox.root('unreadable'),
       };
       mkdirSync(blocked.homeDir, { recursive: true });
       chmodSync(blocked.homeDir, 0o000);
@@ -430,7 +391,7 @@ describe('local Unix users', () => {
       username: 'ownership-test',
       uid: process.getuid?.() ?? 0,
       gid: process.getgid?.() ?? 0,
-      homeDir: join(rootDir, 'ownership'),
+      homeDir: sandbox.root('ownership'),
     };
     environment.runAsUser(target, () => {
       const path = join(target.homeDir, '.claude', 'settings.json');
@@ -441,7 +402,22 @@ describe('local Unix users', () => {
   });
 });
 
-async function setup() {
+/** The loosely-typed JSON these routes return; asserted with `toMatchObject` throughout. */
+type Body = Record<string, any>;
+
+/**
+ * An app with two browser sessions and a switchable second account.
+ *
+ * The peer is a real directory owned by this process rather than a genuine Unix user, so
+ * the access probe reports it as manageable without the suite needing root.
+ */
+async function setup(): Promise<{
+  first: TestApp;
+  second: TestApp;
+  services: TestApp['services'];
+  owner: LocalUser;
+  peer: LocalUser;
+}> {
   const services = createServices();
   const environment = services.get(IEnvironmentService);
   environment.ensureDataDir();
@@ -450,45 +426,15 @@ async function setup() {
     username: 'alice-test',
     uid: owner.uid,
     gid: owner.gid,
-    homeDir: join(rootDir, 'alice'),
+    homeDir: sandbox.root('alice'),
   };
-  // The access probe reports an account with no home as unmanageable, so the peer needs
-  // a real directory to stand in for a switchable second user.
   mkdirSync(peer.homeDir, { recursive: true });
-  const users = services.get(IUserService);
-  users.list = () => [owner, peer];
-  const app = createApp(services);
-  const password = services.get(IAuthService).ensurePassword();
-  const firstCookie = await login(app, password);
-  const secondCookie = await login(app, password);
-  return { app, services, owner, peer, firstCookie, secondCookie };
-}
+  // The user list is stubbed before the app boots, so every route sees the same two.
+  services.get(IUserService).list = () => [owner, peer];
 
-async function login(app: ReturnType<typeof createApp>, password: string): Promise<string> {
-  const response = await app.request('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  return response.headers.get('set-cookie') ?? '';
-}
-
-async function json(
-  app: ReturnType<typeof createApp>,
-  path: string,
-  cookie: string,
-  init: RequestInit = {},
-): Promise<Record<string, any>> {
-  const response = await app.request(path, {
-    ...init,
-    headers: {
-      Cookie: cookie,
-      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
-      ...init.headers,
-    },
-  });
-  expect(response.status).toBeLessThan(400);
-  return (await response.json()) as Record<string, any>;
+  const first = await createTestApp({ services });
+  const second = asSession(first, await loginAgain(first));
+  return { first, second, services: first.services, owner, peer };
 }
 
 function cookieToken(cookie: string): string {

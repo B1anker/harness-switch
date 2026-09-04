@@ -1,85 +1,39 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createApp } from '../src/app';
-import { createServices } from '../src/bootstrap';
 import { parseArgs } from '../src/cli/args';
 import { runCli } from '../src/cli/commands';
+import type { InstantiationService } from '../src/di';
 import { IAuthService } from '../src/services/auth';
-import { IEnvironmentService } from '../src/services/environment';
 import { IProfileService } from '../src/services/profiles';
 import { IVaultService } from '../src/services/vault';
+import { createSandbox, createTestServices, loopbackOnly, type Sandbox } from './support';
 
-let homeDir = '';
-let dataDir = '';
+let sandbox: Sandbox;
+let services: InstantiationService;
 let server: ReturnType<typeof Bun.serve>;
 let baseUrl = '';
-let services: ReturnType<typeof createServices>;
-let originalUrl: string | undefined;
-let originalPort: string | undefined;
-let originalFetch: typeof globalThis.fetch;
-let originalUpdateCheck: string | undefined;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(join(tmpdir(), 'hsw-cli-'));
-  dataDir = join(homeDir, '.harness-switch');
-  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = dataDir;
-  process.env.CODEX_HOME = join(homeDir, '.codex');
-  services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
-  const password = services.get(IAuthService).ensurePassword();
+  sandbox = createSandbox('hsw-cli', {
+    env: (home) => ({ CODEX_HOME: home('.codex'), HSW_UPDATE_CHECK: '0', PORT: undefined }),
+  });
+  services = createTestServices();
   // The CLI logs in with the same password file the daemon would have written.
-  writeFileSync(join(dataDir, 'web_password'), `${password}\n`, { mode: 0o600 });
+  services.get(IAuthService).ensurePassword();
 
-  const app = createApp(services);
-  server = Bun.serve({ port: 0, fetch: app.fetch });
+  server = Bun.serve({ port: 0, fetch: createApp(services).fetch });
   baseUrl = `http://127.0.0.1:${server.port}`;
+  sandbox.setEnv('HSW_URL', baseUrl);
 
-  originalUrl = process.env.HSW_URL;
-  originalPort = process.env.PORT;
-  originalUpdateCheck = process.env.HSW_UPDATE_CHECK;
-  process.env.HSW_URL = baseUrl;
-  process.env.HSW_UPDATE_CHECK = '0';
-  delete process.env.PORT;
-
-  // The doctor update check must never hit the real network in tests, but the
-  // CLI itself talks to the local test server over fetch, so only block
-  // non-localhost requests.
-  originalFetch = globalThis.fetch;
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-    if (!url.startsWith('http://127.0.0.1:') && !url.startsWith('http://localhost:')) {
-      throw new Error('offline');
-    }
-    return originalFetch(input, init);
-  }) as typeof globalThis.fetch;
+  // The doctor update check must never hit the real network, but the CLI itself talks to
+  // the local test server over fetch, so only non-loopback requests are refused.
+  sandbox.stubFetch(loopbackOnly());
 });
 
 afterEach(() => {
   server.stop();
-  delete process.env.HSW_HOME_DIR;
-  delete process.env.HSW_DATA_DIR;
-  delete process.env.CODEX_HOME;
-  if (originalUrl === undefined) {
-    delete process.env.HSW_URL;
-  } else {
-    process.env.HSW_URL = originalUrl;
-  }
-  if (originalPort === undefined) {
-    delete process.env.PORT;
-  } else {
-    process.env.PORT = originalPort;
-  }
-  if (originalUpdateCheck === undefined) {
-    delete process.env.HSW_UPDATE_CHECK;
-  } else {
-    process.env.HSW_UPDATE_CHECK = originalUpdateCheck;
-  }
-  globalThis.fetch = originalFetch;
-  rmSync(homeDir, { recursive: true, force: true });
+  sandbox.dispose();
 });
 
 async function run(command: string, argv: string[]): Promise<{ code: number; logs: string[] }> {
@@ -158,7 +112,7 @@ describe('cli', () => {
   test('each command logs out its temporary API session', async () => {
     const { code } = await run('list', ['--json']);
     expect(code).toBe(0);
-    const store = JSON.parse(await Bun.file(join(dataDir, 'sessions.json')).text()) as {
+    const store = JSON.parse(await Bun.file(sandbox.data('sessions.json')).text()) as {
       sessions: Record<string, unknown>;
     };
     expect(Object.keys(store.sessions)).toHaveLength(0);
@@ -192,29 +146,25 @@ describe('cli', () => {
   });
 
   test('create and profiles support safe credentials from the environment', async () => {
-    process.env.HSW_TEST_API_KEY = 'sk-from-env';
-    try {
-      const created = await run('create', [
-        'claude',
-        'automation',
-        '--base-url',
-        'https://api.example.com/v1',
-        '--model',
-        'claude-sonnet-4-5',
-        '--api-key-env',
-        'HSW_TEST_API_KEY',
-        '--json',
-      ]);
-      expect(created.code).toBe(0);
-      expect(JSON.parse(created.logs.join('\n')).name).toBe('automation');
+    sandbox.setEnv('HSW_TEST_API_KEY', 'sk-from-env');
+    const created = await run('create', [
+      'claude',
+      'automation',
+      '--base-url',
+      'https://api.example.com/v1',
+      '--model',
+      'claude-sonnet-4-5',
+      '--api-key-env',
+      'HSW_TEST_API_KEY',
+      '--json',
+    ]);
+    expect(created.code).toBe(0);
+    expect(JSON.parse(created.logs.join('\n')).name).toBe('automation');
 
-      const listed = await run('profiles', ['claude', '--json']);
-      const payload = JSON.parse(listed.logs.join('\n')) as { items: Array<{ name: string }> };
-      expect(payload.items.map((item) => item.name)).toEqual(['automation']);
-      expect(JSON.stringify(payload)).not.toContain('sk-from-env');
-    } finally {
-      delete process.env.HSW_TEST_API_KEY;
-    }
+    const listed = await run('profiles', ['claude', '--json']);
+    const payload = JSON.parse(listed.logs.join('\n')) as { items: Array<{ name: string }> };
+    expect(payload.items.map((item) => item.name)).toEqual(['automation']);
+    expect(JSON.stringify(payload)).not.toContain('sk-from-env');
   });
 
   test('delete --yes removes an inactive profile', async () => {
@@ -246,7 +196,7 @@ describe('cli', () => {
     expect(payload.harness).toBe('claude');
     expect(payload.warnings).toEqual([]);
     const settings = JSON.parse(
-      await Bun.file(join(homeDir, '.claude', 'settings.json')).text(),
+      await Bun.file(sandbox.home('.claude', 'settings.json')).text(),
     ) as { env: Record<string, string> };
     expect(settings.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-test');
   });
@@ -290,7 +240,12 @@ describe('cli', () => {
     const child = Bun.spawn({
       cmd: [process.execPath, 'src/main.ts', 'list', '--json'],
       cwd: join(import.meta.dir, '..'),
-      env: { ...process.env, HSW_URL: baseUrl, HSW_DATA_DIR: dataDir, HSW_HOME_DIR: homeDir },
+      env: {
+        ...process.env,
+        HSW_URL: baseUrl,
+        HSW_DATA_DIR: sandbox.dataDir,
+        HSW_HOME_DIR: sandbox.homeDir,
+      },
       stdout: 'pipe',
       stderr: 'pipe',
     });

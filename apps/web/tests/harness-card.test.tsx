@@ -1,21 +1,12 @@
-import { afterEach, beforeEach, expect, test } from '@rstest/core';
+import { beforeEach, expect, test } from '@rstest/core';
 import type { ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { HarnessCard } from '@/components/harness-card';
-import { harnessFixture, profileFixture, stubStoreActions } from './fixtures';
-
-const realFetch = globalThis.fetch;
+import { harnessFixture, profileFixture, status, stubFetch, stubStoreActions } from './support';
 
 beforeEach(() => {
   // The activation dialog fetches a preview on open; keep it offline in unit tests.
-  globalThis.fetch = (async () => ({
-    ok: false,
-    json: async () => ({ error: 'offline' }),
-  })) as unknown as typeof fetch;
-});
-
-afterEach(() => {
-  globalThis.fetch = realFetch;
+  stubFetch(() => status(500, { error: 'offline' }));
 });
 
 test('shows the active profile and marks the one taken over by hand', () => {

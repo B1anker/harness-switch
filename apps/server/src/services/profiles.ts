@@ -126,7 +126,9 @@ export class ProfileService implements IProfileService {
     const copySourceName = isCreate ? input.copySourceName?.trim() : undefined;
     this.assertName(name);
     this.assertName(sourceName);
-    if (copySourceName) this.assertName(copySourceName);
+    if (copySourceName) {
+      this.assertName(copySourceName);
+    }
     const store = this.read();
     store[harness] ||= {};
     const prior = store[harness][sourceName];
@@ -319,13 +321,18 @@ export class ProfileService implements IProfileService {
   private repairEndpointReferences(store: ProfileStore, harness: HarnessId): boolean {
     let changed = false;
     for (const stored of Object.values(store[harness] ?? {})) {
-      if (!stored.provider_id || !stored.provider_endpoint) continue;
+      if (!stored.provider_id || !stored.provider_endpoint) {
+        continue;
+      }
       try {
         const provider = this.vault.get(stored.provider_id);
-        if (provider.endpoints.some((endpoint) => endpoint.key === stored.provider_endpoint))
+        if (provider.endpoints.some((endpoint) => endpoint.key === stored.provider_endpoint)) {
           continue;
+        }
         const fallback = provider.endpoints[0];
-        if (!fallback) continue;
+        if (!fallback) {
+          continue;
+        }
         stored.provider_endpoint = fallback.key;
         stored.base_url = fallback.baseUrl;
         changed = true;

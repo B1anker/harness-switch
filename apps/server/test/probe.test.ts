@@ -1,14 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { ProbeResult } from '@seaveyon/harness-switch-shared';
 import { PROBE_CODES } from '@seaveyon/harness-switch-shared';
-import { createApp } from '../src/app';
-import { createServices } from '../src/bootstrap';
-import { IAuthService } from '../src/services/auth';
-import { IEnvironmentService } from '../src/services/environment';
+import { HttpClient } from '../src/services/http-client';
 import { extractCompletionText, extractModels, ProbeService } from '../src/services/probe';
+import { createSandbox, createTestApp, type Sandbox, stubFetch, type TestApp } from './support';
 
 /**
  * A local relay that speaks enough of the model-catalog contract to exercise every
@@ -109,6 +104,15 @@ function startCompletionRelay(answer: (path: string) => Response): CompletionRel
   return { stop: () => server.stop(true), port: server.port!, completions };
 }
 
+/** A draft probe in English, so the asserted prose is the untranslated message. */
+function draftProbe(context: TestApp, body: unknown): Promise<Response> {
+  return context.request('/api/probe', {
+    method: 'POST',
+    headers: { 'Accept-Language': 'en-US' },
+    body: JSON.stringify(body),
+  });
+}
+
 /** An OpenAI chat envelope carrying one token of assistant text. */
 function chatReply(): Response {
   return Response.json({
@@ -118,7 +122,7 @@ function chatReply(): Response {
 
 describe('probe service', () => {
   // Dependency-free by design, so tests build it directly.
-  const probe = new ProbeService();
+  const probe = new ProbeService(new HttpClient());
 
   test('rejects a missing base URL and key before any request', async () => {
     const noUrl = await probe.probe({ baseUrl: '', apiKey: 'sk' });
@@ -194,7 +198,7 @@ describe('probe service', () => {
       });
       expect(result.ok).toBe(false);
       expect(result.code).toBe(PROBE_CODES.unauthorized);
-      expect(result.params?.status).toBe(401);
+      expect(result.data?.status).toBe(401);
     } finally {
       relay.stop();
     }
@@ -218,14 +222,13 @@ describe('probe service', () => {
     const oversized = new Response(JSON.stringify({ data: [{ id: 'too-large' }] }), {
       headers: { 'content-length': String(4 * 1024 * 1024 + 1) },
     });
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => oversized) as unknown as typeof fetch;
+    const restore = stubFetch(() => oversized);
     try {
       const result = await probe.probe({ baseUrl: 'https://api.example.com/v1', apiKey: 'sk' });
       expect(result.ok).toBe(false);
       expect(result.code).toBe(PROBE_CODES.invalidResponse);
     } finally {
-      globalThis.fetch = originalFetch;
+      restore();
     }
   });
 
@@ -258,7 +261,7 @@ describe('probe service', () => {
 /* ------------------------------------------------------------------ */
 
 describe('completion probe', () => {
-  const probe = new ProbeService();
+  const probe = new ProbeService(new HttpClient());
 
   test('no completion is sent unless it was asked for', async () => {
     const relay = startCompletionRelay(chatReply);
@@ -296,7 +299,7 @@ describe('completion probe', () => {
       expect(result.completion?.code).toBe(PROBE_CODES.completionHttpError);
       expect(result.completion?.status).toBe(500);
       // The model name is the detail that makes the failure actionable.
-      expect(result.completion?.params?.model).toBe('relay-model');
+      expect(result.completion?.data?.model).toBe('relay-model');
       expect(result.completion?.model).toBe('relay-model');
       expect(result.completion?.protocol).toBe('openai-chat');
     } finally {
@@ -529,42 +532,24 @@ describe('completion probe', () => {
 /* ------------------------------------------------------------------ */
 
 describe('probe api', () => {
-  let homeDir = '';
+  let sandbox: Sandbox;
   let relay: ReturnType<typeof startRelay> | undefined;
 
-  type TestApp = {
-    app: ReturnType<typeof createApp>;
-    cookie: string;
-  };
+  beforeEach(() => {
+    sandbox = createSandbox('hsw-probe', { env: (home) => ({ CODEX_HOME: home('.codex') }) });
+  });
 
-  async function createTestApp(): Promise<TestApp> {
-    homeDir = await mkdtemp(join(tmpdir(), 'hsw-probe-'));
-    process.env.HSW_HOME_DIR = homeDir;
-    process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-    process.env.CODEX_HOME = join(homeDir, '.codex');
-    const services = createServices();
-    services.get(IEnvironmentService).ensureDataDir();
-    const password = services.get(IAuthService).ensurePassword();
-    const app = createApp(services);
-    const login = await app.request('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    expect(login.status).toBe(200);
-    return { app, cookie: login.headers.get('set-cookie') ?? '' };
-  }
-
-  afterEach(async () => {
-    delete process.env.HSW_HOME_DIR;
-    delete process.env.HSW_DATA_DIR;
-    delete process.env.CODEX_HOME;
-    if (homeDir) {
-      await rm(homeDir, { recursive: true, force: true });
-    }
+  afterEach(() => {
     relay?.stop();
     relay = undefined;
+    sandbox.dispose();
   });
+
+  /** The relay's catalog URL, started on demand so each test owns its own port. */
+  function relayUrl(): string {
+    relay = startRelay();
+    return `http://127.0.0.1:${relay.port}`;
+  }
 
   test('requires authentication', async () => {
     const { app } = await createTestApp();
@@ -576,20 +561,8 @@ describe('probe api', () => {
   });
 
   test('draft probe resolves inline keys and never echoes them', async () => {
-    const { app, cookie } = await createTestApp();
-    relay = startRelay();
-    const response = await app.request('/api/probe', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookie,
-        'Accept-Language': 'en-US',
-      },
-      body: JSON.stringify({
-        baseUrl: `http://127.0.0.1:${relay.port}`,
-        apiKey: 'sk-test',
-      }),
-    });
+    const context = await createTestApp();
+    const response = await draftProbe(context, { baseUrl: relayUrl(), apiKey: 'sk-test' });
     expect(response.status).toBe(200);
     const raw = await response.text();
     const body = JSON.parse(raw) as { result: ProbeResult };
@@ -599,17 +572,8 @@ describe('probe api', () => {
   });
 
   test('draft probe reports a missing credential as a structured failure', async () => {
-    const { app, cookie } = await createTestApp();
-    relay = startRelay();
-    const response = await app.request('/api/probe', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: cookie,
-        'Accept-Language': 'en-US',
-      },
-      body: JSON.stringify({ baseUrl: `http://127.0.0.1:${relay.port}` }),
-    });
+    const context = await createTestApp();
+    const response = await draftProbe(context, { baseUrl: relayUrl() });
     expect(response.status).toBe(200);
     const body = (await response.json()) as { result: ProbeResult };
     expect(body.result.ok).toBe(false);
@@ -619,60 +583,41 @@ describe('probe api', () => {
   });
 
   test('vault probe tests the stored credential against its endpoint', async () => {
-    const { app, cookie } = await createTestApp();
-    relay = startRelay();
-    const created = await app.request('/api/providers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
-      body: JSON.stringify({
-        name: 'acme',
-        apiKey: 'sk-test',
-        endpoints: [{ key: 'default', baseUrl: `http://127.0.0.1:${relay.port}` }],
-      }),
+    const context = await createTestApp();
+    const created = await context.post('/api/providers', {
+      name: 'acme',
+      apiKey: 'sk-test',
+      endpoints: [{ key: 'default', baseUrl: relayUrl() }],
     });
     expect(created.status).toBe(201);
     const { provider } = (await created.json()) as { provider: { id: string } };
 
-    const response = await app.request(`/api/providers/${provider.id}/probe`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
-      body: JSON.stringify({}),
-    });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { result: ProbeResult };
+    const body = await context.postJson<{ result: ProbeResult }>(
+      `/api/providers/${provider.id}/probe`,
+      {},
+    );
     expect(body.result.ok).toBe(true);
     expect(body.result.models?.length).toBeGreaterThan(0);
   });
 
   test('saved-profile probe uses stored credentials end to end', async () => {
-    const { app, cookie } = await createTestApp();
-    relay = startRelay();
-    const created = await app.request('/api/harnesses/claude/profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
-      body: JSON.stringify({
-        name: 'local-relay',
-        baseUrl: `http://127.0.0.1:${relay.port}`,
-        apiKey: 'sk-test',
-      }),
+    const context = await createTestApp();
+    const created = await context.post('/api/harnesses/claude/profiles', {
+      name: 'local-relay',
+      baseUrl: relayUrl(),
+      apiKey: 'sk-test',
     });
     expect(created.status).toBe(201);
 
-    const response = await app.request('/api/harnesses/claude/profiles/local-relay/probe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: cookie },
-      body: JSON.stringify({}),
-    });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { result: ProbeResult };
+    const body = await context.postJson<{ result: ProbeResult }>(
+      '/api/harnesses/claude/profiles/local-relay/probe',
+      {},
+    );
     expect(body.result.ok).toBe(true);
     expect(body.result.models).toContain('gpt-test-a');
 
     // Unknown profiles stay a plain 404.
-    const missing = await app.request('/api/harnesses/claude/profiles/none/probe', {
-      method: 'POST',
-      headers: { Cookie: cookie },
-    });
+    const missing = await context.post('/api/harnesses/claude/profiles/none/probe');
     expect(missing.status).toBe(404);
   });
 });

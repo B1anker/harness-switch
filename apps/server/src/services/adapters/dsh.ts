@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
-import type { IEnvironmentService } from '../environment';
+import { BaseAdapter } from './base';
 import {
   providerId as baseProviderId,
   compact,
@@ -33,109 +33,101 @@ const DEFAULT_MAX_TOKENS = 32768;
  * `agent-default-model` namespace, so activating a profile both registers its route
  * and selects it for newly created sessions.
  */
-export class DshAdapter implements HarnessAdapter {
+export class DshAdapter extends BaseAdapter implements HarnessAdapter {
   readonly id = 'dsh' as const;
   readonly mode: HarnessMode = 'additive';
   readonly modelRequired = true;
   readonly envVarNames: string[] = [];
   readonly envNote = 'API key 安全写入 DSH 的 .credentials.yaml，并由 settings.yaml 引用。';
   readonly envNoteCode = 'harness.field.dsh.envNote';
+  protected readonly requires = ['model', 'apiKey'] as const;
   readonly officialNeedsCurrent = true;
 
   readonly fields: FieldSpec[] = [
     {
       key: 'providerType',
-      label: '提供方类型',
       labelCode: 'harness.field.dsh.providerType.label',
       kind: 'select',
       defaultValue: 'custom',
       options: [
         {
           value: 'custom',
-          label: '自定义提供方',
           labelCode: 'harness.field.dsh.providerType.option.custom',
         },
         {
           value: 'official',
-          label: 'DeepSeek 官方',
           labelCode: 'harness.field.dsh.providerType.option.official',
         },
       ],
     },
     {
       key: 'providerId',
-      label: 'Provider ID（可选）',
       labelCode: 'harness.field.providerId.label',
       kind: 'text',
-      placeholder: '默认取配置名称',
       placeholderCode: 'harness.field.providerId.placeholder',
-      help: 'DSH 的模型路由标识；必须以小写字母开头。',
       helpCode: 'harness.field.dsh.providerId.help',
     },
     {
       key: 'models',
-      label: '模型目录（可选）',
       labelCode: 'harness.field.dsh.models.label',
       kind: 'textarea',
       fullWidth: true,
-      placeholder: '每行一个模型 ID；留空时只注册上方的默认模型',
       placeholderCode: 'harness.field.dsh.models.placeholder',
-      help: '一个提供方可注册多个模型；上方“模型”作为新会话的默认模型。',
       helpCode: 'harness.field.dsh.models.help',
     },
     {
       key: 'api',
-      label: 'API 协议',
       labelCode: 'harness.field.dsh.api.label',
       kind: 'select',
       defaultValue: DEFAULT_API,
       options: [
-        { value: 'openai-responses', label: 'openai-responses' },
-        { value: 'openai-completions', label: 'openai-completions' },
-        { value: 'anthropic-messages', label: 'anthropic-messages' },
+        { value: 'openai-responses' },
+        { value: 'openai-completions' },
+        { value: 'anthropic-messages' },
       ],
     },
     {
       key: 'contextWindow',
-      label: '上下文长度',
       labelCode: 'harness.field.contextLength.label',
       kind: 'text',
       defaultValue: String(DEFAULT_CONTEXT),
     },
     {
       key: 'maxTokens',
-      label: '最大输出 tokens',
       labelCode: 'harness.field.maxTokens.label',
       kind: 'text',
       defaultValue: String(DEFAULT_MAX_TOKENS),
     },
     {
       key: 'reasoningEfforts',
-      label: '支持的思考程度',
       labelCode: 'harness.field.dsh.reasoningEfforts.label',
       kind: 'select',
       defaultValue: '',
-      help: 'DSH 只会显示这里声明且上游模型实际支持的档位。',
       helpCode: 'harness.field.dsh.reasoningEfforts.help',
       options: [
         {
           value: '',
-          label: '不声明（提供方默认）',
           labelCode: 'harness.field.dsh.reasoningEfforts.option.unset',
         },
-        { value: 'low,medium,high,xhigh,max', label: 'Low / Medium / High / XHigh / Max' },
-        { value: 'low,medium,high,xhigh', label: 'Low / Medium / High / XHigh' },
-        { value: 'minimal,low,medium,high', label: 'Minimal / Low / Medium / High' },
+        {
+          value: 'low,medium,high,xhigh,max',
+          labelCode: 'harness.field.dsh.reasoningEfforts.option.lowToMax',
+        },
+        {
+          value: 'low,medium,high,xhigh',
+          labelCode: 'harness.field.dsh.reasoningEfforts.option.lowToXhigh',
+        },
+        {
+          value: 'minimal,low,medium,high',
+          labelCode: 'harness.field.dsh.reasoningEfforts.option.minimalToHigh',
+        },
         {
           value: 'false',
-          label: '模型不支持思考程度',
           labelCode: 'harness.field.dsh.reasoningEfforts.option.none',
         },
       ],
     },
   ];
-
-  constructor(private readonly environment: IEnvironmentService) {}
 
   targets(): AdapterTarget[] {
     return [
@@ -168,26 +160,9 @@ export class DshAdapter implements HarnessAdapter {
       : apiFieldProtocol(profile.extras.api, 'openai-responses');
   }
 
-  validate(profile: AdapterProfile): void {
-    if (!profile.model.trim()) {
-      throw new HttpError(400, 'DeepSeek Harness 需要填写模型名称', {
-        code: ERROR_CODES.adapterModelRequired,
-        params: { harness: 'DeepSeek Harness' },
-      });
-    }
-    if (!profile.apiKey.trim()) {
-      throw new HttpError(400, 'DeepSeek Harness 需要填写 API key', {
-        code: ERROR_CODES.adapterApiKeyRequired,
-        params: { harness: 'DeepSeek Harness' },
-      });
-    }
-  }
-
   render(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     this.validate(profile);
-    const official = this.isOfficial(profile);
-    const providerId = official ? 'deepseek-official' : this.providerId(profile);
-    const credentialRef = this.credentialRef(providerId);
+    const { official, providerId, credentialRef } = this.route(profile);
     const settings = parseYamlDocument(current[SETTINGS]);
     const models = this.models(profile, official);
     if (official) {
@@ -224,8 +199,11 @@ export class DshAdapter implements HarnessAdapter {
     const settings = parseYamlDocument(rendered[SETTINGS]);
     const currentSettings = parseYamlDocument(current[SETTINGS]);
     const currentDefault = currentSettings.getIn(['agent-default-model']);
-    if (currentDefault === undefined) settings.deleteIn(['agent-default-model']);
-    else settings.setIn(['agent-default-model'], currentDefault);
+    if (currentDefault === undefined) {
+      settings.deleteIn(['agent-default-model']);
+    } else {
+      settings.setIn(['agent-default-model'], currentDefault);
+    }
     rendered[SETTINGS] = settings.toString();
     return rendered;
   }
@@ -252,7 +230,9 @@ export class DshAdapter implements HarnessAdapter {
 
   official(current: CurrentFiles): OfficialCapability | undefined {
     const official = this.readOfficialRoute(current);
-    if (!official) return undefined;
+    if (!official) {
+      return undefined;
+    }
     return {
       kind: 'native-api',
       available: true,
@@ -270,8 +250,7 @@ export class DshAdapter implements HarnessAdapter {
       typeof route?.apiKeyEnv === 'string' && route.apiKeyEnv
         ? route.apiKeyEnv
         : 'DEEPSEEK_API_KEY';
-    const apiKey =
-      credentials?.getIn(['refs', credentialRef]) ?? credentials?.getIn([credentialRef]);
+    const apiKey = credentials ? credentialValue(credentials, credentialRef) : undefined;
     if (!settings || route === undefined || typeof apiKey !== 'string' || !apiKey.trim()) {
       return undefined;
     }
@@ -279,15 +258,17 @@ export class DshAdapter implements HarnessAdapter {
   }
 
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
-    const official = this.isOfficial(profile);
-    const providerId = official ? 'deepseek-official' : this.providerId(profile);
+    const { official, providerId, credentialRef } = this.route(profile);
     const rendered: RenderedFiles = {};
 
     if (current[SETTINGS] !== undefined) {
       const settings = tryParseYamlDocument(current[SETTINGS]);
       if (settings) {
-        if (official) settings.deleteIn(['llm-deepseek']);
-        else settings.deleteIn(['llm-pi-ai', 'providers', providerId]);
+        if (official) {
+          settings.deleteIn(['llm-deepseek']);
+        } else {
+          settings.deleteIn(['llm-pi-ai', 'providers', providerId]);
+        }
         if (settings.getIn(['agent-default-model', 'provider']) === providerId) {
           settings.deleteIn(['agent-default-model']);
         }
@@ -300,7 +281,7 @@ export class DshAdapter implements HarnessAdapter {
       const credentials = tryParseYamlDocument(current[CREDENTIALS]);
       if (credentials) {
         this.normalizeCredentials(credentials);
-        credentials.deleteIn(['refs', this.credentialRef(providerId)]);
+        credentials.deleteIn(['refs', credentialRef]);
         rendered[CREDENTIALS] = credentials.toString();
       }
       // The credential provider rejects an invalid document too, so leave it intact.
@@ -310,20 +291,16 @@ export class DshAdapter implements HarnessAdapter {
   }
 
   backfill(profile: AdapterProfile, current: CurrentFiles): Partial<AdapterProfile> {
-    const official = this.isOfficial(profile);
-    const providerId = official ? 'deepseek-official' : this.providerId(profile);
+    const { official, credentialRef, settingsPath } = this.route(profile);
     const settings = tryParseYamlDocument(current[SETTINGS]);
     const credentials = tryParseYamlDocument(current[CREDENTIALS]);
     if (!settings || !credentials) {
       return {};
     }
-    const route = toPlain(
-      settings.getIn(official ? ['llm-deepseek'] : ['llm-pi-ai', 'providers', providerId]),
-    );
+    const route = toPlain(settings.getIn(settingsPath));
     const models = Array.isArray(route?.models) ? route.models : [];
     const firstModel = toPlain(models[0]);
-    const ref = this.credentialRef(providerId);
-    const apiKey = credentials.getIn(['refs', ref]) ?? credentials.getIn([ref]);
+    const apiKey = credentialValue(credentials, credentialRef);
 
     return {
       baseUrl: typeof route?.baseURL === 'string' ? route.baseURL : profile.baseUrl,
@@ -374,6 +351,27 @@ export class DshAdapter implements HarnessAdapter {
     );
   }
 
+  /**
+   * Where a profile lives in the two native files. The official route is DSH's own
+   * `llm-deepseek` block; everything else is a custom entry under `llm-pi-ai.providers`,
+   * with its credential held by reference in `.credentials.yaml`.
+   */
+  private route(profile: AdapterProfile): {
+    official: boolean;
+    providerId: string;
+    credentialRef: string;
+    settingsPath: string[];
+  } {
+    const official = this.isOfficial(profile);
+    const providerId = official ? 'deepseek-official' : this.providerId(profile);
+    return {
+      official,
+      providerId,
+      credentialRef: this.credentialRef(providerId),
+      settingsPath: official ? ['llm-deepseek'] : ['llm-pi-ai', 'providers', providerId],
+    };
+  }
+
   private providerId(profile: AdapterProfile): string {
     const id = baseProviderId(profile);
     return /^[a-z]/.test(id) ? id : `provider-${id}`;
@@ -416,9 +414,12 @@ export class DshAdapter implements HarnessAdapter {
         !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
         typeof value !== 'string' ||
         !value
-      )
+      ) {
         continue;
-      if (credentials.getIn(['refs', key]) === undefined) credentials.setIn(['refs', key], value);
+      }
+      if (credentials.getIn(['refs', key]) === undefined) {
+        credentials.setIn(['refs', key], value);
+      }
       credentials.deleteIn([key]);
     }
   }
@@ -438,6 +439,15 @@ export class DshAdapter implements HarnessAdapter {
       ? Object.fromEntries(levels.map((level) => [level, level]))
       : undefined;
   }
+}
+
+/**
+ * Reads a credential by reference. Older DSH files kept the value at the document root,
+ * so the flat key is still accepted on read; {@link DshAdapter.normalizeCredentials}
+ * moves it under `refs` on the next write.
+ */
+function credentialValue(credentials: ReturnType<typeof parseYamlDocument>, ref: string): unknown {
+  return credentials.getIn(['refs', ref]) ?? credentials.getIn([ref]);
 }
 
 function toPlain(value: unknown): Record<string, unknown> | undefined {

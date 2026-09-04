@@ -1,103 +1,60 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type {
   GitHubDevicePollResponse,
   GitHubPushResponse,
   GitHubSyncStatus,
   TransferImportResponse,
 } from '@seaveyon/harness-switch-shared';
-import { createApp } from '../src/app';
-import { createServices } from '../src/bootstrap';
-import { IAuthService } from '../src/services/auth';
-import { IEnvironmentService } from '../src/services/environment';
+import { createSandbox, createTestApp, type Sandbox } from './support';
 
-let homeDir = '';
-const originalFetch = globalThis.fetch;
+let sandbox: Sandbox;
 
-type TestApp = {
-  app: ReturnType<typeof createApp>;
-  cookie: string;
-};
+type HarnessList = { items: Array<{ id: string; profiles: Array<{ name: string }> }> };
 
-async function createTestApp(): Promise<TestApp> {
-  homeDir = await mkdtemp(join(tmpdir(), 'hsw-github-test-'));
-  process.env.HSW_HOME_DIR = homeDir;
-  process.env.HSW_DATA_DIR = join(homeDir, '.harness-switch');
-
-  const services = createServices();
-  services.get(IEnvironmentService).ensureDataDir();
-  const password = services.get(IAuthService).ensurePassword();
-  const app = createApp(services);
-
-  const res = await app.request('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password }),
-  });
-  const cookie = res.headers.get('set-cookie') || '';
-
-  return { app, cookie };
+function claudeProfileNames(list: HarnessList): string[] {
+  return (list.items.find((item) => item.id === 'claude')?.profiles ?? []).map(
+    (profile) => profile.name,
+  );
 }
 
+beforeEach(() => {
+  sandbox = createSandbox('hsw-github-test');
+});
+
+afterEach(() => {
+  sandbox.dispose();
+});
+
 describe('GitHub Sync Service and Routes', () => {
-  beforeEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  afterEach(async () => {
-    globalThis.fetch = originalFetch;
-    if (homeDir) {
-      await rm(homeDir, { recursive: true, force: true });
-    }
-  });
-
   test('status reports not connected initially', async () => {
-    const { app, cookie } = await createTestApp();
-    const res = await app.request('/api/github/status', {
-      headers: { cookie },
-    });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as GitHubSyncStatus;
+    const context = await createTestApp();
+    const body = await context.json<GitHubSyncStatus>('/api/github/status');
     expect(body.connected).toBe(false);
   });
 
   test('device poll treats TLS/network failures as pending', async () => {
-    const { app, cookie } = await createTestApp();
-
-    globalThis.fetch = (async () => {
+    const context = await createTestApp();
+    sandbox.stubFetch(() => {
       const error = new TypeError('unknown certificate verification error') as TypeError & {
         code?: string;
       };
       error.code = 'UNKNOWN_CERTIFICATE_VERIFICATION_ERROR';
       throw error;
-    }) as unknown as typeof fetch;
-
-    const res = await app.request('/api/github/device/poll', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({ deviceCode: 'device_code_fake' }),
     });
 
+    const res = await context.post('/api/github/device/poll', { deviceCode: 'device_code_fake' });
     expect(res.status).toBe(200);
     const body = (await res.json()) as GitHubDevicePollResponse;
     expect(body.status).toBe('pending');
   });
 
   test('device code request surfaces network failures as 502', async () => {
-    const { app, cookie } = await createTestApp();
-
-    globalThis.fetch = (async () => {
+    const context = await createTestApp();
+    sandbox.stubFetch(() => {
       throw new TypeError('unknown certificate verification error');
-    }) as unknown as typeof fetch;
-
-    const res = await app.request('/api/github/device/code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({}),
     });
 
+    const res = await context.post('/api/github/device/code', {});
     expect(res.status).toBe(502);
     const body = (await res.json()) as { msg: string; code?: string };
     expect(body.msg).toContain('请求失败');
@@ -105,66 +62,50 @@ describe('GitHub Sync Service and Routes', () => {
   });
 
   test('authenticateWithToken connects and stores user info', async () => {
-    const { app, cookie } = await createTestApp();
-
-    globalThis.fetch = (async (input: string | URL | Request, _init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : 'url' in input ? input.url : String(input);
+    const context = await createTestApp();
+    sandbox.stubFetch((url) => {
       if (url.includes('/user')) {
-        return new Response(
-          JSON.stringify({
-            login: 'octocat',
-            avatar_url: 'https://github.com/images/octocat.png',
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        );
-      }
-      if (url.includes('/gists')) {
-        return new Response(JSON.stringify([]), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
+        return Response.json({
+          login: 'octocat',
+          avatar_url: 'https://github.com/images/octocat.png',
         });
       }
+      if (url.includes('/gists')) {
+        return Response.json([]);
+      }
       return new Response('Not found', { status: 404 });
-    }) as unknown as typeof fetch;
-
-    const authRes = await app.request('/api/github/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({ token: 'ghp_fake_token_12345' }),
     });
 
+    const authRes = await context.post('/api/github/token', { token: 'ghp_fake_token_12345' });
     expect(authRes.status).toBe(200);
     const status = (await authRes.json()) as GitHubSyncStatus;
     expect(status.connected).toBe(true);
     expect(status.username).toBe('octocat');
     expect(status.avatarUrl).toBe('https://github.com/images/octocat.png');
 
-    // Check status endpoint returns connected
-    const statusRes = await app.request('/api/github/status', {
-      headers: { cookie },
-    });
-    const checkStatus = (await statusRes.json()) as GitHubSyncStatus;
+    const checkStatus = await context.json<GitHubSyncStatus>('/api/github/status');
     expect(checkStatus.connected).toBe(true);
     expect(checkStatus.username).toBe('octocat');
   });
 
   test('push and pull roundtrip with encryption', async () => {
-    const { app, cookie } = await createTestApp();
+    const context = await createTestApp();
 
-    let storedGist: any = null;
+    /** The gist as GitHub would hold it, so a pull reads back what the push wrote. */
+    let storedGist: {
+      id: string;
+      description?: string;
+      updated_at: string;
+      files: Record<string, { content: string }>;
+    } | null = null;
 
-    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : 'url' in input ? input.url : String(input);
+    sandbox.stubFetch((url, init) => {
       const method = init?.method || 'GET';
-
       if (url.includes('/user')) {
-        return new Response(
-          JSON.stringify({
-            login: 'octocat',
-            avatar_url: 'https://github.com/images/octocat.png',
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        );
+        return Response.json({
+          login: 'octocat',
+          avatar_url: 'https://github.com/images/octocat.png',
+        });
       }
       if (url.endsWith('/gists') && method === 'POST') {
         const body = JSON.parse(String(init?.body));
@@ -174,131 +115,74 @@ describe('GitHub Sync Service and Routes', () => {
           updated_at: '2026-08-28T12:00:00Z',
           files: body.files,
         };
-        return new Response(JSON.stringify(storedGist), {
-          status: 201,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return Response.json(storedGist, { status: 201 });
       }
       if (url.includes('/gists/gist_123') && method === 'PATCH') {
         const body = JSON.parse(String(init?.body));
         storedGist = {
-          ...storedGist,
+          ...storedGist!,
           updated_at: '2026-08-28T12:01:00Z',
-          files: { ...storedGist.files, ...body.files },
+          files: { ...storedGist!.files, ...body.files },
         };
-        return new Response(JSON.stringify(storedGist), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return Response.json(storedGist);
       }
       if (url.includes('/gists/gist_123') && method === 'GET') {
-        return new Response(JSON.stringify(storedGist), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return Response.json(storedGist);
       }
       if (url.includes('/gists')) {
-        return new Response(JSON.stringify(storedGist ? [storedGist] : []), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return Response.json(storedGist ? [storedGist] : []);
       }
       return new Response('Not found', { status: 404 });
-    }) as unknown as typeof fetch;
-
-    // 1. Connect token
-    await app.request('/api/github/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({ token: 'ghp_fake_token_12345' }),
     });
 
-    // 2. Create a profile locally
-    await app.request('/api/harnesses/claude/profiles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({
-        name: 'my-custom-profile',
-        baseUrl: 'https://api.openai.com/v1',
-        apiKey: 'sk-test-12345',
-        model: 'claude-3-opus',
-        notes: 'test note',
-      }),
+    await context.post('/api/github/token', { token: 'ghp_fake_token_12345' });
+    await context.post('/api/harnesses/claude/profiles', {
+      name: 'my-custom-profile',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test-12345',
+      model: 'claude-3-opus',
+      notes: 'test note',
     });
 
-    // 3. Push to GitHub Gist
-    const pushRes = await app.request('/api/github/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({ passphrase: 'my-secret-passphrase' }),
-    });
-
+    const pushRes = await context.post('/api/github/push', { passphrase: 'my-secret-passphrase' });
     expect(pushRes.status).toBe(200);
     const pushBody = (await pushRes.json()) as GitHubPushResponse;
     expect(pushBody.ok).toBe(true);
     expect(pushBody.gistId).toBe('gist_123');
     expect(storedGist).not.toBeNull();
-    expect(storedGist.files['harness-switch-backup.json']).toBeDefined();
+    const uploaded = storedGist!.files['harness-switch-backup.json'];
+    expect(uploaded).toBeDefined();
 
-    // Verify raw gist content is encrypted and contains no plaintext secret
-    const rawContent = storedGist.files['harness-switch-backup.json'].content;
-    expect(rawContent).not.toContain('sk-test-12345');
-    expect(rawContent).toContain('harness-switch-encrypted-export');
+    // The gist is public infrastructure: the plaintext key must never reach it.
+    expect(uploaded?.content).not.toContain('sk-test-12345');
+    expect(uploaded?.content).toContain('harness-switch-encrypted-export');
 
-    // 4. Delete the profile locally to simulate a fresh/different machine
-    await app.request('/api/harnesses/claude/profiles/my-custom-profile', {
-      method: 'DELETE',
-      headers: { cookie },
+    // Deleting locally stands in for pulling onto a fresh machine.
+    await context.del('/api/harnesses/claude/profiles/my-custom-profile');
+    expect(claudeProfileNames(await context.json<HarnessList>('/api/harnesses'))).not.toContain(
+      'my-custom-profile',
+    );
+
+    const previewRes = await context.post('/api/github/pull/preview', {
+      passphrase: 'my-secret-passphrase',
     });
-
-    // Verify it is gone
-    const listRes = await app.request('/api/harnesses', { headers: { cookie } });
-    const harnessesData = (await listRes.json()) as {
-      items: Array<{ id: string; profiles: Array<{ name: string }> }>;
-    };
-    const claudeProfiles = harnessesData.items.find((h) => h.id === 'claude')?.profiles ?? [];
-    expect(claudeProfiles.some((p) => p.name === 'my-custom-profile')).toBe(false);
-
-    // 5. Pull preview from GitHub
-    const previewRes = await app.request('/api/github/pull/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({ passphrase: 'my-secret-passphrase' }),
-    });
-
     expect(previewRes.status).toBe(200);
     const previewBody = (await previewRes.json()) as { preview: { profileCount: number } };
     expect(previewBody.preview.profileCount).toBeGreaterThanOrEqual(1);
 
-    // 6. Pull and import
-    const pullRes = await app.request('/api/github/pull', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', cookie },
-      body: JSON.stringify({ passphrase: 'my-secret-passphrase', conflictPolicy: 'overwrite' }),
+    const pullRes = await context.post('/api/github/pull', {
+      passphrase: 'my-secret-passphrase',
+      conflictPolicy: 'overwrite',
     });
-
     expect(pullRes.status).toBe(200);
     const pullBody = (await pullRes.json()) as TransferImportResponse;
     expect(pullBody.ok).toBe(true);
     expect(pullBody.imported).toBeGreaterThanOrEqual(1);
+    expect(claudeProfileNames(await context.json<HarnessList>('/api/harnesses'))).toContain(
+      'my-custom-profile',
+    );
 
-    // 7. Verify profile is restored
-    const afterListRes = await app.request('/api/harnesses', { headers: { cookie } });
-    const afterData = (await afterListRes.json()) as {
-      items: Array<{ id: string; profiles: Array<{ name: string }> }>;
-    };
-    const afterClaudeProfiles = afterData.items.find((h) => h.id === 'claude')?.profiles ?? [];
-    expect(afterClaudeProfiles.some((p) => p.name === 'my-custom-profile')).toBe(true);
-
-    // 8. Test disconnect
-    const discRes = await app.request('/api/github/disconnect', {
-      method: 'POST',
-      headers: { cookie },
-    });
-    expect(discRes.status).toBe(200);
-
-    const afterDiscRes = await app.request('/api/github/status', { headers: { cookie } });
-    const afterDiscBody = (await afterDiscRes.json()) as GitHubSyncStatus;
-    expect(afterDiscBody.connected).toBe(false);
+    expect((await context.post('/api/github/disconnect')).status).toBe(200);
+    expect((await context.json<GitHubSyncStatus>('/api/github/status')).connected).toBe(false);
   });
 });

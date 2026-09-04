@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api } from '@/lib/api';
+import { api, userSyncPath } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText, type MessageLine, messageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
@@ -72,11 +72,13 @@ export function UserPane({ onDone }: { onDone: () => void }) {
   }, [sources]);
 
   async function inspect() {
-    if (!sourceUser) return;
+    if (!sourceUser) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
-      const inspected = await api<UserSyncPreview>('/api/users/sync/preview', {
+      const inspected = await api<UserSyncPreview>(userSyncPath.preview, {
         method: 'POST',
         body: JSON.stringify({ sourceUser }),
       });
@@ -94,11 +96,13 @@ export function UserPane({ onDone }: { onDone: () => void }) {
   }
 
   async function synchronize() {
-    if (!sourceUser || !preview) return;
+    if (!sourceUser || !preview) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
-      const result = await api<UserSyncResponse>('/api/users/sync', {
+      const result = await api<UserSyncResponse>(userSyncPath.run, {
         method: 'POST',
         body: JSON.stringify({
           sourceUser,

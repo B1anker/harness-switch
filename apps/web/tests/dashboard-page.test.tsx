@@ -1,8 +1,7 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DashboardPage } from '@/pages/dashboard-page';
-import { useAppStore } from '@/stores/app-store';
-import { harnessFixture, profileFixture } from './fixtures';
+import { harnessFixture, profileFixture, setStoreState } from './support';
 
 function setDashboardState() {
   const claudeProfile = profileFixture({ name: 'claude-main' });
@@ -11,7 +10,7 @@ function setDashboardState() {
     name: 'codex-main',
     model: 'gpt-5.4',
   });
-  useAppStore.setState({
+  setStoreState({
     harnesses: [
       harnessFixture({
         active: { name: 'claude-main', baseUrl: claudeProfile.baseUrl, model: claudeProfile.model },
@@ -103,7 +102,7 @@ test('the header opens the vault dialog', () => {
 test('an unmanageable user cannot be selected and says why', () => {
   setDashboardState();
   let selected = '';
-  useAppStore.setState({
+  setStoreState({
     users: [
       { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
       {
@@ -114,8 +113,7 @@ test('an unmanageable user cannot be selected and says why', () => {
         current: false,
         manageable: false,
         blockCode: 'user.block.homeUnsearchable',
-        blockParams: { username: 'alice', home: '/home/alice' },
-        blockReason: 'server prose',
+        blockData: { username: 'alice', home: '/home/alice' },
       },
     ],
     switchUser: async (username: string) => {
@@ -128,11 +126,11 @@ test('an unmanageable user cannot be selected and says why', () => {
 
   const entry = screen.getByRole('menuitemradio', { name: /alice/ });
   expect(entry).toBeDisabled();
-  // Short and path-free so the narrow menu cannot wrap; the full server prose with the
-  // directory stays available as the tooltip.
+  // Short and path-free so the narrow menu cannot wrap; the directory arrives as data
+  // and is appended in the tooltip.
   expect(entry).toHaveTextContent('没有权限访问');
   expect(entry.textContent ?? '').not.toContain('/home/alice');
-  expect(entry).toHaveAttribute('title', 'server prose');
+  expect(entry).toHaveAttribute('title', '没有权限访问 — /home/alice');
   // A row that cannot be picked must not light up under the cursor.
   expect(entry.className).not.toContain('hover:bg-accent');
   expect(entry.className).toContain('cursor-default');
@@ -157,9 +155,9 @@ test('a selectable user keeps a pointer and hover state', () => {
   expect(current.className).not.toContain('hover:bg-accent');
 });
 
-test('a user whose block code this build does not know falls back to server prose', () => {
+test('a user whose block code this build does not know still reads as a sentence', () => {
   setDashboardState();
-  useAppStore.setState({
+  setStoreState({
     users: [
       { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
       {
@@ -170,7 +168,6 @@ test('a user whose block code this build does not know falls back to server pros
         current: false,
         manageable: false,
         blockCode: 'user.block.inventedLater',
-        blockReason: '来自服务端的原因',
       },
     ],
   });
@@ -180,7 +177,7 @@ test('a user whose block code this build does not know falls back to server pros
 
   const entry = screen.getByRole('menuitemradio', { name: /alice/ });
   expect(entry).toBeDisabled();
-  expect(entry).toHaveTextContent('来自服务端的原因');
+  expect(entry).toHaveTextContent('未知错误');
 });
 
 test('the right column shows the doctor and operations cards for the selected harness', () => {

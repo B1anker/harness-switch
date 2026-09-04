@@ -28,13 +28,23 @@ export class LogService implements ILogService {
 }
 
 function formatError(error: unknown): string {
-  if (error === undefined) return '';
-  if (!(error instanceof Error)) return ` | thrown=${String(error)}`;
+  if (error === undefined) {
+    return '';
+  }
+  if (!(error instanceof Error)) {
+    return ` | thrown=${String(error)}`;
+  }
 
   const errno = error as NodeJS.ErrnoException;
   const details = [`${error.name}: ${error.message}`];
-  if (errno.code) details.push(`code=${errno.code}`);
-  if (errno.syscall) details.push(`syscall=${errno.syscall}`);
-  if (errno.path) details.push(`path=${errno.path}`);
+  if (errno.code) {
+    details.push(`code=${errno.code}`);
+  }
+  if (errno.syscall) {
+    details.push(`syscall=${errno.syscall}`);
+  }
+  if (errno.path) {
+    details.push(`path=${errno.path}`);
+  }
   return ` | ${details.join(' | ')}`;
 }

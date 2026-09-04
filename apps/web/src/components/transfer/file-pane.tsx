@@ -5,7 +5,7 @@ import { buildImportNotice, ImportReview } from '@/components/import-review';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
+import { api, transferPath } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText, type MessageLine } from '@/lib/messages';
 import { useTransferImport } from '@/lib/use-transfer-import';
@@ -40,12 +40,12 @@ export function FilePane({ onDone }: { onDone: () => void }) {
 
   const transfer = useTransferImport({
     fetchPreview: (options) =>
-      api<TransferPreview>('/api/transfer/preview', {
+      api<TransferPreview>(transferPath.preview, {
         method: 'POST',
         body: JSON.stringify({ envelope, passphrase: importPassphrase, ...options }),
       }),
     runImport: (options) =>
-      api('/api/transfer/import', {
+      api(transferPath.import, {
         method: 'POST',
         body: JSON.stringify({
           envelope,
@@ -66,7 +66,7 @@ export function FilePane({ onDone }: { onDone: () => void }) {
     setExportError(null);
     setMessage(null);
     try {
-      const result = await api<TransferEnvelope>('/api/transfer/export', {
+      const result = await api<TransferEnvelope>(transferPath.export, {
         method: 'POST',
         body: JSON.stringify({ passphrase: exportPassphrase, includeCodexLoginCache: true }),
       });

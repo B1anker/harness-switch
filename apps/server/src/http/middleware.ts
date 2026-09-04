@@ -7,13 +7,6 @@ import { IAuthService } from '../services/auth';
 import { IEnvironmentService } from '../services/environment';
 import { IUserService } from '../services/users';
 
-export function createServiceMiddleware(services: InstantiationService): MiddlewareHandler {
-  return async (c, next) => {
-    c.set('services', services);
-    await next();
-  };
-}
-
 export function createOriginGuard(): MiddlewareHandler {
   return async (c, next) => {
     if (c.req.method !== 'GET' && c.req.method !== 'HEAD' && c.req.method !== 'OPTIONS') {

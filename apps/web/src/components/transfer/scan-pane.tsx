@@ -232,15 +232,9 @@ export function ScanPane() {
   );
 }
 
-/**
- * The note explaining an empty candidate list. A server that predates the code contract
- * sends only prose, which `lineText` then renders as the fallback.
- */
+/** The note explaining an empty candidate list. */
 function noteText(t: TFunction, result: ScanHarnessResult): string {
-  if (!result.note && !result.noteCode) {
-    return '';
-  }
-  return lineText(t, { key: result.noteCode ?? 'scan.note.unknown', fallback: result.note });
+  return result.noteCode ? lineText(t, { key: result.noteCode, params: result.noteData }) : '';
 }
 
 type CandidateRowProps = {

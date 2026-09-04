@@ -4,7 +4,9 @@ import type {
   ProbeResult,
 } from '@seaveyon/harness-switch-shared';
 import { PROBE_CODES } from '@seaveyon/harness-switch-shared';
+import { isRecord } from '../common/guards';
 import { createDecorator, inject } from '../di';
+import { IHttpClient } from './http-client';
 
 export type ProbeInput = {
   baseUrl: string;
@@ -73,27 +75,29 @@ const COMPLETION_PROTOCOLS: readonly CompletionProtocol[] = [
  * one minimal request and reports its outcome separately, so "lists models" and "answers
  * with one" never get conflated.
  */
-@inject()
+@inject(IHttpClient)
 export class ProbeService implements IProbeService {
   declare readonly _serviceBrand: undefined;
+
+  constructor(private readonly http: IHttpClient) {}
 
   async probe(input: ProbeInput): Promise<ProbeResult> {
     const baseUrl = input.baseUrl.trim();
     if (!baseUrl) {
-      return failure(PROBE_CODES.missingBaseUrl, '未提供 Base URL，无法测试');
+      return failure(PROBE_CODES.missingBaseUrl);
     }
     if (!input.apiKey.trim()) {
-      return failure(PROBE_CODES.missingApiKey, '未提供 API Key，无法测试');
+      return failure(PROBE_CODES.missingApiKey);
     }
 
     let base: URL;
     try {
       base = new URL(baseUrl);
     } catch {
-      return failure(PROBE_CODES.badUrl, `Base URL 无法解析：${baseUrl}`);
+      return failure(PROBE_CODES.badUrl);
     }
     if (base.protocol !== 'http:' && base.protocol !== 'https:') {
-      return failure(PROBE_CODES.badUrl, `Base URL 必须是 http/https：${base.protocol}`);
+      return failure(PROBE_CODES.badUrl);
     }
 
     const catalog = await this.readCatalog(base, input.apiKey);
@@ -108,10 +112,7 @@ export class ProbeService implements IProbeService {
     if (!model) {
       return {
         ...catalog,
-        completion: completionFailure(
-          PROBE_CODES.missingModel,
-          '没有可用于补全测试的模型：请填写模型名称，或先获取模型目录',
-        ),
+        completion: completionFailure(PROBE_CODES.missingModel),
       };
     }
     return { ...catalog, completion: await this.complete(base, input, model) };
@@ -136,9 +137,9 @@ export class ProbeService implements IProbeService {
       }
       lastStatus = result.status;
     }
-    return failure(PROBE_CODES.httpError, `端点返回 ${lastStatus ?? '未知状态'}，未找到模型目录`, {
+    return failure(PROBE_CODES.httpError, {
       status: lastStatus,
-      params: lastStatus === undefined ? undefined : { status: lastStatus },
+      data: lastStatus === undefined ? undefined : { status: lastStatus },
     });
   }
 
@@ -146,7 +147,7 @@ export class ProbeService implements IProbeService {
     const started = performance.now();
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await this.http.fetch(url, {
         headers: authHeaders(apiKey, { Accept: 'application/json' }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
         redirect: 'follow',
@@ -154,12 +155,12 @@ export class ProbeService implements IProbeService {
     } catch (error) {
       const latencyMs = Math.round(performance.now() - started);
       if (isTimeout(error)) {
-        return failure(PROBE_CODES.timeout, `请求超时（${TIMEOUT_MS / 1000} 秒）`, {
+        return failure(PROBE_CODES.timeout, {
           latencyMs,
           requestUrl: url.toString(),
         });
       }
-      return failure(PROBE_CODES.networkError, reason(error), {
+      return failure(PROBE_CODES.networkError, {
         latencyMs,
         requestUrl: url.toString(),
       });
@@ -169,27 +170,23 @@ export class ProbeService implements IProbeService {
     const shared = { status: response.status, latencyMs, requestUrl: url.toString() };
 
     if (response.status === 401 || response.status === 403) {
-      return failure(
-        PROBE_CODES.unauthorized,
-        `端点可达但拒绝了凭据（HTTP ${response.status}），请检查 API Key`,
-        { ...shared, params: { status: response.status } },
-      );
+      return failure(PROBE_CODES.unauthorized, { ...shared, data: { status: response.status } });
     }
     if (!response.ok) {
-      return failure(PROBE_CODES.httpError, `端点返回 HTTP ${response.status}`, {
+      return failure(PROBE_CODES.httpError, {
         ...shared,
-        params: { status: response.status },
+        data: { status: response.status },
       });
     }
 
     const text = await readBody(response);
     if (text === null) {
-      return failure(PROBE_CODES.invalidResponse, '响应体过大，不是模型目录', shared);
+      return failure(PROBE_CODES.invalidResponse, shared);
     }
 
     const models = extractModels(text);
     if (models === null) {
-      return failure(PROBE_CODES.invalidResponse, '响应不是已知的模型目录格式', shared);
+      return failure(PROBE_CODES.invalidResponse, shared);
     }
     return { ok: true, ...shared, models };
   }
@@ -213,9 +210,7 @@ export class ProbeService implements IProbeService {
       }
       last = attempt;
     }
-    return (
-      last ?? completionFailure(PROBE_CODES.completionUnsupported, '端点不接受任何已知的补全协议')
-    );
+    return last ?? completionFailure(PROBE_CODES.completionUnsupported);
   }
 
   private async sendCompletion(
@@ -228,7 +223,7 @@ export class ProbeService implements IProbeService {
     const started = performance.now();
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await this.http.fetch(url, {
         method: 'POST',
         headers: authHeaders(apiKey, {
           Accept: 'application/json',
@@ -242,13 +237,9 @@ export class ProbeService implements IProbeService {
       const latencyMs = Math.round(performance.now() - started);
       const shared = { model, protocol, latencyMs, requestUrl: url.toString() };
       if (isTimeout(error)) {
-        return completionFailure(
-          PROBE_CODES.timeout,
-          `补全请求超时（${COMPLETION_TIMEOUT_MS / 1000} 秒）`,
-          shared,
-        );
+        return completionFailure(PROBE_CODES.timeout, shared);
       }
-      return completionFailure(PROBE_CODES.networkError, reason(error), shared);
+      return completionFailure(PROBE_CODES.networkError, shared);
     }
 
     const latencyMs = Math.round(performance.now() - started);
@@ -261,32 +252,26 @@ export class ProbeService implements IProbeService {
     };
 
     if (response.status === 401 || response.status === 403) {
-      return completionFailure(
-        PROBE_CODES.unauthorized,
-        `端点可达但拒绝了凭据（HTTP ${response.status}），请检查 API Key`,
-        { ...shared, params: { status: response.status } },
-      );
+      return completionFailure(PROBE_CODES.unauthorized, {
+        ...shared,
+        data: { status: response.status },
+      });
     }
     if (!response.ok) {
       // The whole point of this test: the catalog said yes, the model says no.
-      return completionFailure(
-        PROBE_CODES.completionHttpError,
-        `模型 ${model} 的补全请求返回 HTTP ${response.status}`,
-        { ...shared, params: { status: response.status, model } },
-      );
+      return completionFailure(PROBE_CODES.completionHttpError, {
+        ...shared,
+        data: { status: response.status, model },
+      });
     }
 
     const text = await readBody(response);
     if (text === null) {
-      return completionFailure(PROBE_CODES.completionInvalid, '补全响应体过大', shared);
+      return completionFailure(PROBE_CODES.completionInvalid, shared);
     }
     const produced = extractCompletionText(text);
     if (produced === null) {
-      return completionFailure(
-        PROBE_CODES.completionInvalid,
-        '补全响应不是已知的格式，无法确认模型真的作答',
-        shared,
-      );
+      return completionFailure(PROBE_CODES.completionInvalid, shared);
     }
     // An empty string is still a valid answer: `max_tokens: 1` can be spent entirely on
     // a stop token. The envelope parsing above is what proves the model ran.
@@ -355,7 +340,9 @@ async function readBody(response: Response): Promise<string | null> {
   if (declaredLength && Number(declaredLength) > MAX_BODY_BYTES) {
     return null;
   }
-  if (!response.body) return '';
+  if (!response.body) {
+    return '';
+  }
 
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
@@ -363,7 +350,9 @@ async function readBody(response: Response): Promise<string | null> {
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        break;
+      }
       size += value.byteLength;
       if (size > MAX_BODY_BYTES) {
         await reader.cancel('catalog body too large');
@@ -383,26 +372,17 @@ function joinUrl(base: URL, suffix: string): URL {
   return next;
 }
 
-function failure(code: string, message: string, extra: Partial<ProbeResult> = {}): ProbeResult {
-  return { ok: false, code, message, ...extra };
+function failure(code: string, extra: Partial<ProbeResult> = {}): ProbeResult {
+  return { ok: false, code, ...extra };
 }
 
-function completionFailure(
-  code: string,
-  message: string,
-  extra: Partial<ProbeCompletion> = {},
-): ProbeCompletion {
-  return { ok: false, code, message, ...extra };
+function completionFailure(code: string, extra: Partial<ProbeCompletion> = {}): ProbeCompletion {
+  return { ok: false, code, ...extra };
 }
 
 function isTimeout(error: unknown): boolean {
   const name = (error as Error)?.name;
   return name === 'TimeoutError' || name === 'AbortError';
-}
-
-function reason(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error);
-  return `请求失败：${text}`;
 }
 
 /**
@@ -480,7 +460,9 @@ export function extractCompletionText(body: string): string | null {
   if (Array.isArray(parsed.choices)) {
     return parsed.choices
       .map((choice) => {
-        if (!isRecord(choice)) return '';
+        if (!isRecord(choice)) {
+          return '';
+        }
         const message = isRecord(choice.message) ? choice.message : undefined;
         return (
           contentText(message?.content) ||
@@ -521,17 +503,16 @@ function contentText(content: unknown): string {
   }
   return content
     .map((block) => {
-      if (typeof block === 'string') return block;
-      if (!isRecord(block)) return '';
+      if (typeof block === 'string') {
+        return block;
+      }
+      if (!isRecord(block)) {
+        return '';
+      }
       return firstString(block, ['text', 'output_text', 'content']);
     })
     .join('');
 }
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 function firstString(record: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {
     const value = record[key];

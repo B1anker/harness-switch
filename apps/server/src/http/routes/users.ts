@@ -13,6 +13,7 @@ import { IEnvironmentService } from '../../services/environment';
 import { IUserAccessService } from '../../services/user-access';
 import { IUserSyncService } from '../../services/user-sync';
 import { IUserService } from '../../services/users';
+import { param } from '../params';
 import { readJsonBody } from '../validate';
 
 export function createUserRoutes(services: InstantiationService): Hono {
@@ -34,14 +35,7 @@ export function createUserRoutes(services: InstantiationService): Hono {
           current: user.username === current,
           manageable: verdict.ok,
         };
-        return verdict.ok
-          ? base
-          : {
-              ...base,
-              blockCode: verdict.code,
-              blockParams: verdict.params,
-              blockReason: verdict.reason,
-            };
+        return verdict.ok ? base : { ...base, blockCode: verdict.code, blockData: verdict.data };
       }),
     } satisfies UsersResponse);
   });
@@ -64,7 +58,7 @@ export function createUserRoutes(services: InstantiationService): Hono {
   });
 
   app.post('/:username/select', (c) => {
-    const user = users.require(decodeURIComponent(c.req.param('username')));
+    const user = users.require(param(c, 'username'));
     const token = getCookie(c, environment.cookieName);
     if (!token) {
       throw new HttpError(401, 'authentication required', {
@@ -78,9 +72,9 @@ export function createUserRoutes(services: InstantiationService): Hono {
     // account would lock an already-pinned session out of even reading this list.
     const verdict = access.inspect(user);
     if (!verdict.ok) {
-      throw new HttpError(403, verdict.reason, {
+      throw new HttpError(403, 'user is not switchable', {
         code: ERROR_CODES.userNotSwitchable,
-        params: { username: user.username, ...verdict.params },
+        params: { username: user.username, ...verdict.data },
       });
     }
     auth.selectUser(token, user.username);

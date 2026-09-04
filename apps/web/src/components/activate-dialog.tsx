@@ -61,10 +61,14 @@ export function ActivateDialog({
       : previewProfile(harness.id, profileName ?? '');
     void preview
       .then((result) => {
-        if (!cancelled) setTargets(result);
+        if (!cancelled) {
+          setTargets(result);
+        }
       })
       .catch((err: unknown) => {
-        if (!cancelled) setPreviewError(errorLine(err));
+        if (!cancelled) {
+          setPreviewError(errorLine(err));
+        }
       });
     return () => {
       cancelled = true;
@@ -75,12 +79,17 @@ export function ActivateDialog({
     // AlertDialogAction closes by default; keep the diff visible until the write has
     // completed, then close and let the toast confirm, or stay open for a retry.
     event.preventDefault();
-    if (!targets || executing) return;
+    if (!targets || executing) {
+      return;
+    }
     setExecuting(true);
     setActivationError(null);
     try {
-      if (official) await activateOfficial(harness.id);
-      else await activateProfile(harness.id, profileName ?? '');
+      if (official) {
+        await activateOfficial(harness.id);
+      } else {
+        await activateProfile(harness.id, profileName ?? '');
+      }
       onOpenChange(false);
     } catch (error) {
       setActivationError(errorLine(error));

@@ -1,30 +1,15 @@
-import { afterEach, beforeEach, expect, test } from '@rstest/core';
+import { beforeEach, expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { GistPane } from '@/components/transfer/gist-pane';
 import { useAppStore } from '@/stores/app-store';
-
-const realFetch = globalThis.fetch;
+import { recordRequests, routes, setStoreState, stubFetch } from '../support';
 
 beforeEach(() => {
-  useAppStore.setState({ loadHarnesses: async () => {} });
-});
-
-afterEach(() => {
-  globalThis.fetch = realFetch;
-  useAppStore.setState({ notice: null });
+  setStoreState({ loadHarnesses: async () => {} });
 });
 
 test('shows device code tab and token login tab when disconnected', async () => {
-  globalThis.fetch = (async (input: string | URL | Request) => {
-    const url = String(input);
-    if (url === '/api/github/status') {
-      return new Response(JSON.stringify({ connected: false }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    return new Response('Not found', { status: 404 });
-  }) as typeof globalThis.fetch;
+  stubFetch(routes({ '/api/github/status': { connected: false } }));
 
   render(<GistPane onDone={() => {}} />);
 
@@ -40,40 +25,25 @@ test('shows device code tab and token login tab when disconnected', async () => 
 });
 
 test('shows connected account and pushes config to cloud', async () => {
-  const requests: Array<{ url: string; body: string }> = [];
-
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
-    requests.push({ url, body: String(init?.body ?? '') });
-
-    if (url === '/api/github/status') {
-      return new Response(
-        JSON.stringify({
-          connected: true,
-          username: 'octocat',
-          avatarUrl: 'https://github.com/images/octocat.png',
-          lastSyncedAt: '2026-08-28T10:00:00Z',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-
-    if (url === '/api/github/push') {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          gistId: 'gist_123',
-          gistUpdatedAt: '2026-08-28T12:00:00Z',
-          lastSyncedAt: '2026-08-28T12:00:00Z',
-          exportedProfilesCount: 5,
-          exportedVaultCount: 2,
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-
-    return new Response('Not found', { status: 404 });
-  }) as typeof globalThis.fetch;
+  const { handler, requests } = recordRequests(
+    routes({
+      '/api/github/status': {
+        connected: true,
+        username: 'octocat',
+        avatarUrl: 'https://github.com/images/octocat.png',
+        lastSyncedAt: '2026-08-28T10:00:00Z',
+      },
+      '/api/github/push': {
+        ok: true,
+        gistId: 'gist_123',
+        gistUpdatedAt: '2026-08-28T12:00:00Z',
+        lastSyncedAt: '2026-08-28T12:00:00Z',
+        exportedProfilesCount: 5,
+        exportedVaultCount: 2,
+      },
+    }),
+  );
+  stubFetch(handler);
 
   render(<GistPane onDone={() => {}} />);
 
@@ -90,10 +60,10 @@ test('shows connected account and pushes config to cloud', async () => {
   fireEvent.click(pushSubmitBtn);
 
   await waitFor(() => {
-    expect(requests.some((r) => r.url === '/api/github/push')).toBe(true);
+    expect(requests.some((r) => r.path === '/api/github/push')).toBe(true);
   });
 
-  const pushReq = requests.find((r) => r.url === '/api/github/push');
+  const pushReq = requests.find((r) => r.path === '/api/github/push');
   expect(JSON.parse(pushReq?.body ?? '{}')).toEqual({
     passphrase: 'my-sync-secret',
     includeCodexLoginCache: true,
@@ -101,44 +71,20 @@ test('shows connected account and pushes config to cloud', async () => {
 });
 
 test('handles manual check device code flow', async () => {
-  const requests: Array<{ url: string; body: string }> = [];
-
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
-    requests.push({ url, body: String(init?.body ?? '') });
-
-    if (url === '/api/github/status') {
-      return new Response(JSON.stringify({ connected: false }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (url === '/api/github/device/code') {
-      return new Response(
-        JSON.stringify({
-          deviceCode: 'mock-device-code',
-          userCode: '1234-ABCD',
-          verificationUri: 'https://github.com/login/device',
-          expiresIn: 900,
-          interval: 5,
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-
-    if (url === '/api/github/device/poll') {
-      return new Response(
-        JSON.stringify({
-          status: 'authorized',
-          username: 'octocat',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-
-    return new Response('Not found', { status: 404 });
-  }) as typeof globalThis.fetch;
+  const { handler, requests } = recordRequests(
+    routes({
+      '/api/github/status': { connected: false },
+      '/api/github/device/code': {
+        deviceCode: 'mock-device-code',
+        userCode: '1234-ABCD',
+        verificationUri: 'https://github.com/login/device',
+        expiresIn: 900,
+        interval: 5,
+      },
+      '/api/github/device/poll': { status: 'authorized', username: 'octocat' },
+    }),
+  );
+  stubFetch(handler);
 
   render(<GistPane onDone={() => {}} />);
 
@@ -149,32 +95,21 @@ test('handles manual check device code flow', async () => {
   fireEvent.click(checkBtn);
 
   await waitFor(() => {
-    expect(requests.some((r) => r.url === '/api/github/device/poll')).toBe(true);
+    expect(requests.some((r) => r.path === '/api/github/device/poll')).toBe(true);
   });
   expect(await screen.findByText(/GitHub 授权成功，欢迎 octocat/)).toBeInTheDocument();
 });
 
 test('pulling reviews the cloud backup with the shared import step', async () => {
-  const requests: Array<{ url: string; body: string }> = [];
-
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
-    requests.push({ url, body: String(init?.body ?? '') });
-
-    if (url === '/api/github/status') {
-      return new Response(
-        JSON.stringify({ connected: true, username: 'octocat', gistId: 'gist_1234567890' }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-
-    if (url === '/api/github/pull/preview') {
-      const request = JSON.parse(String(init?.body ?? '{}')) as {
-        conflictPolicy?: 'skip' | 'overwrite';
-        restoreActive?: boolean;
-      };
-      return new Response(
-        JSON.stringify({
+  const { handler, requests } = recordRequests(
+    routes({
+      '/api/github/status': { connected: true, username: 'octocat', gistId: 'gist_1234567890' },
+      '/api/github/pull/preview': (_url: string, init: RequestInit) => {
+        const request = JSON.parse(String(init.body ?? '{}')) as {
+          conflictPolicy?: 'skip' | 'overwrite';
+          restoreActive?: boolean;
+        };
+        return {
           gistUpdatedAt: '2026-08-28T12:00:00Z',
           preview: {
             exportedAt: '2026-08-28T11:59:00Z',
@@ -188,29 +123,21 @@ test('pulling reviews the cloud backup with the shared import step', async () =>
             codexActivationAuthEffect: 'none',
             codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
           },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-
-    if (url === '/api/github/pull') {
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          imported: 3,
-          overwritten: 1,
-          skipped: 0,
-          providersCopied: 1,
-          activeRestored: 0,
-          codexLoginCacheMigrated: false,
-          warnings: [],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-
-    return new Response('Not found', { status: 404 });
-  }) as typeof globalThis.fetch;
+        };
+      },
+      '/api/github/pull': {
+        ok: true,
+        imported: 3,
+        overwritten: 1,
+        skipped: 0,
+        providersCopied: 1,
+        activeRestored: 0,
+        codexLoginCacheMigrated: false,
+        warnings: [],
+      },
+    }),
+  );
+  stubFetch(handler);
 
   let done = 0;
   render(<GistPane onDone={() => (done += 1)} />);
@@ -228,8 +155,8 @@ test('pulling reviews the cloud backup with the shared import step', async () =>
   fireEvent.click(screen.getByRole('button', { name: '确认导入' }));
   fireEvent.click(await screen.findByRole('button', { name: '安全导入' }));
 
-  await waitFor(() => expect(requests.some((r) => r.url === '/api/github/pull')).toBe(true));
-  const pullReq = requests.find((r) => r.url === '/api/github/pull');
+  await waitFor(() => expect(requests.some((r) => r.path === '/api/github/pull')).toBe(true));
+  const pullReq = requests.find((r) => r.path === '/api/github/pull');
   expect(JSON.parse(pullReq?.body ?? '{}')).toEqual({
     passphrase: 'my-sync-secret',
     conflictPolicy: 'skip',
@@ -245,21 +172,15 @@ test('pulling reviews the cloud backup with the shared import step', async () =>
 });
 
 test('changing the conflict policy keeps the preview and asks for a re-check', async () => {
-  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    const url = String(input);
-    if (url === '/api/github/status') {
-      return new Response(JSON.stringify({ connected: true, username: 'octocat' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    if (url === '/api/github/pull/preview') {
-      const request = JSON.parse(String(init?.body ?? '{}')) as {
-        conflictPolicy?: 'skip' | 'overwrite';
-        restoreActive?: boolean;
-      };
-      return new Response(
-        JSON.stringify({
+  stubFetch(
+    routes({
+      '/api/github/status': { connected: true, username: 'octocat' },
+      '/api/github/pull/preview': (_url: string, init: RequestInit) => {
+        const request = JSON.parse(String(init.body ?? '{}')) as {
+          conflictPolicy?: 'skip' | 'overwrite';
+          restoreActive?: boolean;
+        };
+        return {
           gistUpdatedAt: '2026-08-28T12:00:00Z',
           preview: {
             exportedAt: '2026-08-28T11:59:00Z',
@@ -273,12 +194,10 @@ test('changing the conflict policy keeps the preview and asks for a re-check', a
             codexActivationAuthEffect: 'none',
             codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
           },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    }
-    return new Response('Not found', { status: 404 });
-  }) as typeof globalThis.fetch;
+        };
+      },
+    }),
+  );
 
   render(<GistPane onDone={() => {}} />);
   fireEvent.click(await screen.findByText('从云端拉取'));
