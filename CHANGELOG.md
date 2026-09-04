@@ -1,3 +1,11 @@
+## [0.30.1](https://github.com/B1anker/harness-switch/compare/v0.30.0...v0.30.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **web:** steady the transfer dialog and cache GitHub status ([007947b](https://github.com/B1anker/harness-switch/commit/007947b5a40d794af6be47da333a8e2bd4d3e6b9))
+* **web:** stop rstest dumping cursor escapes into log viewers ([7e97197](https://github.com/B1anker/harness-switch/commit/7e97197f873f0c94437db0e2e68361af63b6396e))
+
 # [0.30.0](https://github.com/B1anker/harness-switch/compare/v0.29.0...v0.30.0) (2026-09-03)
 
 

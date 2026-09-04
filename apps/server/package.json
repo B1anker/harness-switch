@@ -1,6 +1,6 @@
 {
   "name": "@seaveyon/harness-switch",
-  "version": "0.30.0",
+  "version": "0.30.1",
   "description": "A secure web control plane that switches API providers for Claude Code, Codex, Kimi Code, Pi and DeepSeek Harness by writing their native config files on SSH servers.",
   "keywords": [
     "claude-code",
