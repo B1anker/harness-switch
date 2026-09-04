@@ -138,7 +138,7 @@ test('switching Unix users refreshes every user-scoped collection', async () => 
 });
 
 test('an expired session drops the user back to the login screen without an error banner', async () => {
-  responder = () => ({ status: 401, body: { error: 'authentication required' } });
+  responder = () => ({ status: 401, body: { msg: 'authentication required' } });
   await useAppStore.getState().loadHarnesses();
 
   const state = useAppStore.getState();
@@ -148,7 +148,7 @@ test('an expired session drops the user back to the login screen without an erro
 });
 
 test('a real failure surfaces the server message', async () => {
-  responder = () => ({ status: 500, body: { error: 'disk full' } });
+  responder = () => ({ status: 500, body: { msg: 'disk full' } });
   await useAppStore.getState().loadHarnesses();
   expect(useAppStore.getState().error).toMatchObject({
     key: 'error.unknown',
@@ -162,7 +162,7 @@ test('loading the session also refreshes drift without blocking on its failure',
       ? { status: 200, body: {} }
       : path === '/api/harnesses'
         ? { status: 200, body: harnessResponse() }
-        : { status: 500, body: { error: 'drift broken' } };
+        : { status: 500, body: { msg: 'drift broken' } };
 
   await useAppStore.getState().loadSession();
 
@@ -197,13 +197,7 @@ test('warnings from steps after the switch committed are shown, not swallowed', 
           body: {
             ok: true,
             envFile: '/env.sh',
-            warnings: [
-              {
-                code: 'warning.activation.backfillFailed',
-                message: '未能把 main 的现有配置回填保存',
-                params: { profile: 'main' },
-              },
-            ],
+            warnings: [{ code: 'warning.activation.backfillFailed', data: { profile: 'main' } }],
           },
         }
       : { status: 200, body: harnessResponse() };
@@ -214,7 +208,7 @@ test('warnings from steps after the switch committed are shown, not swallowed', 
     expect.arrayContaining([
       expect.objectContaining({
         key: 'warning.activation.backfillFailed',
-        fallback: '未能把 main 的现有配置回填保存',
+        params: { profile: 'main' },
       }),
     ]),
   );
@@ -245,7 +239,7 @@ test('creating and updating hit the right paths and refresh the list plus drift'
 });
 
 test('a rejected write is raised so the dialog can keep the form open', async () => {
-  responder = () => ({ status: 409, body: { error: 'profile already exists' } });
+  responder = () => ({ status: 409, body: { msg: 'profile already exists' } });
   await expect(
     useAppStore.getState().createProfile('claude', { name: 'main', baseUrl: 'https://a' }),
   ).rejects.toThrow('profile already exists');
@@ -337,7 +331,7 @@ test('loading providers stores the list without ever exposing a key', async () =
 });
 
 test('an expired session clears the provider list back to empty', async () => {
-  responder = () => ({ status: 401, body: { error: 'authentication required' } });
+  responder = () => ({ status: 401, body: { msg: 'authentication required' } });
   await useAppStore.getState().loadProviders();
   expect(useAppStore.getState().authenticated).toBe(false);
   expect(useAppStore.getState().providers).toEqual([]);
@@ -395,7 +389,7 @@ test('deleting a provider deletes and reloads', async () => {
 });
 
 test('a referenced provider surfaces the 409 message', async () => {
-  responder = () => ({ status: 409, body: { error: 'Provider 正被 2 个配置引用' } });
+  responder = () => ({ status: 409, body: { msg: 'Provider 正被 2 个配置引用' } });
   await expect(useAppStore.getState().deleteProvider('openrouter')).rejects.toThrow(
     'Provider 正被 2 个配置引用',
   );

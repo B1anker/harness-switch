@@ -35,14 +35,7 @@ export function createUserRoutes(services: InstantiationService): Hono {
           current: user.username === current,
           manageable: verdict.ok,
         };
-        return verdict.ok
-          ? base
-          : {
-              ...base,
-              blockCode: verdict.code,
-              blockParams: verdict.params,
-              blockReason: verdict.reason,
-            };
+        return verdict.ok ? base : { ...base, blockCode: verdict.code, blockData: verdict.data };
       }),
     } satisfies UsersResponse);
   });
@@ -79,9 +72,9 @@ export function createUserRoutes(services: InstantiationService): Hono {
     // account would lock an already-pinned session out of even reading this list.
     const verdict = access.inspect(user);
     if (!verdict.ok) {
-      throw new HttpError(403, verdict.reason, {
+      throw new HttpError(403, 'user is not switchable', {
         code: ERROR_CODES.userNotSwitchable,
-        params: { username: user.username, ...verdict.params },
+        params: { username: user.username, ...verdict.data },
       });
     }
     auth.selectUser(token, user.username);

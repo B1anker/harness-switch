@@ -85,9 +85,8 @@ export class ProviderService implements IProviderService {
         !provider.endpoints.some((endpoint) => endpoint.key === profile.providerEndpoint)
       ) {
         warnings.push({
-          message: `${harness}/${ref.name}: endpoint ${profile.providerEndpoint} 已不存在，将回退到 provider 首个 endpoint`,
           code: WARNING_CODES.endpointFallback,
-          params: { harness, profile: ref.name, endpoint: profile.providerEndpoint },
+          data: { harness, profile: ref.name, endpoint: profile.providerEndpoint },
         });
       }
       try {
@@ -96,9 +95,8 @@ export class ProviderService implements IProviderService {
         const reason = (error as Error).message;
         this.log.error(`providers update: failed to re-apply ${harness}/${ref.name}`, error);
         warnings.push({
-          message: `${harness}/${ref.name} 重新应用失败：${reason}`,
           code: WARNING_CODES.reapplyFailed,
-          params: { harness, profile: ref.name, reason },
+          data: { harness, profile: ref.name, reason },
         });
       }
     }
@@ -109,11 +107,7 @@ export class ProviderService implements IProviderService {
     const apiKey = this.vault.decrypt(id);
     const baseUrl = endpointBaseUrl(this.vault.get(id), options.endpoint);
     if (!baseUrl) {
-      return {
-        ok: false,
-        code: PROBE_CODES.missingBaseUrl,
-        message: `provider ${id} 未配置任何 endpoint，无法测试`,
-      };
+      return { ok: false, code: PROBE_CODES.missingBaseUrl };
     }
     return this.probes.probe({
       baseUrl,

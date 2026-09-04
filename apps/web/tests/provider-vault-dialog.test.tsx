@@ -196,7 +196,7 @@ test('a referenced provider shows the 409 reason instead of deleting', async () 
     deleteProvider: async () => {
       throw new ApiError(409, 'Provider 正被 2 个配置引用，请先移除这些引用再删除', {
         code: 'provider.inUse',
-        params: { count: 2 },
+        data: { count: 2 },
       });
     },
   } as Partial<ReturnType<typeof useAppStore.getState>> as never);

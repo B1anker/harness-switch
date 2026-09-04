@@ -105,8 +105,7 @@ test('a failed probe renders the translated reason instead of throwing', async (
     draft: {
       ok: false,
       code: 'probe.unauthorized',
-      params: { status: 401 },
-      message: '端点可达但拒绝了凭据（HTTP 401），请检查 API Key',
+      data: { status: 401 },
     },
   });
   renderCreateDialog();
@@ -257,8 +256,7 @@ test('a listed model that does not answer renders red under a green catalog line
         model: 'model-a',
         status: 500,
         code: 'probe.completionHttpError',
-        params: { status: 500, model: 'model-a' },
-        message: '模型 model-a 的补全请求返回 HTTP 500',
+        data: { status: 500, model: 'model-a' },
       },
     },
   });

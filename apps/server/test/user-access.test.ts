@@ -153,11 +153,11 @@ describe('user access probe', () => {
     expect(verdict.code).toBe(USER_BLOCK_CODES.ownershipRequiresRoot);
   });
 
-  test('a block carries prose and params for the CLI and the web UI', () => {
+  test('a block carries the code and the data its message interpolates', () => {
     const verdict = access().inspect(peer('ghost'));
     expect(verdict.ok).toBe(false);
     if (verdict.ok) return;
-    expect(verdict.reason.length).toBeGreaterThan(0);
-    expect(verdict.params.home).toBe(sandbox.root('ghost'));
+    expect(verdict.code).toBe(USER_BLOCK_CODES.homeMissing);
+    expect(verdict.data.home).toBe(sandbox.root('ghost'));
   });
 });

@@ -5,6 +5,7 @@ import type {
   ProbeResult,
   ProfilePublic,
 } from '@seaveyon/harness-switch-shared';
+import { LIMITS } from '@seaveyon/harness-switch-shared';
 import { ChevronDown, ChevronRight, Loader2, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ProbeResultLine } from '@/components/probe-result-line';
@@ -30,7 +31,14 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslation } from '@/lib/i18n';
-import { errorLine, lineText, type MessageLine, specText } from '@/lib/messages';
+import {
+  errorLine,
+  fieldText,
+  lineText,
+  type MessageLine,
+  placeholderText,
+  specText,
+} from '@/lib/messages';
 import { PRESETS, type Preset } from '@/lib/presets';
 import { useAppStore } from '@/stores/app-store';
 
@@ -44,9 +52,6 @@ type ProfileDialogProps = {
 };
 
 type ProfileFieldErrors = Record<string, MessageLine | undefined>;
-
-/** Longest profile name the server accepts. */
-const NAME_MAX_LENGTH = 120;
 
 /** `oneMKey` is null for tiers with no 1M variant, such as Haiku. */
 const CLAUDE_MODEL_ROWS = [
@@ -251,8 +256,8 @@ export function ProfileDialog({
     if (!trimmedName) next.name = { key: 'profile.error.nameRequired' };
     else if (trimmedName.includes('/') || trimmedName.includes('\\'))
       next.name = { key: 'profile.error.nameSlash' };
-    else if (trimmedName.length > NAME_MAX_LENGTH)
-      next.name = { key: 'profile.error.nameTooLong', params: { max: NAME_MAX_LENGTH } };
+    else if (trimmedName.length > LIMITS.name)
+      next.name = { key: 'profile.error.nameTooLong', params: { max: LIMITS.name } };
     else if (
       harness.profiles.some((item) => item.name === trimmedName && item.name !== profile?.name)
     )
@@ -269,7 +274,7 @@ export function ProfileDialog({
         // own language sitting inside an otherwise translated sentence.
         next[`extra:${field.key}`] = {
           key: 'profile.error.fieldRequired',
-          params: { label: specText(t, field.labelCode, field.label, field.params) },
+          params: { label: fieldText(t, field.labelCode, field.params) },
         };
       }
     }
@@ -848,10 +853,8 @@ function ExtraField({
 }) {
   const { t } = useTranslation();
   const id = `extra-${field.key}`;
-  const label = specText(t, field.labelCode, field.label, field.params);
-  const placeholder = field.placeholder
-    ? specText(t, field.placeholderCode, field.placeholder, field.params)
-    : undefined;
+  const label = fieldText(t, field.labelCode, field.params);
+  const placeholder = placeholderText(t, field);
   return (
     <div
       className={
@@ -872,7 +875,7 @@ function ExtraField({
           <SelectContent>
             {field.options?.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {specText(t, option.labelCode, option.label)}
+                {option.labelCode ? t(option.labelCode) : option.value}
               </SelectItem>
             ))}
           </SelectContent>
@@ -904,9 +907,9 @@ function ExtraField({
           {lineText(t, error)}
         </p>
       ) : null}
-      {field.help ? (
+      {field.helpCode ? (
         <p className="text-xs text-muted-foreground">
-          {specText(t, field.helpCode, field.help, field.params)}
+          {fieldText(t, field.helpCode, field.params)}
         </p>
       ) : null}
     </div>
@@ -967,7 +970,7 @@ function ClaudeModelMappingFields({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`extra-${nameKey}`} className="text-xs md:sr-only">
-                  {specText(t, nameField.labelCode, nameField.label, nameField.params)}
+                  {fieldText(t, nameField.labelCode, nameField.params)}
                 </Label>
                 <Input
                   id={`extra-${nameKey}`}
@@ -975,13 +978,7 @@ function ClaudeModelMappingFields({
                   placeholder={
                     values[modelKey]?.trim()
                       ? t('profile.mapping.defaultTo', { model: values[modelKey].trim() })
-                      : nameField.placeholder &&
-                        specText(
-                          t,
-                          nameField.placeholderCode,
-                          nameField.placeholder,
-                          nameField.params,
-                        )
+                      : placeholderText(t, nameField)
                   }
                   aria-invalid={nameError ? true : undefined}
                   aria-describedby={nameError ? `extra-${nameKey}-error` : undefined}
@@ -995,20 +992,12 @@ function ClaudeModelMappingFields({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`extra-${modelKey}`} className="text-xs md:sr-only">
-                  {specText(t, modelField.labelCode, modelField.label, modelField.params)}
+                  {fieldText(t, modelField.labelCode, modelField.params)}
                 </Label>
                 <Input
                   id={`extra-${modelKey}`}
                   value={values[modelKey] ?? ''}
-                  placeholder={
-                    modelField.placeholder &&
-                    specText(
-                      t,
-                      modelField.placeholderCode,
-                      modelField.placeholder,
-                      modelField.params,
-                    )
-                  }
+                  placeholder={placeholderText(t, modelField)}
                   aria-invalid={modelError ? true : undefined}
                   aria-describedby={modelError ? `extra-${modelKey}-error` : undefined}
                   onChange={(event) => onChange(modelKey, event.target.value)}
@@ -1040,20 +1029,12 @@ function ClaudeModelMappingFields({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="extra-subagentModel" className="text-xs md:sr-only">
-                {specText(t, subagentField.labelCode, subagentField.label, subagentField.params)}
+                {fieldText(t, subagentField.labelCode, subagentField.params)}
               </Label>
               <Input
                 id="extra-subagentModel"
                 value={values.subagentModel ?? ''}
-                placeholder={
-                  subagentField.placeholder &&
-                  specText(
-                    t,
-                    subagentField.placeholderCode,
-                    subagentField.placeholder,
-                    subagentField.params,
-                  )
-                }
+                placeholder={placeholderText(t, subagentField)}
                 aria-invalid={errors['extra:subagentModel'] ? true : undefined}
                 aria-describedby={
                   errors['extra:subagentModel'] ? 'extra-subagentModel-error' : undefined
@@ -1114,7 +1095,7 @@ function OneMCell({
     );
   }
   const id = `extra-${field.key}`;
-  const label = specText(t, field.labelCode, field.label, field.params);
+  const label = fieldText(t, field.labelCode, field.params);
   return (
     <div className="space-y-1.5">
       <div className="flex h-10 items-center">

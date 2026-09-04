@@ -137,12 +137,12 @@ test('the import notice lists only the counts that happened, in one order', () =
     providersCopied: 3,
     activeRestored: 0,
     codexLoginCacheMigrated: false,
-    warnings: [{ message: 'kimi 的凭据缺少密钥' }],
+    warnings: [{ code: 'warning.transfer.credentialMissing' }],
   });
 
   expect(notice[0]?.key).toBe('transfer.importedSummary');
   const parts = String(notice[0]?.params?.parts);
   expect(parts).toBe('新增 2 项、恢复 3 条凭据、跳过 1 项、未迁移导出包内的 Codex 登录缓存');
   // Warnings ride along as their own lines so they follow a language switch too.
-  expect(notice[1]?.fallback).toContain('kimi 的凭据缺少密钥');
+  expect(notice[1]?.key).toBe('warning.transfer.credentialMissing');
 });

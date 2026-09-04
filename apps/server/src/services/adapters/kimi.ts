@@ -55,38 +55,31 @@ export class KimiAdapter extends BaseAdapter implements HarnessAdapter {
   readonly fields: FieldSpec[] = [
     {
       key: 'providerType',
-      label: 'Provider 类型',
       labelCode: 'harness.field.kimi.providerType.label',
       kind: 'select',
       defaultValue: 'kimi',
-      help: '决定 Kimi Code 使用哪套协议实现。',
       helpCode: 'harness.field.kimi.providerType.help',
       options: [
         {
           value: 'kimi',
-          label: 'kimi（Moonshot / Kimi Code）',
           labelCode: 'harness.field.kimi.providerType.option.kimi',
         },
-        { value: 'anthropic', label: 'anthropic' },
-        { value: 'openai_responses', label: 'openai_responses' },
-        { value: 'openai_legacy', label: 'openai_legacy' },
+        { value: 'anthropic' },
+        { value: 'openai_responses' },
+        { value: 'openai_legacy' },
       ],
     },
     {
       key: 'providerId',
-      label: 'Provider ID（可选）',
       labelCode: 'harness.field.providerId.label',
       kind: 'text',
-      placeholder: '默认取配置名称',
       placeholderCode: 'harness.field.providerId.placeholder',
     },
     {
       key: 'maxContextSize',
-      label: '上下文长度',
       labelCode: 'harness.field.contextLength.label',
       kind: 'text',
       defaultValue: String(DEFAULT_CONTEXT),
-      help: 'Kimi Code 要求 models 条目必须声明 max_context_size。',
       helpCode: 'harness.field.kimi.maxContextSize.help',
     },
   ];

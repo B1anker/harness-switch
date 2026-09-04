@@ -188,7 +188,10 @@
           "help": "DSH only shows the levels declared here that the upstream model actually supports.",
           "option": {
             "unset": "Not declared (provider default)",
-            "none": "Model does not support reasoning levels"
+            "none": "Model does not support reasoning levels",
+            "lowToMax": "Low / Medium / High / XHigh / Max",
+            "lowToXhigh": "Low / Medium / High / XHigh",
+            "minimalToHigh": "Minimal / Low / Medium / High"
           }
         }
       }
@@ -499,7 +502,9 @@
       "probeOk": "Endpoint of profile {{profile}} is reachable",
       "probeFailed": "Connectivity probe failed for profile {{profile}}",
       "completionOk": "Model {{model}} completed a request ({{latencyMs}}ms)",
-      "completionFailed": "Model {{model}} failed to complete: the endpoint is reachable, but this model cannot answer"
+      "completionFailed": "Model {{model}} failed to complete: the endpoint is reachable, but this model cannot answer",
+      "completionOkCached": "Model {{model}} completed a request ({{latencyMs}}ms, cached)",
+      "completionFailedCached": "Model {{model}} failed to complete: the endpoint is reachable, but this model cannot answer (cached)"
     }
   },
   "notice": {
@@ -614,20 +619,38 @@
       "loginCacheNotRegular": "The Codex login cache is not a regular file"
     },
     "transfer": {
-      "envelopeInvalid": "Unsupported export file format"
+      "envelopeInvalid": "Unsupported export file format",
+      "passphraseTooShort": "The migration passphrase must be at least 8 characters",
+      "decryptFailed": "Wrong migration passphrase, or the export file is damaged",
+      "tooManyProfiles": "The export file contains too many profiles",
+      "profilesInvalid": "The profile data in the export file is invalid",
+      "profileNameInvalid": "The export file contains an invalid profile name",
+      "duplicateProfile": "The export file contains a duplicate profile",
+      "providersInvalid": "The vault data in the export file is invalid",
+      "duplicateProvider": "The export file contains a duplicate vault entry",
+      "providerMissing": "A profile in the export file references a vault entry that does not exist",
+      "activeInvalid": "The active-profile data in the export file is invalid",
+      "duplicateActive": "The export file contains a duplicate active profile",
+      "activeProfileMissing": "An active profile in the export file references a profile that does not exist",
+      "officialActiveInvalid": "The official-login state in the export file is invalid",
+      "codexCacheInvalid": "The Codex login cache in the export file is invalid"
     },
     "sync": {
       "sourceCodexLoginCacheMissing": "The source user has no usable Codex official login cache",
       "sourceEqualsTarget": "The source and target users are the same",
       "invalidConflictPolicy": "The conflict policy is invalid"
     },
-    "harness": { "notFound": "Harness not found" },
+    "harness": {
+      "notFound": "Harness not found"
+    },
     "file": {
       "notRegular": "{{file}} is not a regular file",
       "outsideManagedDirectory": "{{file}} is outside the managed directories",
       "ownershipRequiresRoot": "Changing ownership of {{path}} requires running as root"
     },
-    "scan": { "apiKeyRequired": "No credential could be extracted; enter an API key first" },
+    "scan": {
+      "apiKeyRequired": "No credential could be extracted; enter an API key first"
+    },
     "backup": {
       "targetInvalid": "{{path}} is not a valid {{harness}} backup target",
       "invalidId": "The backup id is invalid",
@@ -691,6 +714,11 @@
     },
     "transfer": {
       "activeRestoreFailed": "Could not restore the active state: {{reason}}"
+    },
+    "scan": {
+      "profileGone": "The configuration is no longer on disk; skipped",
+      "profileExists": "A profile with the same name already exists; skipped",
+      "importFailed": "Import failed: {{reason}}"
     }
   },
   "update": {

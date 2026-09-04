@@ -70,11 +70,6 @@ function checksOf(report: DoctorResponse, harness: string, id: string): DoctorCh
   );
 }
 
-function messageOf(check: DoctorCheck | undefined): string {
-  const detail = check?.detail as { message?: unknown } | undefined;
-  return typeof detail?.message === 'string' ? detail.message : '';
-}
-
 function activateClaude() {
   services.get(IProfileService).upsert(
     'claude',
@@ -105,8 +100,7 @@ describe('doctor', () => {
     const report = await doctor().run({ harness: 'dsh' });
     const check = checksOf(report, 'dsh', 'dsh.install')[0];
     expect(check?.status).toBe('ok');
-    expect(check?.code).toBe('doctor.check.installNotRequired');
-    expect(messageOf(check)).toContain('Web 服务');
+    expect(check?.code).toBe(DOCTOR_CODES.installNotRequired);
   });
 
   test('flags a missing target file as a files warning', async () => {
@@ -114,7 +108,7 @@ describe('doctor', () => {
     const report = await doctor().run({ harness: 'claude' });
     const check = checksOf(report, 'claude', 'claude.files.settings')[0];
     expect(check?.status).toBe('warn');
-    expect(messageOf(check)).toContain('不存在');
+    expect(check?.code).toBe(DOCTOR_CODES.fileMissing);
   });
 
   test('flags group/other-readable config files as permission warnings', async () => {
@@ -243,8 +237,8 @@ describe('doctor', () => {
     const check = checksOf(report, 'claude', 'claude.completion')[0];
     expect(check?.status).toBe('error');
     expect(check?.code).toBe(DOCTOR_CODES.completionFailed);
-    expect(check?.params?.model).toBe('claude-sonnet-4-5');
-    expect(check?.params?.reason).toBe(PROBE_CODES.completionHttpError);
+    expect(check?.data?.model).toBe('claude-sonnet-4-5');
+    expect(check?.data?.reason).toBe(PROBE_CODES.completionHttpError);
     const detail = check?.detail as { model?: string; status?: number } | undefined;
     expect(detail?.model).toBe('claude-sonnet-4-5');
     expect(detail?.status).toBe(500);
@@ -275,10 +269,9 @@ describe('doctor', () => {
     expect(posts()).toHaveLength(1);
     const check = checksOf(second, 'claude', 'claude.completion')[0];
     expect(check?.status).toBe('ok');
-    // A replay says so, in prose and in detail: "answered" and "answered hours ago" differ.
     const detail = check?.detail as { cachedAt?: string } | undefined;
     expect(typeof detail?.cachedAt).toBe('string');
-    expect(messageOf(check)).toContain('缓存');
+    expect(check?.code).toBe(DOCTOR_CODES.completionOkCached);
   });
 
   test('the probe skips harnesses in official-login mode instead of crashing', async () => {

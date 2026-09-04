@@ -98,7 +98,6 @@ const MODEL_MAPPINGS: readonly ModelMapping[] = [
     role: 'Fable',
     label: 'Fable 模型映射（可选）',
     example: 'glm-5',
-    help: '写入 ANTHROPIC_DEFAULT_FABLE_MODEL；用于支持 Fable 档位的新版 Claude Code。',
     helpCode: 'harness.field.claude.fableModel.help',
   },
   {
@@ -108,15 +107,14 @@ const MODEL_MAPPINGS: readonly ModelMapping[] = [
     role: '子代理',
     label: '子代理模型（可选）',
     example: 'glm-5-air',
-    help: '写入 CLAUDE_CODE_SUBAGENT_MODEL，可让子代理使用更快或成本更低的模型。',
     helpCode: 'harness.field.claude.subagentModel.help',
     oneMLabelCode: 'harness.field.claude.oneM.subagentLabel',
   },
 ];
 
 const ONE_M_OPTIONS = [
-  { value: 'false', label: '关闭', labelCode: 'harness.field.toggle.off' },
-  { value: 'true', label: '开启', labelCode: 'harness.field.toggle.on' },
+  { value: 'false', labelCode: 'harness.field.toggle.off' },
+  { value: 'true', labelCode: 'harness.field.toggle.on' },
 ];
 
 /**
@@ -127,13 +125,11 @@ const ONE_M_OPTIONS = [
 function oneMField(role: string, key: string, labelCode?: string): FieldSpec {
   return {
     key,
-    label: `${role} 声明支持 1M`,
     labelCode: labelCode ?? 'harness.field.claude.oneM.label',
     ...(labelCode ? {} : { params: { role } }),
     kind: 'select',
     defaultValue: 'false',
     options: ONE_M_OPTIONS,
-    help: '在模型 ID 末尾追加 [1m]，向 Claude Code 声明 1M 上下文；Claude Code 请求上游前会去掉该后缀。仅在该模型确实支持 1M 时开启。',
     helpCode: 'harness.field.claude.oneM.help',
   };
 }
@@ -146,13 +142,10 @@ function tierFields(tier: ModelMapping): FieldSpec[] {
   const fields: FieldSpec[] = [
     {
       key: tier.field,
-      label: tier.label,
       labelCode: `harness.field.claude.${tier.field}.label`,
       kind: 'text',
       ...(tier.required ? { required: true } : {}),
-      placeholder: `例如：${tier.example}`,
       placeholderCode: 'harness.field.claude.example.placeholder',
-      help: tier.help ?? `写入 ${tier.envVar}。`,
       helpCode: tier.helpCode ?? 'harness.field.claude.modelMapping.help',
       // The shared help entry names the variable it writes; a tier with its own entry
       // already spells the variable out in its prose.
@@ -164,12 +157,9 @@ function tierFields(tier: ModelMapping): FieldSpec[] {
   if (tier.nameField && tier.nameEnvVar) {
     fields.push({
       key: tier.nameField,
-      label: `${tier.role} 显示名称（选填）`,
       labelCode: `harness.field.claude.${tier.nameField}.label`,
       kind: 'text',
-      placeholder: `留空则使用 ${tier.role} 模型 ID`,
       placeholderCode: 'harness.field.claude.modelName.placeholder',
-      help: `写入 ${tier.nameEnvVar}；留空时 Claude Code 默认显示对应模型 ID。`,
       helpCode: 'harness.field.claude.modelName.help',
       params: { role: tier.role, envVar: tier.nameEnvVar },
     });
@@ -210,22 +200,18 @@ export class ClaudeAdapter extends BaseAdapter implements HarnessAdapter {
   readonly fields: FieldSpec[] = [
     {
       key: 'authVar',
-      label: '凭据变量',
       labelCode: 'harness.field.claude.authVar.label',
       kind: 'select',
       defaultValue: 'ANTHROPIC_AUTH_TOKEN',
-      help: '第三方中转通常要求 ANTHROPIC_AUTH_TOKEN；官方 API key 用 ANTHROPIC_API_KEY。',
       helpCode: 'harness.field.claude.authVar.help',
       fullWidth: true,
       options: [
         {
           value: 'ANTHROPIC_AUTH_TOKEN',
-          label: 'ANTHROPIC_AUTH_TOKEN（第三方中转）',
           labelCode: 'harness.field.claude.authVar.option.authToken',
         },
         {
           value: 'ANTHROPIC_API_KEY',
-          label: 'ANTHROPIC_API_KEY（官方）',
           labelCode: 'harness.field.claude.authVar.option.official',
         },
       ],
@@ -233,11 +219,9 @@ export class ClaudeAdapter extends BaseAdapter implements HarnessAdapter {
     ...MODEL_MAPPINGS.flatMap(tierFields),
     {
       key: 'extraEnv',
-      label: '追加环境变量（可选）',
       labelCode: 'harness.field.claude.extraEnv.label',
       kind: 'textarea',
       placeholder: 'ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.2\nAPI_TIMEOUT_MS=3000000',
-      help: '每行一个 KEY=VALUE，会合并进 settings.json 的 env。',
       helpCode: 'harness.field.claude.extraEnv.help',
     },
   ];

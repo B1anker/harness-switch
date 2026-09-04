@@ -1,4 +1,5 @@
 import type { ProbeCompletion, ProbeResult } from '@seaveyon/harness-switch-shared';
+import { PROBE_CODES } from '@seaveyon/harness-switch-shared';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { useI18n, useTranslation } from '@/lib/i18n';
 import { lineText, messageLine } from '@/lib/messages';
@@ -6,8 +7,8 @@ import { lineText, messageLine } from '@/lib/messages';
 /**
  * One connectivity-probe outcome, rendered next to the button that triggered it.
  *
- * Success shows latency and catalog size; failure translates the server's `code`,
- * falling back to its prose — the same contract as every other server message.
+ * Success shows latency and catalog size; failure renders the server's `code` — the
+ * same contract as every other server message.
  *
  * The completion is a second line rather than part of the first, because the two
  * verdicts are independent: a relay that lists a model and then 5xx on it must show
@@ -39,7 +40,7 @@ function CatalogLine({ result }: { result: ProbeResult }) {
     <Line ok={false}>
       {lineText(
         t,
-        messageLine({ code: result.code, params: result.params, message: result.message ?? '' }),
+        messageLine({ code: result.code ?? PROBE_CODES.networkError, data: result.data }),
       )}
     </Line>
   );
@@ -63,11 +64,7 @@ function CompletionLine({ completion }: { completion: ProbeCompletion }) {
   }
   const text = lineText(
     t,
-    messageLine({
-      code: completion.code,
-      params: completion.params,
-      message: completion.message ?? '',
-    }),
+    messageLine({ code: completion.code ?? PROBE_CODES.networkError, data: completion.data }),
   );
   return (
     <Line ok={false}>{at ? `${text}（${t('probe.completionFailedCached', { at })}）` : text}</Line>

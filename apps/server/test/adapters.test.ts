@@ -823,8 +823,9 @@ describe('form field localization', () => {
   });
 
   test('every field carrying prose carries a key for it', () => {
-    // Labels like `config.toml` or `openai-responses` are identifiers and stay as they are;
-    // anything with a CJK character is prose and needs a key, or it never gets translated.
+    // The type now demands a `labelCode`, so what is left to police is the literals that
+    // remain: identifiers like `config.toml` or an env var sample, which read the same in
+    // every language. A CJK character in one means prose slipped back in without a key.
     const untranslated: string[] = [];
     for (const adapter of adapters) {
       const note = adapter.envNote;
@@ -837,19 +838,8 @@ describe('form field localization', () => {
         }
       }
       for (const field of adapter.fields) {
-        if (hasCjk(field.label) && !field.labelCode) {
-          untranslated.push(`${adapter.id}.${field.key}: label`);
-        }
-        if (field.help && hasCjk(field.help) && !field.helpCode) {
-          untranslated.push(`${adapter.id}.${field.key}: help`);
-        }
-        if (field.placeholder && hasCjk(field.placeholder) && !field.placeholderCode) {
+        if (field.placeholder && hasCjk(field.placeholder)) {
           untranslated.push(`${adapter.id}.${field.key}: placeholder`);
-        }
-        for (const option of field.options ?? []) {
-          if (hasCjk(option.label) && !option.labelCode) {
-            untranslated.push(`${adapter.id}.${field.key}: option ${option.value}`);
-          }
         }
       }
     }

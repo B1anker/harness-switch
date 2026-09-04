@@ -141,7 +141,7 @@ describe('existing configuration scan', () => {
     const codex = resultFor(await scan(context), 'codex');
     expect(codex.sources.map((source) => source.key).toSorted()).toEqual(['auth', 'config']);
     expect(codex.sources.every((source) => !source.exists)).toBe(true);
-    expect(codex.note).toContain('没有找到');
+    expect(codex.noteMsg).toContain('没有找到');
   });
 
   test('refuses to guess at a config file the tool itself could not parse', async () => {
@@ -150,7 +150,7 @@ describe('existing configuration scan', () => {
 
     const codex = resultFor(await scan(context), 'codex');
     expect(codex.candidates).toHaveLength(0);
-    expect(codex.note).toContain('无法解析');
+    expect(codex.noteMsg).toContain('无法解析');
   });
 });
 
@@ -234,7 +234,7 @@ describe('scan import', () => {
     ]);
     expect(again.body.imported).toBe(0);
     expect(again.body.skipped).toBe(1);
-    expect(again.body.warnings[0]?.message).toContain('已存在');
+    expect(again.body.warnings[0]?.msg).toContain('已存在');
 
     const forced = await importSelections(context, [
       { id: 'claude:claude', name: '重名', target: 'profile', overwrite: true },
@@ -252,7 +252,7 @@ describe('scan import', () => {
     ]);
     expect(body.imported).toBe(0);
     expect(body.skipped).toBe(1);
-    expect(body.warnings[0]?.message).toContain('已不在磁盘上');
+    expect(body.warnings[0]?.msg).toContain('已不在磁盘上');
   });
 
   test('a provider whose key lives in the shell must have one supplied', async () => {
@@ -263,7 +263,7 @@ describe('scan import', () => {
       { id: 'codex:beta', name: 'beta', target: 'profile' },
     ]);
     expect(refused.body.imported).toBe(0);
-    expect(refused.body.warnings[0]?.message).toContain('请先填写 API key');
+    expect(refused.body.warnings[0]?.msg).toContain('请先填写 API key');
 
     const supplied = await importSelections(context, [
       { id: 'codex:beta', name: 'beta', target: 'profile', apiKey: 'sk-typed-by-hand' },

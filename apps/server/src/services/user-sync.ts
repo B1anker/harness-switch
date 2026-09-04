@@ -238,18 +238,13 @@ export class UserSyncService implements IUserSyncService {
         const result = this.activation.activate(harness, name);
         // Nested warnings keep their own code; only the scope prefix is added.
         warnings.push(
-          ...result.warnings.map((warning) => ({
-            ...warning,
-            message: `${harness}/${name}: ${warning.message}`,
-            scope: `${harness}/${name}`,
-          })),
+          ...result.warnings.map((warning) => ({ ...warning, scope: `${harness}/${name}` })),
         );
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         warnings.push({
-          message: `${harness}/${name} 已更新配置库，但自动重新激活失败：${reason}`,
           code: WARNING_CODES.syncReapplyFailed,
-          params: { harness, profile: name, reason },
+          data: { harness, profile: name, reason },
         });
       }
     }

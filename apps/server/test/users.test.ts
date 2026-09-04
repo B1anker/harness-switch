@@ -62,10 +62,11 @@ describe('local Unix users', () => {
       { username: owner.username, manageable: true },
       { username: stranger.username, manageable: false, blockCode: USER_BLOCK_CODES.homeMissing },
     ]);
-    // The reason travels as prose for the CLI and as params for the web UI.
+    // The message stays path-free for the narrow account menu; the path travels as
+    // data, which is what the UI puts in the tooltip.
     const blocked = listed.items[1];
-    expect(blocked.blockReason).toContain(stranger.homeDir);
-    expect(blocked.blockParams).toMatchObject({ home: stranger.homeDir });
+    expect(blocked.blockData).toMatchObject({ home: stranger.homeDir });
+    expect(blocked.blockMsg).toBe('主目录不存在');
 
     const response = await first.post(`/api/users/${stranger.username}/select`);
     expect(response.status).toBe(403);

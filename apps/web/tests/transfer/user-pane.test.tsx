@@ -204,7 +204,7 @@ test('finishes on a successful sync and reports the result in the toast', async 
             skipped: 1,
             providersCopied: 2,
             codexLoginCacheMigrated: false,
-            warnings: [{ message: 'kimi 的凭据缺少密钥' }],
+            warnings: [{ code: 'warning.transfer.credentialMissing' }],
           };
     return new Response(JSON.stringify(body), {
       status: 200,
@@ -225,7 +225,7 @@ test('finishes on a successful sync and reports the result in the toast', async 
     params: { imported: 3, overwritten: 0, skipped: 1, providersCopied: 2 },
   });
   expect(notice[1]?.key).toBe('sync.cacheNotMigrated');
-  expect(notice[2]?.fallback).toContain('kimi 的凭据缺少密钥');
+  expect(notice[2]?.key).toBe('warning.transfer.credentialMissing');
   // The result now lives in the toast, so the pane no longer repeats it inline.
   expect(screen.queryByText(/同步完成：/)).toBeNull();
 });
@@ -244,7 +244,7 @@ test('keeps a failed sync on screen with its reason instead of finishing', async
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         )
-      : new Response(JSON.stringify({ error: '来源用户目录不可读' }), {
+      : new Response(JSON.stringify({ msg: '来源用户目录不可读' }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         })) as typeof globalThis.fetch;

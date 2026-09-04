@@ -198,7 +198,7 @@ describe('probe service', () => {
       });
       expect(result.ok).toBe(false);
       expect(result.code).toBe(PROBE_CODES.unauthorized);
-      expect(result.params?.status).toBe(401);
+      expect(result.data?.status).toBe(401);
     } finally {
       relay.stop();
     }
@@ -299,7 +299,7 @@ describe('completion probe', () => {
       expect(result.completion?.code).toBe(PROBE_CODES.completionHttpError);
       expect(result.completion?.status).toBe(500);
       // The model name is the detail that makes the failure actionable.
-      expect(result.completion?.params?.model).toBe('relay-model');
+      expect(result.completion?.data?.model).toBe('relay-model');
       expect(result.completion?.model).toBe('relay-model');
       expect(result.completion?.protocol).toBe('openai-chat');
     } finally {

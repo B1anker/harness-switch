@@ -4,11 +4,9 @@ import { daemonDataDir } from '../daemon';
 import { CliError } from './args';
 
 export type ApiErrorPayload = {
-  error?: unknown;
   msg?: unknown;
   code?: unknown;
   data?: unknown;
-  params?: unknown;
 };
 
 /**
@@ -74,11 +72,7 @@ export class CliClient {
     if (!response.ok) {
       const params = payload ? messageParams(payload) : undefined;
       throw new CliError(
-        payload && (typeof payload.msg === 'string' || typeof payload.error === 'string')
-          ? typeof payload.msg === 'string'
-            ? payload.msg
-            : (payload.error as string)
-          : `请求失败：HTTP ${response.status}`,
+        typeof payload?.msg === 'string' ? payload.msg : `请求失败：HTTP ${response.status}`,
         {
           status: response.status,
           ...(payload && typeof payload.code === 'string' ? { code: payload.code } : {}),
@@ -125,12 +119,7 @@ async function responseError(response: Response): Promise<{
     const payload = (await response.json()) as ApiErrorPayload;
     const params = messageParams(payload);
     return {
-      message:
-        typeof payload.msg === 'string'
-          ? payload.msg
-          : typeof payload.error === 'string'
-            ? payload.error
-            : `HTTP ${response.status}`,
+      message: typeof payload.msg === 'string' ? payload.msg : `HTTP ${response.status}`,
       status: response.status,
       ...(typeof payload.code === 'string' ? { code: payload.code } : {}),
       ...(params ? { params } : {}),
@@ -143,8 +132,7 @@ async function responseError(response: Response): Promise<{
 function messageParams(
   payload: ApiErrorPayload,
 ): Record<string, string | number | boolean> | undefined {
-  const value = payload.data ?? payload.params;
-  return isMessageParams(value) ? value : undefined;
+  return isMessageParams(payload.data) ? payload.data : undefined;
 }
 
 function isMessageParams(value: unknown): value is Record<string, string | number | boolean> {

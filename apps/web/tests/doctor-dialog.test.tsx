@@ -38,10 +38,10 @@ test('labels every severity level with a status tag', () => {
   setup([
     doctorReportFixture({
       checks: [
-        doctorCheckFixture({ id: 'ok', label: 'ok check' }),
-        doctorCheckFixture({ id: 'warn', label: 'warn check', status: 'warn' }),
-        doctorCheckFixture({ id: 'error', label: 'error check', status: 'error' }),
-        doctorCheckFixture({ id: 'unknown', label: 'unknown check', status: 'unknown' }),
+        doctorCheckFixture({ id: 'ok' }),
+        doctorCheckFixture({ id: 'warn', status: 'warn' }),
+        doctorCheckFixture({ id: 'error', status: 'error' }),
+        doctorCheckFixture({ id: 'unknown', status: 'unknown' }),
       ],
     }),
   ]);

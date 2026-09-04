@@ -7,17 +7,17 @@ import { i18n } from '@/lib/i18n';
  */
 export class ApiError extends Error {
   readonly code?: string;
-  readonly params?: MessageParams;
+  readonly data?: MessageParams;
 
   constructor(
     readonly status: number,
     message: string,
-    options: { code?: string; data?: MessageParams; params?: MessageParams } = {},
+    options: { code?: string; data?: MessageParams } = {},
   ) {
     super(message);
     this.name = 'ApiError';
     this.code = options.code;
-    this.params = options.data ?? options.params;
+    this.data = options.data;
   }
 }
 
@@ -109,9 +109,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(response.status, payload.msg ?? payload.error ?? '', {
+    throw new ApiError(response.status, payload.msg ?? '', {
       code: payload.code,
-      data: payload.data ?? payload.params,
+      data: payload.data,
     });
   }
   return payload as T;

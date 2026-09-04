@@ -2,15 +2,15 @@ import { basename, join } from 'node:path';
 import {
   ERROR_CODES,
   type HarnessId,
-  isHarnessId,
+  harnessIdSchema,
   type OperationFile,
   type OperationKind,
   type OperationMetadataKey,
   type OperationReceipt,
   type OperationState,
 } from '@seaveyon/harness-switch-shared';
+import { z } from 'zod';
 import { HttpError } from '../common/errors';
-import { isRecord } from '../common/guards';
 import { createDecorator, inject } from '../di';
 import { IBackupService } from './backup';
 import { IEnvironmentService } from './environment';
@@ -21,25 +21,59 @@ import { IUserService } from './users';
 const RECEIPT = 'receipt.json';
 const METADATA_PREFIX = 'meta-';
 
-const METADATA_KEYS: readonly OperationMetadataKey[] = ['profiles', 'active', 'vault'];
+const METADATA_KEYS = [
+  'profiles',
+  'active',
+  'vault',
+] as const satisfies readonly OperationMetadataKey[];
 
-const OPERATION_KINDS: readonly OperationKind[] = [
+const OPERATION_KINDS = [
   'activate',
   'activate-official',
   'revoke',
   'reapply',
   'import',
   'sync',
-];
+] as const satisfies readonly OperationKind[];
 
-const OPERATION_STATES: readonly OperationState[] = [
+const OPERATION_STATES = [
   'prepared',
   'applying',
   'metadata-committed',
   'committed',
   'rolled-back',
   'degraded',
-];
+] as const satisfies readonly OperationState[];
+
+/**
+ * A receipt as it sits on disk.
+ *
+ * These are written mid-transaction and survive crashes, so a torn or hand-edited one
+ * is expected. Anything the recovery pass needs to reason about — the state machine,
+ * the files to restore — must be right or the receipt is skipped entirely; the purely
+ * descriptive fields fall back instead, so one bad timestamp cannot hide an operation
+ * that still has a rollback owing.
+ */
+const receiptSchema = z.object({
+  state: z.enum(OPERATION_STATES),
+  kind: z.enum(OPERATION_KINDS),
+  harness: harnessIdSchema,
+  profile: z.string(),
+  user: z.string(),
+  startedAt: z.string(),
+  finishedAt: z.string().optional().catch(undefined),
+  backupId: z.string().nullable().catch(null),
+  files: z.array(
+    z.object({
+      key: z.string(),
+      path: z.string(),
+      existed: z.boolean().catch(false),
+    }),
+  ),
+  metadata: z.array(z.enum(METADATA_KEYS)),
+  undoable: z.boolean().catch(false),
+  note: z.string().optional().catch(undefined),
+});
 
 /** What an operation intends to change, declared before any of it happens. */
 export type JournalPlan = {
@@ -334,54 +368,8 @@ export class JournalService implements IJournalService {
 
   /** The directory name is the id; the recorded one is only advisory. */
   private parse(id: string, value: unknown): OperationReceipt | null {
-    if (!isRecord(value)) {
-      return null;
-    }
-    const { state, kind, harness, profile, user, startedAt, backupId, files, metadata } = value;
-    if (typeof state !== 'string' || !OPERATION_STATES.includes(state as OperationState)) {
-      return null;
-    }
-    if (typeof kind !== 'string' || !OPERATION_KINDS.includes(kind as OperationKind)) {
-      return null;
-    }
-    if (typeof harness !== 'string' || !isHarnessId(harness)) {
-      return null;
-    }
-    if (typeof profile !== 'string' || typeof user !== 'string' || typeof startedAt !== 'string') {
-      return null;
-    }
-    if (!Array.isArray(files) || !Array.isArray(metadata)) {
-      return null;
-    }
-    const parsedFiles: OperationFile[] = [];
-    for (const file of files) {
-      if (!isRecord(file) || typeof file.key !== 'string' || typeof file.path !== 'string') {
-        return null;
-      }
-      parsedFiles.push({ key: file.key, path: file.path, existed: file.existed === true });
-    }
-    const parsedMetadata: OperationMetadataKey[] = [];
-    for (const key of metadata) {
-      if (typeof key !== 'string' || !METADATA_KEYS.includes(key as OperationMetadataKey)) {
-        return null;
-      }
-      parsedMetadata.push(key as OperationMetadataKey);
-    }
-    return {
-      id,
-      state: state as OperationState,
-      kind: kind as OperationKind,
-      harness,
-      profile,
-      user,
-      startedAt,
-      finishedAt: typeof value.finishedAt === 'string' ? value.finishedAt : undefined,
-      backupId: typeof backupId === 'string' ? backupId : null,
-      files: parsedFiles,
-      metadata: parsedMetadata,
-      undoable: value.undoable === true,
-      note: typeof value.note === 'string' ? value.note : undefined,
-    };
+    const parsed = receiptSchema.safeParse(value);
+    return parsed.success ? { id, ...parsed.data } : null;
   }
 
   private nextId(plan: JournalPlan): string {

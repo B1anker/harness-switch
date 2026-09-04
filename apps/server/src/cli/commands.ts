@@ -36,6 +36,7 @@ import {
   printProfilesHuman,
   printProvidersHuman,
   printScanHuman,
+  warningText,
 } from './output';
 
 /**
@@ -171,7 +172,7 @@ async function cmdUsers(client: CliClient, json: OutputMode): Promise<number> {
     for (const user of payload.items) {
       // An unmanageable account is listed but annotated: `--user` on it would be
       // refused, so the reason is more useful than a bare name.
-      const note = user.manageable === false ? `  (${user.blockReason ?? '不可切换'})` : '';
+      const note = user.manageable === false ? `  (${user.blockMsg ?? '不可切换'})` : '';
       console.log(`${user.current ? '*' : ' '} ${user.username.padEnd(20)} ${user.homeDir}${note}`);
     }
   }
@@ -409,7 +410,7 @@ async function cmdImport(
       `导入=${payload.imported} 跳过=${payload.skipped} 新建Vault条目=${payload.providersCreated}`,
     );
     for (const warning of payload.warnings) {
-      console.log(`warning: ${warning.message}`);
+      console.log(`warning: ${warningText(warning)}`);
     }
     console.log('工具本身的配置文件未被修改；需要生效请再执行 activate。');
   }

@@ -9,6 +9,7 @@ import {
   type TransferConflictPolicy,
   type TransferEnvelope,
   type TransferImportResponse,
+  transferEnvelopeSchema,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
@@ -534,15 +535,13 @@ export class GitHubSyncService implements IGitHubSyncService {
     }
 
     try {
-      const envelope = JSON.parse(rawContent) as TransferEnvelope;
-      if (envelope.format !== 'harness-switch-encrypted-export') {
-        throw new HttpError(400, '不支持的备份文件格式', {
-          code: ERROR_CODES.transferEnvelopeInvalid,
-        });
-      }
-      return { envelope, updatedAt: gist.updated_at };
-    } catch (err) {
-      if (err instanceof HttpError) throw err;
+      // A gist is editable by hand and by any other tool holding the token, so it gets
+      // the same validation as an uploaded file rather than a check on `format` alone.
+      return {
+        envelope: transferEnvelopeSchema.parse(JSON.parse(rawContent)),
+        updatedAt: gist.updated_at,
+      };
+    } catch {
       throw new HttpError(400, '云端备份文件损坏或非有效 JSON', {
         code: ERROR_CODES.transferEnvelopeInvalid,
       });

@@ -22,8 +22,7 @@ export type ConfigFormat = 'json' | 'toml' | 'yaml' | 'text';
 
 export type FieldOption = {
   value: string;
-  label: string;
-  /** Catalog key for {@link FieldOption.label}. See {@link FieldSpec.labelCode}. */
+  /** Absent when the value is its own label, as for `low` / `medium` / `high`. */
   labelCode?: string;
 };
 
@@ -32,28 +31,23 @@ export type FieldOption = {
  * duplicating each harness schema. Core fields (name, base URL, API key, model,
  * notes) are always rendered and are not part of this list.
  *
- * The prose fields (`label`, `help`, `placeholder`) are the adapter's own wording;
- * the matching `*Code` entries name the catalog key the web UI resolves instead, so
- * a form renders in the reader's language. Prose stays as the fallback for a build
- * whose catalog lacks the key — the same split `DoctorCheck` uses.
+ * Every string a reader interprets is a catalog key — an adapter phrasing its own
+ * fields would pin the form to one language whatever the reader picked. What is left
+ * as a literal is the text that does not translate: an env var sample, a model id.
  */
 export type FieldSpec = {
   key: string;
-  label: string;
   kind: 'text' | 'password' | 'select' | 'textarea';
   required?: boolean;
-  placeholder?: string;
-  help?: string;
   options?: FieldOption[];
   defaultValue?: string;
   /** Lets schema-driven forms place this field on its own row. */
   fullWidth?: boolean;
-  /** Catalog key for {@link FieldSpec.label}. */
-  labelCode?: string;
-  /** Catalog key for {@link FieldSpec.help}. */
+  labelCode: string;
   helpCode?: string;
-  /** Catalog key for {@link FieldSpec.placeholder}. */
   placeholderCode?: string;
+  /** A literal example, shown when there is no `placeholderCode` to render instead. */
+  placeholder?: string;
   /** Values the `*Code` entries interpolate. Data, never keys. */
   params?: MessageParams;
 };
@@ -152,10 +146,9 @@ export type LocalUserPublic = {
   manageable: boolean;
   /** Why `manageable` is false. See `USER_BLOCK_CODES`. */
   blockCode?: string;
-  /** Values `blockCode` interpolates. Data, never keys. */
-  blockParams?: MessageParams;
-  /** The server's own prose for the block, printed by the CLI and used as the UI's fallback. */
-  blockReason?: string;
+  /** Values `blockCode` interpolates, and the prose the boundary resolves them into. */
+  blockData?: MessageParams;
+  blockMsg?: string;
 };
 
 export type UsersResponse = {
@@ -392,13 +385,9 @@ export type ProbeResult = {
   completion?: ProbeCompletion;
   /** Stable machine-readable failure reason; see `PROBE_CODES`. */
   code?: string;
-  /** Values the UI interpolates into the translated message for `code`. */
-  params?: MessageParams;
-  /** Standard localized API fields for newer clients. */
+  /** Values `code` interpolates, and the prose the boundary resolves them into. */
   data?: MessageParams;
   msg?: string;
-  /** Server prose for the same failure; kept for the CLI and as UI fallback. */
-  message?: string;
 };
 
 /**
@@ -422,10 +411,8 @@ export type ProbeCompletion = {
   /** True when the reply carried assistant text rather than only a bare envelope. */
   produced?: boolean;
   code?: string;
-  params?: MessageParams;
   data?: MessageParams;
   msg?: string;
-  message?: string;
   /**
    * When this outcome was replayed from the per-profile cache rather than sent now,
    * the ISO timestamp of the request that produced it.
@@ -533,11 +520,8 @@ export type ScanHarnessResult = {
   label: string;
   sources: ScanSource[];
   candidates: ScanCandidate[];
-  /** Explains an empty candidate list. The server's own prose, printed by the CLI. */
-  note?: string;
-  /** The same explanation as a stable code the web UI can translate. See `SCAN_NOTE_CODES`. */
+  /** Explains an empty candidate list. See `SCAN_NOTE_CODES`. */
   noteCode?: string;
-  /** Standard localized API fields for the scan note. */
   noteData?: MessageParams;
   noteMsg?: string;
 };
@@ -632,19 +616,16 @@ export type DoctorCheckStatus = 'ok' | 'warn' | 'error' | 'unknown';
 export type DoctorCheck = {
   id: string;
   /** The server's own prose, printed by the CLI and used as the UI's fallback. */
-  label: string;
   status: DoctorCheckStatus;
   /**
-   * Stable identifier for what this check reports, so the web UI can render the
-   * same fact in the viewer's language. See `DOCTOR_CODES`.
+   * Stable identifier for what this check reports, so every client renders the
+   * same fact in its own language. See `DOCTOR_CODES`.
    */
-  code?: string;
+  code: string;
   /** Values `code` interpolates — paths, modes, counts. Data, never keys. */
-  params?: MessageParams;
-  /** Standard localized API fields for newer clients. */
   data?: MessageParams;
   msg?: string;
-  /** Human-readable message plus machine-readable extras. */
+  /** Machine-readable extras for the check, shown under the message. */
   detail?: unknown;
 };
 

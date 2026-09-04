@@ -67,6 +67,20 @@ export const ERROR_CODES = {
 
   /* Transfer and cross-user sync */
   transferEnvelopeInvalid: 'transfer.envelopeInvalid',
+  transferPassphraseTooShort: 'transfer.passphraseTooShort',
+  transferDecryptFailed: 'transfer.decryptFailed',
+  transferTooManyProfiles: 'transfer.tooManyProfiles',
+  transferProfilesInvalid: 'transfer.profilesInvalid',
+  transferProfileNameInvalid: 'transfer.profileNameInvalid',
+  transferDuplicateProfile: 'transfer.duplicateProfile',
+  transferProvidersInvalid: 'transfer.providersInvalid',
+  transferDuplicateProvider: 'transfer.duplicateProvider',
+  transferProviderMissing: 'transfer.providerMissing',
+  transferActiveInvalid: 'transfer.activeInvalid',
+  transferDuplicateActive: 'transfer.duplicateActive',
+  transferActiveProfileMissing: 'transfer.activeProfileMissing',
+  transferOfficialActiveInvalid: 'transfer.officialActiveInvalid',
+  transferCodexCacheInvalid: 'transfer.codexCacheInvalid',
   syncSourceCacheMissing: 'sync.sourceCodexLoginCacheMissing',
   syncSourceEqualsTarget: 'sync.sourceEqualsTarget',
   scanApiKeyRequired: 'scan.apiKeyRequired',
@@ -112,14 +126,11 @@ export type MessageParams = Record<string, string | number | boolean>;
 /**
  * Non-fatal problems reported alongside a successful result.
  *
- * `message` is the server's own prose, kept so the CLI and older clients keep
- * working. `code` lets the web UI render the viewer's language instead.
+ * The standard message triple: services emit `code` and `data`, and the HTTP boundary
+ * resolves `msg` against the caller's `Accept-Language`.
  */
 export type LocalizedMessage = {
-  message: string;
-  code?: string;
-  params?: MessageParams;
-  /** Standard API response fields, added by the HTTP boundary for newer clients. */
+  code: string;
   data?: MessageParams;
   msg?: string;
   /**
@@ -139,6 +150,9 @@ export const WARNING_CODES = {
   reapplyFailed: 'warning.provider.reapplyFailed',
   syncReapplyFailed: 'warning.sync.activeReapplyFailed',
   transferActiveRestoreFailed: 'warning.transfer.activeRestoreFailed',
+  scanProfileGone: 'warning.scan.profileGone',
+  scanProfileExists: 'warning.scan.profileExists',
+  scanImportFailed: 'warning.scan.importFailed',
 } as const;
 
 export type WarningCode = (typeof WARNING_CODES)[keyof typeof WARNING_CODES];
@@ -175,6 +189,12 @@ export const DOCTOR_CODES = {
   completionOk: 'doctor.check.completionOk',
   /** The endpoint is reachable but its active model would not complete. */
   completionFailed: 'doctor.check.completionFailed',
+  /**
+   * The same two outcomes replayed from the per-profile cache rather than sent now.
+   * Worth saying out loud: "answers" and "answered hours ago" are different claims.
+   */
+  completionOkCached: 'doctor.check.completionOkCached',
+  completionFailedCached: 'doctor.check.completionFailedCached',
 } as const;
 
 export type DoctorCode = (typeof DOCTOR_CODES)[keyof typeof DOCTOR_CODES];
@@ -256,3 +276,38 @@ export const USER_BLOCK_CODES = {
 } as const;
 
 export type UserBlockCode = (typeof USER_BLOCK_CODES)[keyof typeof USER_BLOCK_CODES];
+
+/**
+ * The catalog path for a message code. Codes live in two shapes: warnings, doctor checks
+ * and scan notes already name their catalog namespace, while error codes are bare
+ * (`adapter.modelRequired`) and hang off `error.`. The prefixes must stay this specific —
+ * `scan.apiKeyRequired` is an error code but `scan.note.unparsable` is not, and a
+ * top-level `probe` namespace of UI strings shadows the `probe.*` error codes.
+ */
+export function catalogKey(code: string): string {
+  return DIRECT_NAMESPACES.some((namespace) => code.startsWith(namespace)) ? code : `error.${code}`;
+}
+
+const DIRECT_NAMESPACES = ['warning.', 'doctor.check.', 'scan.note.'] as const;
+
+/**
+ * Whether a string is one of the codes this contract defines.
+ *
+ * The HTTP boundary walks arbitrary response JSON looking for message nodes to resolve.
+ * Membership here is what marks a `code` field as one — a `code` holding anything else
+ * (a country, an exit status) is data and must pass through untouched.
+ */
+export function isMessageCode(value: unknown): value is string {
+  return typeof value === 'string' && MESSAGE_CODES.has(value);
+}
+
+const MESSAGE_CODES: ReadonlySet<string> = new Set(
+  [
+    ERROR_CODES,
+    WARNING_CODES,
+    DOCTOR_CODES,
+    SCAN_NOTE_CODES,
+    PROBE_CODES,
+    USER_BLOCK_CODES,
+  ].flatMap((group) => Object.values(group)),
+);

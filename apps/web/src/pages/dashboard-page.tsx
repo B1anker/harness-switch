@@ -1,4 +1,5 @@
 import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
+import { catalogKey } from '@seaveyon/harness-switch-shared';
 import {
   ArrowRightLeft,
   ChevronDown,
@@ -26,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { UpdateButton } from '@/components/update-button';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
 import { useI18n, useTranslation } from '@/lib/i18n';
-import { catalogKey, lineText, specText } from '@/lib/messages';
+import { lineText, specText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
@@ -225,15 +226,15 @@ function UserMenu() {
             // rather than in an error after a click that was never going to work.
             const blocked = user.manageable === false;
             // Kept short and path-free: the menu is only as wide as a username, so an
-            // interpolated path would wrap to three lines. The server's own prose still
-            // carries the directory and rides along in the tooltip.
+            // interpolated path would wrap to three lines. The directory travels as data
+            // and is appended in the tooltip instead.
             const reason = blocked
               ? lineText(t, {
                   key: user.blockCode ? catalogKey(user.blockCode) : 'error.user.notSwitchable',
-                  params: user.blockParams,
-                  fallback: user.blockReason,
+                  params: user.blockData,
                 })
               : '';
+            const blockedPath = user.blockData?.path ?? user.blockData?.home;
             const unselectable = usersLoading || user.username === currentUser || blocked;
             return (
               <button
@@ -242,7 +243,7 @@ function UserMenu() {
                 role="menuitemradio"
                 aria-checked={user.username === currentUser}
                 disabled={unselectable}
-                title={blocked ? (user.blockReason ?? reason) : undefined}
+                title={blocked ? [reason, blockedPath].filter(Boolean).join(' — ') : undefined}
                 onClick={() => void selectUser(user.username)}
                 className={cn(
                   'flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',

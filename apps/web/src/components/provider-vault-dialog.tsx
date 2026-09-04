@@ -1,4 +1,5 @@
 import type { ProbeResult, ProviderPublic } from '@seaveyon/harness-switch-shared';
+import { LIMITS } from '@seaveyon/harness-switch-shared';
 import { Eye, EyeOff, Loader2, Pencil, Plus, Trash2, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ProbeResultLine } from '@/components/probe-result-line';
@@ -54,9 +55,6 @@ type EndpointFieldErrors = {
   key?: MessageLine;
   baseUrl?: MessageLine;
 };
-
-/** Longest endpoint id the server accepts. */
-const ENDPOINT_KEY_MAX_LENGTH = 60;
 
 /**
  * Provider Vault: one place to see every stored provider entry (name, key
@@ -437,11 +435,11 @@ function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
         else if (
           endpoint.key.includes('/') ||
           endpoint.key.includes('\\') ||
-          endpoint.key.length > ENDPOINT_KEY_MAX_LENGTH
+          endpoint.key.length > LIMITS.endpointKey
         )
           errors.key = {
             key: 'vault.error.endpointKeyInvalid',
-            params: { max: ENDPOINT_KEY_MAX_LENGTH },
+            params: { max: LIMITS.endpointKey },
           };
         else if ((keyCounts.get(endpoint.key) ?? 0) > 1)
           errors.key = { key: 'vault.error.endpointKeyDuplicate' };

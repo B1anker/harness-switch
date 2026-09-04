@@ -1,4 +1,5 @@
 import type { Language } from '@seaveyon/harness-switch-shared';
+import { isMessageCode } from '@seaveyon/harness-switch-shared';
 import type { MiddlewareHandler } from 'hono';
 import { isRecord } from '../common/guards';
 import { localizeMessage, requestLanguage } from '../common/localize';
@@ -25,11 +26,13 @@ export function createLocalizeMiddleware(): MiddlewareHandler {
   };
 }
 
-/** Adds the standard { code, data, msg } contract to nested success messages.
+/**
+ * Adds the `msg` beside every message code in the payload.
  *
- * Old `message`/`label`/`params` fields remain during the compatibility window so
- * existing web and CLI releases keep working. New clients can consistently prefer
- * `msg` and `data` whenever a server-reported `code` is present.
+ * Codes travel in families — `code`/`data`/`msg`, and the same triple under a `note` or
+ * `block` prefix for nodes that carry a second, subordinate message. Resolving them by
+ * suffix keeps this one walk correct as new families appear, and `isMessageCode` is what
+ * separates a message node from a record that happens to have a `code` column.
  */
 function localizeResponsePayload(value: unknown, language: Language): unknown {
   if (Array.isArray(value)) return value.map((item) => localizeResponsePayload(item, language));
@@ -37,17 +40,27 @@ function localizeResponsePayload(value: unknown, language: Language): unknown {
   const next = Object.fromEntries(
     Object.entries(value).map(([key, child]) => [key, localizeResponsePayload(child, language)]),
   ) as Record<string, unknown>;
-  const code = typeof value.code === 'string' ? value.code : undefined;
-  const params = isMessageParams(value.params) ? value.params : undefined;
-  if (code && (typeof value.message === 'string' || typeof value.label === 'string')) {
-    next.data = params;
-    next.msg = localizeMessage(language, code, params);
-  }
-  if (typeof value.noteCode === 'string' && typeof value.note === 'string') {
-    next.noteData = params;
-    next.noteMsg = localizeMessage(language, value.noteCode, params);
+  for (const [key, code] of Object.entries(value)) {
+    const prefix = codeFieldPrefix(key);
+    if (prefix === undefined || !isMessageCode(code)) continue;
+    const raw = value[sibling(prefix, 'data')];
+    next[sibling(prefix, 'msg')] = localizeMessage(
+      language,
+      code,
+      isMessageParams(raw) ? raw : undefined,
+    );
   }
   return next;
+}
+
+/** The family a code field names: `code` heads the bare one, `noteCode` the `note` one. */
+function codeFieldPrefix(key: string): string | undefined {
+  if (key === 'code') return '';
+  return key.endsWith('Code') ? key.slice(0, -'Code'.length) : undefined;
+}
+
+function sibling(prefix: string, name: 'data' | 'msg'): string {
+  return prefix === '' ? name : `${prefix}${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 }
 
 function isMessageParams(value: unknown): value is Record<string, string | number | boolean> {

@@ -8,6 +8,7 @@ import type {
   TransferEnvelope,
   TransferPreview,
 } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import {
   asSession,
   createSandbox,
@@ -1154,6 +1155,48 @@ describe('rest api', () => {
       expect(imported.status, item.label).toBe(400);
     }
     expect((await summary(context, 'claude')).profiles).toHaveLength(0);
+  });
+
+  test('a malformed export names the section that is wrong, not just "invalid"', async () => {
+    const context = await createTestApp();
+    const profile = portableClaudeProfile('main');
+    const base = {
+      format: 'harness-switch-portable-config',
+      version: 1,
+      exportedAt: '2026-08-20T00:00:00.000Z',
+      profiles: [profile],
+      active: [],
+    };
+    // Which section is broken decides what the user has to go fix, so each one keeps
+    // its own code rather than collapsing into a single "bad file".
+    const cases = [
+      { code: ERROR_CODES.transferEnvelopeInvalid, payload: { ...base, version: 2 } },
+      {
+        code: ERROR_CODES.transferProfilesInvalid,
+        payload: { ...base, profiles: [{ ...profile, harness: 'nope' }] },
+      },
+      {
+        code: ERROR_CODES.transferActiveInvalid,
+        payload: { ...base, active: [{ harness: 'claude', name: 'main', official: 'yes' }] },
+      },
+      {
+        code: ERROR_CODES.transferProvidersInvalid,
+        payload: {
+          ...base,
+          providers: [{ id: '__proto__', name: 'p', apiKey: 'k', endpoints: [] }],
+        },
+      },
+      { code: ERROR_CODES.transferCodexCacheInvalid, payload: { ...base, codexLoginCache: 7 } },
+    ];
+
+    for (const item of cases) {
+      const response = await context.post('/api/transfer/preview', {
+        envelope: encryptedPortablePayload(item.payload as unknown as PortableTestPayload),
+        passphrase: 'portable-secret',
+      });
+      expect(response.status, item.code).toBe(400);
+      expect(await response.json(), item.code).toMatchObject({ code: item.code });
+    }
   });
 
   test('previews and restores an active Codex openai_auth profile without copying its login cache', async () => {

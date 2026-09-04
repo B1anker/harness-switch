@@ -18,25 +18,23 @@ import { useAppStore } from '@/stores/app-store';
 function oneMFieldFixture(role: string, key: string, labelCode?: string): FieldSpec {
   return {
     key,
-    label: `${role} 声明支持 1M`,
     labelCode: labelCode ?? 'harness.field.claude.oneM.label',
     ...(labelCode ? {} : { params: { role } }),
     kind: 'select',
     defaultValue: 'false',
     options: [
-      { value: 'false', label: '关闭', labelCode: 'harness.field.toggle.off' },
-      { value: 'true', label: '开启', labelCode: 'harness.field.toggle.on' },
+      { value: 'false', labelCode: 'harness.field.toggle.off' },
+      { value: 'true', labelCode: 'harness.field.toggle.on' },
     ],
   };
 }
 
 /**
  * A plain text field as the Claude adapter emits it. Every one of its label keys is
- * `harness.field.claude.<key>.label`, so the key derives the code and the call site keeps
- * showing the literal label the tests query by.
+ * `harness.field.claude.<key>.label`, so the key is all a call site has to supply.
  */
-function textFieldFixture(key: string, label: string): FieldSpec {
-  return { key, label, labelCode: `harness.field.claude.${key}.label`, kind: 'text' };
+function textFieldFixture(key: string): FieldSpec {
+  return { key, labelCode: `harness.field.claude.${key}.label`, kind: 'text' };
 }
 
 export function profileFixture(overrides: Partial<ProfilePublic> = {}): ProfilePublic {
@@ -63,7 +61,6 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
     fields: [
       {
         key: 'authVar',
-        label: '凭据变量',
         labelCode: 'harness.field.claude.authVar.label',
         kind: 'select',
         defaultValue: 'ANTHROPIC_AUTH_TOKEN',
@@ -71,28 +68,26 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
         options: [
           {
             value: 'ANTHROPIC_AUTH_TOKEN',
-            label: 'ANTHROPIC_AUTH_TOKEN（第三方中转）',
             labelCode: 'harness.field.claude.authVar.option.authToken',
           },
           {
             value: 'ANTHROPIC_API_KEY',
-            label: 'ANTHROPIC_API_KEY（官方）',
             labelCode: 'harness.field.claude.authVar.option.official',
           },
         ],
       },
-      textFieldFixture('haikuModel', 'Haiku 模型映射'),
-      textFieldFixture('haikuModelName', 'Haiku 显示名称（选填）'),
-      textFieldFixture('sonnetModel', 'Sonnet 模型映射'),
-      textFieldFixture('sonnetModelName', 'Sonnet 显示名称（选填）'),
+      textFieldFixture('haikuModel'),
+      textFieldFixture('haikuModelName'),
+      textFieldFixture('sonnetModel'),
+      textFieldFixture('sonnetModelName'),
       oneMFieldFixture('Sonnet', 'sonnetModel1m'),
-      textFieldFixture('opusModel', 'Opus 模型映射'),
-      textFieldFixture('opusModelName', 'Opus 显示名称（选填）'),
+      textFieldFixture('opusModel'),
+      textFieldFixture('opusModelName'),
       oneMFieldFixture('Opus', 'opusModel1m'),
-      textFieldFixture('fableModel', 'Fable 模型映射（可选）'),
-      textFieldFixture('fableModelName', 'Fable 显示名称（选填）'),
+      textFieldFixture('fableModel'),
+      textFieldFixture('fableModelName'),
       oneMFieldFixture('Fable', 'fableModel1m'),
-      textFieldFixture('subagentModel', '子代理模型（可选）'),
+      textFieldFixture('subagentModel'),
       oneMFieldFixture('子代理', 'subagentModel1m', 'harness.field.claude.oneM.subagentLabel'),
     ],
     targets: [
@@ -175,10 +170,9 @@ export function driftSummaryFixture(overrides: Partial<DriftSummary> = {}): Drif
 export function doctorCheckFixture(overrides: Partial<DoctorCheck> = {}): DoctorCheck {
   return {
     id: 'claude.install',
-    label: '已找到可执行文件 claude',
     status: 'ok',
     code: 'doctor.check.installFound',
-    params: { bin: 'claude' },
+    data: { bin: 'claude' },
     ...overrides,
   };
 }
@@ -190,10 +184,9 @@ export function doctorReportFixture(overrides: Partial<DoctorReport> = {}): Doct
       doctorCheckFixture(),
       doctorCheckFixture({
         id: 'claude.drift',
-        label: '2 个文件与激活配置不一致（drifted）',
         status: 'warn',
         code: 'doctor.check.driftMismatch',
-        params: { count: 2, status: 'drifted' },
+        data: { count: 2, status: 'drifted' },
       }),
     ],
     ...overrides,
