@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { BackupSlice } from './slices/backups';
+import type { GithubSlice } from './slices/github';
 import type { HarnessSlice } from './slices/harnesses';
 import type { InsightSlice } from './slices/insights';
 import type { NoticeSlice } from './slices/notice';
@@ -22,6 +23,7 @@ export type AppState = SessionSlice &
   InsightSlice &
   ScanSlice &
   OperationSlice &
+  GithubSlice &
   NoticeSlice;
 
 export type Slice<T> = StateCreator<AppState, [], [], T>;

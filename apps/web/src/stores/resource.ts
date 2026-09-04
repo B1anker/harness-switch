@@ -3,7 +3,7 @@ import { errorLine, type MessageLine } from '@/lib/messages';
 import type { AppState, SetState } from './types';
 
 /** The collections that carry their own `{ x, xLoading, xError }` triple. */
-type ResourceName = 'providers' | 'doctor' | 'drift' | 'scan' | 'operations';
+type ResourceName = 'providers' | 'doctor' | 'drift' | 'scan' | 'operations' | 'githubStatus';
 
 /**
  * Runs one load into a `{ x, xLoading, xError }` triple.
@@ -24,7 +24,13 @@ export async function loadResource<N extends ResourceName>(
     set({ ...assign(name, value), ...flags(name, false, null) });
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
-      set({ authenticated: false, ...assign(name, []), ...flags(name, false, null) });
+      // Arrays go back to `[]` so list UIs stay typed; the single github status object
+      // has no empty list shape, so it clears to null like an unread cache.
+      set({
+        authenticated: false,
+        ...assign(name, name === 'githubStatus' ? null : []),
+        ...flags(name, false, null),
+      });
       return;
     }
     set(flags(name, false, errorLine(error)));

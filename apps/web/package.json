@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "rspack dev",
     "build": "NODE_ENV=production rspack build",
-    "test": "rstest"
+    "test": "node ./scripts/rstest.mjs"
   },
   "dependencies": {
     "@fontsource-variable/ibm-plex-sans": "^5.3.0",

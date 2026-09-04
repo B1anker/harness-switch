@@ -190,6 +190,27 @@ test('deleting asks for confirmation before calling the store', () => {
   expect(calls.deleteProfile).toEqual([['claude', 'openrouter-main']]);
 });
 
+test('kimi uses default/provider wording like dsh, not activate/profile', () => {
+  stubStoreActions(['activateProfile', 'deleteProfile']);
+  render(
+    <HarnessCard
+      harness={harnessFixture({
+        id: 'kimi',
+        label: 'Kimi Code',
+        mode: 'additive',
+        profiles: [profileFixture({ harness: 'kimi' })],
+      })}
+      onAdd={() => {}}
+      onEdit={() => {}}
+    />,
+  );
+
+  expect(screen.getByText('提供方')).toBeInTheDocument();
+  expect(screen.getByText('默认模型')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '设为默认' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '激活' })).toBeNull();
+});
+
 test('warns that an additive harness also loses its provider entry', () => {
   stubStoreActions(['activateProfile', 'deleteProfile']);
   render(

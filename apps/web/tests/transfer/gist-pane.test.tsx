@@ -8,6 +8,49 @@ beforeEach(() => {
   setStoreState({ loadHarnesses: async () => {} });
 });
 
+test('shows a loading state until the connection status returns', async () => {
+  let resolveStatus: ((value: { connected: boolean }) => void) | undefined;
+  stubFetch(async (url) => {
+    if (String(url).endsWith('/api/github/status')) {
+      return await new Promise<{ connected: boolean }>((resolve) => {
+        resolveStatus = resolve;
+      });
+    }
+    throw new Error(`unexpected ${url}`);
+  });
+
+  render(<GistPane onDone={() => {}} />);
+
+  expect(screen.getByText('正在读取 GitHub 连接状态…')).toBeInTheDocument();
+  expect(screen.queryByText(/获取设备授权码/)).toBeNull();
+
+  resolveStatus?.({ connected: false });
+  expect(await screen.findByText(/获取设备授权码/)).toBeInTheDocument();
+});
+
+test('reuses a cached status instead of fetching again on remount', async () => {
+  const { handler, requests } = recordRequests(
+    routes({
+      '/api/github/status': {
+        connected: true,
+        username: 'octocat',
+        lastSyncedAt: '2026-08-28T10:00:00Z',
+      },
+    }),
+  );
+  stubFetch(handler);
+
+  const first = render(<GistPane onDone={() => {}} />);
+  expect(await screen.findByText('octocat')).toBeInTheDocument();
+  expect(requests.filter((r) => r.path === '/api/github/status')).toHaveLength(1);
+  first.unmount();
+
+  render(<GistPane onDone={() => {}} />);
+  expect(screen.getByText('octocat')).toBeInTheDocument();
+  expect(screen.queryByText('正在读取 GitHub 连接状态…')).toBeNull();
+  expect(requests.filter((r) => r.path === '/api/github/status')).toHaveLength(1);
+});
+
 test('shows device code tab and token login tab when disconnected', async () => {
   stubFetch(routes({ '/api/github/status': { connected: false } }));
 

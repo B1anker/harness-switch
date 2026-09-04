@@ -836,6 +836,7 @@
   },
   "githubSync": {
     "title": "GitHub 云端同步",
+    "loading": "正在读取 GitHub 连接状态…",
     "intro": "通过 GitHub 账号实现多机器无缝同步。配置包使用主密码进行端到端 AES-256-GCM 加密后存入私有 Gist，保护凭据安全。",
     "tabDevice": "GitHub 授权登录",
     "tabToken": "Token 登录",
