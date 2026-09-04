@@ -3,14 +3,13 @@ import type { PreviewTarget } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { i18n } from '@/lib/i18n';
-import { useAppStore } from '@/stores/app-store';
-import { harnessFixture, profileFixture, stubStoreActions } from './fixtures';
+import { harnessFixture, profileFixture, setStoreState, stubStoreActions } from './support';
 
 type Recorded = { created: unknown[][]; updated: unknown[][] };
 
 function setup(preview: PreviewTarget[] = []): Recorded {
   const recorded: Recorded = { created: [], updated: [] };
-  useAppStore.setState({
+  setStoreState({
     providers: [],
     createProfile: async (...args: unknown[]) => {
       recorded.created.push(args);
@@ -20,7 +19,7 @@ function setup(preview: PreviewTarget[] = []): Recorded {
     },
     previewProfile: async () => preview,
     loadProviders: async () => {},
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return recorded;
 }
 
@@ -580,13 +579,13 @@ function chineseIn(root: ParentNode): string[] {
 }
 
 test('shows the reason a save failed instead of closing silently', async () => {
-  useAppStore.setState({
+  setStoreState({
     providers: [],
     createProfile: async () => {
       throw new Error('profile already exists');
     },
     loadProviders: async () => {},
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   const closes: boolean[] = [];
   render(
     <ProfileDialog

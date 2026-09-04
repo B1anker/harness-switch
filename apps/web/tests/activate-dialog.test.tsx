@@ -1,24 +1,8 @@
-import { afterEach, expect, test } from '@rstest/core';
+import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ActivateDialog } from '@/components/activate-dialog';
 import { useAppStore } from '@/stores/app-store';
-import { harnessFixture, profileFixture } from './fixtures';
-
-const realFetch = globalThis.fetch;
-
-afterEach(() => {
-  globalThis.fetch = realFetch;
-  useAppStore.setState({
-    harnesses: [],
-    backups: [],
-    notice: null,
-    loadBackups: async () => {},
-  });
-});
-
-function json(payload: unknown, status = 200) {
-  return { ok: status >= 200 && status < 300, json: async () => payload };
-}
+import { harnessFixture, profileFixture, recordRequests, status, stubFetch } from './support';
 
 const previewTargets = [
   {
@@ -51,12 +35,7 @@ const previewTargets = [
 ];
 
 test('shows the diff against live files before activating', async () => {
-  globalThis.fetch = (async (path: string) => {
-    if (path.includes('/preview')) {
-      return json({ targets: previewTargets });
-    }
-    return json({});
-  }) as unknown as typeof fetch;
+  stubFetch((url) => (url.includes('/preview') ? { targets: previewTargets } : {}));
 
   render(
     <ActivateDialog
@@ -75,17 +54,13 @@ test('shows the diff against live files before activating', async () => {
 });
 
 test('confirm closes the dialog once the write completes', async () => {
-  const requests: string[] = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push(`${init.method ?? 'GET'} ${path}`);
-    if (path.includes('/preview')) {
-      return json({ targets: previewTargets });
-    }
-    if (path === '/api/harnesses') {
-      return json({ items: [harnessFixture()], envFile: '' });
-    }
-    return json({ ok: true, envFile: '', warnings: [] });
-  }) as unknown as typeof fetch;
+  const { handler, requests } = recordRequests((url) => {
+    if (url.includes('/preview')) return { targets: previewTargets };
+    if (url === '/api/harnesses') return { items: [harnessFixture()], envFile: '' };
+    return { ok: true, envFile: '', warnings: [] };
+  });
+  stubFetch(handler);
+  const calls = () => requests.map((request) => `${request.method} ${request.path}`);
 
   let closed = false;
   render(
@@ -99,24 +74,20 @@ test('confirm closes the dialog once the write completes', async () => {
 
   fireEvent.click(await screen.findByRole('button', { name: '确认激活' }));
   for (let i = 0; i < 100; i++) {
-    if (
-      requests.some(
-        (request) => request === 'POST /api/harnesses/claude/profiles/openrouter-main/activate',
-      )
-    )
-      break;
+    if (calls().includes('POST /api/harnesses/claude/profiles/openrouter-main/activate')) break;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  expect(requests).toContain('POST /api/harnesses/claude/profiles/openrouter-main/activate');
+  expect(calls()).toContain('POST /api/harnesses/claude/profiles/openrouter-main/activate');
   await waitFor(() => expect(closed).toBe(true));
   expect(useAppStore.getState().notice?.[0]?.key).toBe('notice.switchDone');
 });
 
 test('keeps the preview open and offers retry when activation fails', async () => {
-  globalThis.fetch = (async (path: string) => {
-    if (path.includes('/preview')) return json({ targets: previewTargets });
-    return json({ code: 'http.requestFailed', msg: 'disk full' }, 500);
-  }) as unknown as typeof fetch;
+  stubFetch((url) =>
+    url.includes('/preview')
+      ? { targets: previewTargets }
+      : status(500, { code: 'http.requestFailed', msg: 'disk full' }),
+  );
 
   render(
     <ActivateDialog
@@ -134,14 +105,10 @@ test('keeps the preview open and offers retry when activation fails', async () =
 });
 
 test('cancel does not activate', async () => {
-  const requests: string[] = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push(`${init.method ?? 'GET'} ${path}`);
-    if (path.includes('/preview')) {
-      return json({ targets: previewTargets });
-    }
-    return json({});
-  }) as unknown as typeof fetch;
+  const { handler, requests } = recordRequests((url) =>
+    url.includes('/preview') ? { targets: previewTargets } : {},
+  );
+  stubFetch(handler);
 
   render(
     <ActivateDialog
@@ -154,5 +121,7 @@ test('cancel does not activate', async () => {
 
   fireEvent.click(await screen.findByRole('button', { name: '取消' }));
   await new Promise((resolve) => setTimeout(resolve, 50));
-  expect(requests).not.toContain('POST /api/harnesses/claude/profiles/openrouter-main/activate');
+  expect(requests.map((request) => `${request.method} ${request.path}`)).not.toContain(
+    'POST /api/harnesses/claude/profiles/openrouter-main/activate',
+  );
 });

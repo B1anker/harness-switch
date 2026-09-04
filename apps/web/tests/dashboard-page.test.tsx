@@ -1,8 +1,7 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DashboardPage } from '@/pages/dashboard-page';
-import { useAppStore } from '@/stores/app-store';
-import { harnessFixture, profileFixture } from './fixtures';
+import { harnessFixture, profileFixture, setStoreState } from './support';
 
 function setDashboardState() {
   const claudeProfile = profileFixture({ name: 'claude-main' });
@@ -11,7 +10,7 @@ function setDashboardState() {
     name: 'codex-main',
     model: 'gpt-5.4',
   });
-  useAppStore.setState({
+  setStoreState({
     harnesses: [
       harnessFixture({
         active: { name: 'claude-main', baseUrl: claudeProfile.baseUrl, model: claudeProfile.model },
@@ -103,7 +102,7 @@ test('the header opens the vault dialog', () => {
 test('an unmanageable user cannot be selected and says why', () => {
   setDashboardState();
   let selected = '';
-  useAppStore.setState({
+  setStoreState({
     users: [
       { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
       {
@@ -158,7 +157,7 @@ test('a selectable user keeps a pointer and hover state', () => {
 
 test('a user whose block code this build does not know still reads as a sentence', () => {
   setDashboardState();
-  useAppStore.setState({
+  setStoreState({
     users: [
       { username: 'root', uid: 0, gid: 0, homeDir: '/root', current: true, manageable: true },
       {

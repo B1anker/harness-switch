@@ -2,7 +2,7 @@ import { expect, test } from '@rstest/core';
 import type { BackupDetail, BackupEntry } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BackupPanel } from '@/components/backup-panel';
-import { useAppStore } from '@/stores/app-store';
+import { setStoreState } from './support';
 
 function setup(backups: BackupEntry[]) {
   const restored: string[] = [];
@@ -28,7 +28,7 @@ function setup(backups: BackupEntry[]) {
       },
     ],
   };
-  useAppStore.setState({
+  setStoreState({
     backups,
     loadBackups: async () => {
       loads.push(1);
@@ -40,7 +40,7 @@ function setup(backups: BackupEntry[]) {
     restoreBackup: async (id: string) => {
       restored.push(id);
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return { restored, loads, details };
 }
 

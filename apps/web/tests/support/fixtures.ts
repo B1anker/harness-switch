@@ -8,7 +8,6 @@ import type {
   ProfilePublic,
   ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
-import { useAppStore } from '@/stores/app-store';
 
 /**
  * Mirrors the 1M flag spec the Claude adapter emits per model tier, including the catalog
@@ -108,25 +107,6 @@ export function harnessFixture(overrides: Partial<HarnessSummary> = {}): Harness
     },
     ...overrides,
   };
-}
-
-/**
- * Replaces the store's async actions with recorders, so a component test asserts what
- * the component asked for without touching the network.
- */
-export function stubStoreActions<K extends keyof ReturnType<typeof useAppStore.getState>>(
-  keys: K[],
-): Record<K, unknown[][]> {
-  const calls = {} as Record<K, unknown[][]>;
-  const patch: Record<string, unknown> = {};
-  for (const key of keys) {
-    calls[key] = [];
-    patch[key as string] = async (...args: unknown[]) => {
-      calls[key].push(args);
-    };
-  }
-  useAppStore.setState(patch);
-  return calls;
 }
 
 export function providerFixture(overrides: Partial<ProviderPublic> = {}): ProviderPublic {

@@ -10,7 +10,7 @@ import {
   Server,
   UserRound,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
 import { BrandMark } from '@/components/brand-mark';
 import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
@@ -24,8 +24,16 @@ import { ProfileDialog } from '@/components/profile-dialog';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { TabList, TabPanel } from '@/components/ui/tabs';
 import { UpdateButton } from '@/components/update-button';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
+import { harnessWords } from '@/lib/harness-words';
 import { useI18n, useTranslation } from '@/lib/i18n';
 import { lineText, specText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
@@ -90,10 +98,10 @@ export function DashboardPage() {
           onChange={setSelectedHarnessId}
         />
         {selectedHarness ? (
-          <main
-            role="tabpanel"
-            id={`harness-panel-${selectedHarness.id}`}
-            aria-labelledby={`harness-tab-${selectedHarness.id}`}
+          <TabPanel
+            as="main"
+            idPrefix="harness"
+            value={selectedHarness.id}
             className="min-w-0 space-y-6 p-4 sm:p-6 xl:p-8"
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -106,9 +114,7 @@ export function DashboardPage() {
                 onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
               >
                 <Plus />
-                {selectedHarness.id === 'dsh'
-                  ? t('harness.addCustomProvider')
-                  : t('harness.newProfile')}
+                {t(harnessWords(selectedHarness.id).add)}
               </Button>
             </div>
             <HarnessCard
@@ -130,7 +136,7 @@ export function DashboardPage() {
               </code>
               <p className="mt-3 leading-relaxed text-muted-foreground">{t('env.note')}</p>
             </details>
-          </main>
+          </TabPanel>
         ) : null}
         {selectedHarness ? (
           <ContextPanel
@@ -164,62 +170,27 @@ function UserMenu() {
   const currentUser = useAppStore((state) => state.currentUser);
   const usersLoading = useAppStore((state) => state.usersLoading);
   const switchUser = useAppStore((state) => state.switchUser);
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function closeOnOutsidePointer(event: PointerEvent) {
-      if (!menuRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener('pointerdown', closeOnOutsidePointer);
-    return () => window.removeEventListener('pointerdown', closeOnOutsidePointer);
-  }, [open]);
-
-  async function selectUser(username: string) {
-    try {
-      await switchUser(username);
-      setOpen(false);
-    } catch {
-      // The store owns the translated error state; leave the menu open for a retry.
-    }
-  }
-
-  async function signOut() {
-    try {
-      await logout();
-      setOpen(false);
-    } catch {
-      // Keep the session menu available if the server could not end the session.
-    }
-  }
 
   return (
-    <div ref={menuRef} className="relative">
-      <Button
-        variant="outline"
-        size="sm"
-        aria-label={t('nav.currentLocalUser')}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        disabled={usersLoading}
-        onClick={() => setOpen((value) => !value)}
-      >
-        <UserRound />
-        <span className="max-w-28 truncate">{currentUser || t('nav.localUser')}</span>
-        <ChevronDown className={cn('transition-transform', open && 'rotate-180')} />
-      </Button>
-      {open ? (
-        <div
-          role="menu"
+    <DropdownMenu
+      label={t('nav.currentLocalUser')}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          className="group"
           aria-label={t('nav.currentLocalUser')}
-          className="absolute right-0 top-full z-30 mt-2 w-52 rounded-xl border bg-popover p-1 text-popover-foreground shadow-lg"
+          disabled={usersLoading}
         >
-          <div className="px-3 py-2 text-xs text-muted-foreground">{t('nav.currentLocalUser')}</div>
+          <UserRound />
+          <span className="max-w-28 truncate">{currentUser || t('nav.localUser')}</span>
+          <ChevronDown className="transition-transform group-aria-expanded:rotate-180" />
+        </Button>
+      }
+    >
+      {(close) => (
+        <>
+          <DropdownMenuLabel>{t('nav.currentLocalUser')}</DropdownMenuLabel>
           {users.map((user) => {
             // An account this process cannot write to is shown but not offered: the
             // server refuses the switch anyway, so the reason belongs next to the name
@@ -235,24 +206,19 @@ function UserMenu() {
                 })
               : '';
             const blockedPath = user.blockData?.path ?? user.blockData?.home;
-            const unselectable = usersLoading || user.username === currentUser || blocked;
             return (
-              <button
+              <DropdownMenuItem
                 key={user.username}
-                type="button"
                 role="menuitemradio"
                 aria-checked={user.username === currentUser}
-                disabled={unselectable}
+                disabled={usersLoading || user.username === currentUser || blocked}
                 title={blocked ? [reason, blockedPath].filter(Boolean).join(' — ') : undefined}
-                onClick={() => void selectUser(user.username)}
-                className={cn(
-                  'flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
-                  // A row that cannot be picked must not light up under the cursor, or it
-                  // reads as clickable right up until the click does nothing.
-                  unselectable
-                    ? 'cursor-default opacity-60'
-                    : 'cursor-pointer hover:bg-accent hover:text-accent-foreground',
-                )}
+                className="flex-col items-start"
+                onClick={() => {
+                  // The store owns the translated error state; a failure leaves the menu
+                  // open for a retry.
+                  void switchUser(user.username).then(close, () => {});
+                }}
               >
                 <span className="flex w-full items-center gap-1.5">
                   {blocked ? <Lock className="size-3 shrink-0" aria-hidden /> : null}
@@ -263,26 +229,24 @@ function UserMenu() {
                     {reason}
                   </span>
                 ) : null}
-              </button>
+              </DropdownMenuItem>
             );
           })}
-          <div className="my-1 border-t" />
-          <button
-            type="button"
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
             role="menuitem"
+            destructive
             disabled={usersLoading}
-            onClick={() => void signOut()}
-            className={cn(
-              'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-destructive transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35',
-              usersLoading ? 'cursor-default opacity-60' : 'cursor-pointer hover:bg-destructive/10',
-            )}
+            className="gap-2"
+            // Keep the session menu available if the server could not end the session.
+            onClick={() => void logout().then(close, () => {})}
           >
             <LogOut className="size-4" />
             {t('nav.signOut')}
-          </button>
-        </div>
-      ) : null}
-    </div>
+          </DropdownMenuItem>
+        </>
+      )}
+    </DropdownMenu>
   );
 }
 
@@ -297,61 +261,23 @@ function HarnessTabs({
 }) {
   const { t } = useTranslation();
 
-  function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
-    const backward = event.key === 'ArrowLeft' || event.key === 'ArrowUp';
-    const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown';
-    if (!backward && !forward && event.key !== 'Home' && event.key !== 'End') {
-      return;
-    }
-    event.preventDefault();
-    let nextIndex = index;
-    if (event.key === 'Home') {
-      nextIndex = 0;
-    } else if (event.key === 'End') {
-      nextIndex = harnesses.length - 1;
-    } else {
-      const offset = forward ? 1 : -1;
-      nextIndex = (index + offset + harnesses.length) % harnesses.length;
-    }
-    const next = harnesses[nextIndex];
-    if (next) {
-      onChange(next.id);
-      const tabs =
-        event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-      tabs?.[nextIndex]?.focus();
-    }
-  }
-
   return (
-    <div
-      role="tablist"
-      aria-label={t('nav.switchHarness')}
-      aria-orientation="vertical"
+    <TabList
+      label={t('nav.switchHarness')}
+      idPrefix="harness"
+      orientation="vertical"
+      items={harnesses}
+      value={value}
+      onChange={onChange}
       className="flex gap-2 overflow-x-auto border-b bg-card/45 p-3 xl:sticky xl:top-20 xl:h-[calc(100dvh-80px)] xl:flex-col xl:self-start xl:overflow-x-visible xl:overflow-y-auto xl:border-b-0 xl:border-r xl:p-4"
+      tabClassName="min-w-[12rem] gap-3 px-3 py-3 xl:min-w-0 xl:w-full"
     >
-      {harnesses.map((harness, index) => {
-        const selected = harness.id === value;
+      {(harness, selected) => {
         const activeLabel = harness.active?.official
           ? t('harness.official')
           : (harness.active?.name ?? null);
         return (
-          <button
-            key={harness.id}
-            type="button"
-            role="tab"
-            id={`harness-tab-${harness.id}`}
-            aria-controls={`harness-panel-${harness.id}`}
-            aria-selected={selected}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(harness.id)}
-            onKeyDown={(event) => onKeyDown(event, index)}
-            className={cn(
-              'flex min-w-[12rem] shrink-0 cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-left transition-[color,background-color,box-shadow,transform] duration-150 active:translate-y-px xl:min-w-0 xl:w-full',
-              selected
-                ? 'bg-primary/[0.09] text-primary shadow-[inset_0_0_0_1px_rgb(99_91_255/0.13)]'
-                : 'text-muted-foreground hover:bg-card hover:text-foreground',
-            )}
-          >
+          <>
             <span
               className={cn(
                 'flex size-10 shrink-0 items-center justify-center rounded-xl border bg-card shadow-[0_4px_12px_-8px_rgb(36_39_70/0.28)]',
@@ -373,10 +299,10 @@ function HarnessTabs({
             <span className="font-mono text-[11px] text-muted-foreground">
               {harness.profiles.length}
             </span>
-          </button>
+          </>
         );
-      })}
-    </div>
+      }}
+    </TabList>
   );
 }
 

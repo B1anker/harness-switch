@@ -1,50 +1,19 @@
-import { afterEach, beforeEach, expect, test } from '@rstest/core';
+import { beforeEach, expect, test } from '@rstest/core';
 import { useAppStore } from '@/stores/app-store';
+import { type RecordedRequest, recordRequests, setStoreState, status, stubFetch } from './support';
 
-type Recorded = { path: string; method: string; body?: string };
-
-let requests: Recorded[] = [];
+let requests: RecordedRequest[] = [];
 let responder: (path: string, method: string) => { status: number; body: unknown };
-const realFetch = globalThis.fetch;
 
 beforeEach(() => {
-  requests = [];
   responder = () => ({ status: 200, body: {} });
-  globalThis.fetch = (async (input: string, init: RequestInit = {}) => {
-    const method = init.method ?? 'GET';
-    requests.push({ path: input, method, body: init.body as string | undefined });
-    const { status, body } = responder(input, method);
-    return new Response(JSON.stringify(body), {
-      status,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
-
-  useAppStore.setState({
-    authenticated: true,
-    currentUser: 'root',
-    users: [],
-    usersLoading: false,
-    harnesses: [],
-    backups: [],
-    envFile: '',
-    error: null,
-    notice: null,
-    providers: null,
-    providersLoading: false,
-    providersError: null,
-    doctor: null,
-    doctorUpdatedAvailable: false,
-    doctorLoading: false,
-    doctorError: null,
-    drift: null,
-    driftLoading: false,
-    driftError: null,
+  const recorder = recordRequests((path, init) => {
+    const { status: code, body } = responder(path, init.method ?? 'GET');
+    return status(code, body);
   });
-});
-
-afterEach(() => {
-  globalThis.fetch = realFetch;
+  requests = recorder.requests;
+  stubFetch(recorder.handler);
+  setStoreState({ authenticated: true, currentUser: 'root' });
 });
 
 function harnessResponse() {

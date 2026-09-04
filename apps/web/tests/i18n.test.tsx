@@ -1,7 +1,8 @@
 import { expect, test } from '@rstest/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { LanguageToggle } from '@/components/language-toggle';
-import { I18nProvider, i18n, useTranslation } from '@/lib/i18n';
+import { i18n, useTranslation } from '@/lib/i18n';
+import { renderWithI18n } from './support';
 
 test('resolves catalog keys in both languages', async () => {
   await i18n.changeLanguage('zh-CN');
@@ -27,11 +28,7 @@ function SampleCopy() {
 test('switches languages, translates copy, and persists the choice', async () => {
   localStorage.setItem('hs-language', 'zh-CN');
   await i18n.changeLanguage('zh-CN');
-  render(
-    <I18nProvider>
-      <SampleCopy />
-    </I18nProvider>,
-  );
+  renderWithI18n(<SampleCopy />);
 
   expect(screen.getByText('Web 密码')).toBeInTheDocument();
 

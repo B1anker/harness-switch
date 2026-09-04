@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect } from '@rstest/core';
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers';
 import { cleanup } from '@testing-library/react';
 import { i18n } from '@/lib/i18n';
+import { resetFetch } from './tests/support/fetch';
+import { resetStore } from './tests/support/store';
 
 expect.extend(jestDomMatchers);
 
@@ -63,4 +65,6 @@ Object.defineProperties(HTMLElement.prototype, {
 
 afterEach(() => {
   cleanup();
+  resetFetch();
+  resetStore();
 });

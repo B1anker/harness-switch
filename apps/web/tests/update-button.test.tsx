@@ -1,30 +1,23 @@
 import { afterEach, expect, test } from '@rstest/core';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { UpdateButton } from '@/components/update-button';
+import { stubFetch } from './support';
 
-const realFetch = globalThis.fetch;
 const realReload = window.location.reload;
 
 afterEach(() => {
-  globalThis.fetch = realFetch;
   window.location.reload = realReload;
 });
 
-function json(payload: unknown) {
-  return { ok: true, json: async () => payload };
-}
-
 test('offers an update button when a newer version is available', async () => {
-  globalThis.fetch = (async () =>
-    json({ current: '0.9.0', latest: '99.0.0', updateAvailable: true })) as unknown as typeof fetch;
+  stubFetch(() => ({ current: '0.9.0', latest: '99.0.0', updateAvailable: true }));
 
   render(<UpdateButton />);
   expect(await screen.findByRole('button', { name: '更新到 v99.0.0' })).toBeInTheDocument();
 });
 
 test('stays hidden when running the latest version', async () => {
-  globalThis.fetch = (async () =>
-    json({ current: '0.9.0', latest: '0.9.0', updateAvailable: false })) as unknown as typeof fetch;
+  stubFetch(() => ({ current: '0.9.0', latest: '0.9.0', updateAvailable: false }));
 
   render(<UpdateButton />);
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -37,18 +30,14 @@ test('posts the update and reloads once the new version answers', async () => {
     reloaded = true;
   };
 
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    if (path === '/api/update/check') {
-      return json({ current: '0.9.0', latest: '99.0.0', updateAvailable: true });
+  stubFetch((url, init) => {
+    if (url === '/api/update/check') {
+      return { current: '0.9.0', latest: '99.0.0', updateAvailable: true };
     }
-    if (path === '/api/update' && init.method === 'POST') {
-      return json({ status: 'updating' });
-    }
-    if (path === '/api/version') {
-      return json({ name: 'harness-switch', version: '99.0.0' });
-    }
-    return json({});
-  }) as unknown as typeof fetch;
+    if (url === '/api/update' && init.method === 'POST') return { status: 'updating' };
+    if (url === '/api/version') return { name: 'harness-switch', version: '99.0.0' };
+    return {};
+  });
 
   render(<UpdateButton />);
   fireEvent.click(await screen.findByRole('button', { name: '更新到 v99.0.0' }));

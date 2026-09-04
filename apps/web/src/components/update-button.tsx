@@ -1,7 +1,7 @@
 import { Loader2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
+import { api, updatePath, versionPath } from '@/lib/api';
 import { useTranslation } from '@/lib/i18n';
 
 type UpdateCheck = { current: string; latest: string | null; updateAvailable: boolean };
@@ -22,7 +22,7 @@ export function UpdateButton() {
 
   useEffect(() => {
     let cancelled = false;
-    void api<UpdateCheck>('/api/update/check')
+    void api<UpdateCheck>(updatePath.check)
       .then((payload) => {
         if (cancelled) return;
         setCurrent(payload.current);
@@ -39,7 +39,7 @@ export function UpdateButton() {
   async function update() {
     setPhase('updating');
     try {
-      await api('/api/update', { method: 'POST' });
+      await api(updatePath.run, { method: 'POST' });
     } catch {
       // The daemon may restart before the response arrives; polling below covers it.
     }
@@ -47,7 +47,7 @@ export function UpdateButton() {
     while (Date.now() < deadline) {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
       try {
-        const payload = await api<{ version: string }>('/api/version');
+        const payload = await api<{ version: string }>(versionPath);
         if (payload.version !== current) {
           window.location.reload();
           return;

@@ -1,8 +1,7 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProfileDialog } from '@/components/profile-dialog';
-import { useAppStore } from '@/stores/app-store';
-import { harnessFixture, profileFixture, providerFixture } from './fixtures';
+import { harnessFixture, profileFixture, providerFixture, setStoreState } from './support';
 
 type Recorded = {
   created: unknown[][];
@@ -11,7 +10,7 @@ type Recorded = {
 
 function setup(overrides: Partial<Recorded> = {}): Recorded {
   const recorded: Recorded = { created: [], updated: [], ...overrides };
-  useAppStore.setState({
+  setStoreState({
     providers: [providerFixture()],
     providersLoading: false,
     providersError: null,
@@ -22,7 +21,7 @@ function setup(overrides: Partial<Recorded> = {}): Recorded {
     updateProfile: async (...args: unknown[]) => {
       recorded.updated.push(args);
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return recorded;
 }
 

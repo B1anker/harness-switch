@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FilePane } from '@/components/transfer/file-pane';
 import { useAppStore } from '@/stores/app-store';
+import { recordRequests, setStoreState, stubFetch } from '../support';
 
 const envelope = {
   format: 'harness-switch-encrypted-export' as const,
@@ -10,21 +11,18 @@ const envelope = {
   cipher: { name: 'aes-256-gcm' as const, iv: 'iv', tag: 'tag', data: 'data' },
 };
 
-const realFetch = globalThis.fetch;
 const realCreateObjectUrl = URL.createObjectURL;
 const realRevokeObjectUrl = URL.revokeObjectURL;
 
 beforeEach(() => {
-  useAppStore.setState({ loadHarnesses: async () => {} });
+  setStoreState({ loadHarnesses: async () => {} });
   URL.createObjectURL = () => 'blob:transfer';
   URL.revokeObjectURL = () => {};
 });
 
 afterEach(() => {
-  globalThis.fetch = realFetch;
   URL.createObjectURL = realCreateObjectUrl;
   URL.revokeObjectURL = realRevokeObjectUrl;
-  useAppStore.setState({ notice: null });
 });
 
 /** Hands the pane a `.hsw-backup` the same way the file picker would. */
@@ -38,14 +36,8 @@ async function pickEnvelope() {
 }
 
 test('exports all profiles only after the migration password is confirmed', async () => {
-  const requests: Array<{ path: string; body: string }> = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push({ path, body: String(init.body ?? '') });
-    return new Response(JSON.stringify(envelope), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+  const { handler, requests } = recordRequests(() => envelope);
+  stubFetch(handler);
 
   render(<FilePane onDone={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: '导出所有配置' }));
@@ -72,38 +64,32 @@ test('exports all profiles only after the migration password is confirmed', asyn
 });
 
 test('automatically migrates Codex login cache on import without separate checkbox', async () => {
-  const requests: Array<{ path: string; body: string }> = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push({ path, body: String(init.body ?? '') });
-    const body =
-      path === '/api/transfer/preview'
-        ? {
-            exportedAt: '2026-08-18T00:00:00.000Z',
-            profileCount: 0,
-            providerCount: 0,
-            harnesses: [],
-            conflicts: [],
-            activeCount: 0,
-            conflictPolicy: 'skip',
-            restoreActive: true,
-            codexActivationAuthEffect: 'none',
-            codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
-          }
-        : {
-            ok: true,
-            imported: 0,
-            overwritten: 0,
-            skipped: 0,
-            providersCopied: 0,
-            activeRestored: 0,
-            codexLoginCacheMigrated: true,
-            warnings: [],
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+  const { handler, requests } = recordRequests((url) =>
+    url === '/api/transfer/preview'
+      ? {
+          exportedAt: '2026-08-18T00:00:00.000Z',
+          profileCount: 0,
+          providerCount: 0,
+          harnesses: [],
+          conflicts: [],
+          activeCount: 0,
+          conflictPolicy: 'skip',
+          restoreActive: true,
+          codexActivationAuthEffect: 'none',
+          codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
+        }
+      : {
+          ok: true,
+          imported: 0,
+          overwritten: 0,
+          skipped: 0,
+          providersCopied: 0,
+          activeRestored: 0,
+          codexLoginCacheMigrated: true,
+          warnings: [],
+        },
+  );
+  stubFetch(handler);
 
   render(<FilePane onDone={() => {}} />);
   await pickEnvelope();
@@ -124,42 +110,36 @@ test('automatically migrates Codex login cache on import without separate checkb
 });
 
 test('re-checks activation effects before importing and requires final acknowledgement', async () => {
-  const requests: Array<{ path: string; body: string }> = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push({ path, body: String(init.body ?? '') });
+  const { handler, requests } = recordRequests((url, init) => {
     const request = JSON.parse(String(init.body ?? '{}')) as {
       conflictPolicy?: 'skip' | 'overwrite';
       restoreActive?: boolean;
     };
-    const body =
-      path === '/api/transfer/preview'
-        ? {
-            exportedAt: '2026-08-18T00:00:00.000Z',
-            profileCount: 1,
-            providerCount: 0,
-            harnesses: [{ harness: 'codex', profiles: 1 }],
-            conflicts: [],
-            activeCount: 1,
-            conflictPolicy: request.conflictPolicy ?? 'skip',
-            restoreActive: request.restoreActive === true,
-            codexActivationAuthEffect: request.restoreActive === true ? 'openai-api-key' : 'none',
-            codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
-          }
-        : {
-            ok: true,
-            imported: 1,
-            overwritten: 0,
-            skipped: 0,
-            providersCopied: 0,
-            activeRestored: 0,
-            codexLoginCacheMigrated: false,
-            warnings: [],
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+    return url === '/api/transfer/preview'
+      ? {
+          exportedAt: '2026-08-18T00:00:00.000Z',
+          profileCount: 1,
+          providerCount: 0,
+          harnesses: [{ harness: 'codex', profiles: 1 }],
+          conflicts: [],
+          activeCount: 1,
+          conflictPolicy: request.conflictPolicy ?? 'skip',
+          restoreActive: request.restoreActive === true,
+          codexActivationAuthEffect: request.restoreActive === true ? 'openai-api-key' : 'none',
+          codexLoginCache: { available: false, targetExists: true, migrationNeeded: false },
+        }
+      : {
+          ok: true,
+          imported: 1,
+          overwritten: 0,
+          skipped: 0,
+          providersCopied: 0,
+          activeRestored: 0,
+          codexLoginCacheMigrated: false,
+          warnings: [],
+        };
+  });
+  stubFetch(handler);
 
   render(<FilePane onDone={() => {}} />);
   await pickEnvelope();
@@ -190,36 +170,31 @@ test('re-checks activation effects before importing and requires final acknowled
 });
 
 test('reports the result in the toast and lets the dialog get out of the way', async () => {
-  globalThis.fetch = (async (path: string) => {
-    const body =
-      path === '/api/transfer/preview'
-        ? {
-            exportedAt: '2026-08-18T00:00:00.000Z',
-            profileCount: 2,
-            providerCount: 0,
-            harnesses: [{ harness: 'claude', profiles: 2 }],
-            conflicts: [],
-            activeCount: 0,
-            conflictPolicy: 'skip',
-            restoreActive: true,
-            codexActivationAuthEffect: 'none',
-            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
-          }
-        : {
-            ok: true,
-            imported: 2,
-            overwritten: 0,
-            skipped: 1,
-            providersCopied: 0,
-            activeRestored: 0,
-            codexLoginCacheMigrated: false,
-            warnings: [],
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+  stubFetch((url) =>
+    url === '/api/transfer/preview'
+      ? {
+          exportedAt: '2026-08-18T00:00:00.000Z',
+          profileCount: 2,
+          providerCount: 0,
+          harnesses: [{ harness: 'claude', profiles: 2 }],
+          conflicts: [],
+          activeCount: 0,
+          conflictPolicy: 'skip',
+          restoreActive: true,
+          codexActivationAuthEffect: 'none',
+          codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
+        }
+      : {
+          ok: true,
+          imported: 2,
+          overwritten: 0,
+          skipped: 1,
+          providersCopied: 0,
+          activeRestored: 0,
+          codexLoginCacheMigrated: false,
+          warnings: [],
+        },
+  );
 
   let done = 0;
   render(<FilePane onDone={() => (done += 1)} />);

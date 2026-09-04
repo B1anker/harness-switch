@@ -3,8 +3,7 @@ import type { ProbeResult } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProfileDialog } from '@/components/profile-dialog';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
-import { useAppStore } from '@/stores/app-store';
-import { harnessFixture, profileFixture, providerFixture } from './fixtures';
+import { harnessFixture, profileFixture, providerFixture, setStoreState } from './support';
 
 /**
  * The probe is a pure UI conversation with three store actions; stubbing them lets
@@ -24,7 +23,7 @@ function setupProfileDialog(
   overrides: { draft?: ProbeResult | Error; saved?: ProbeResult | Error } = {},
 ) {
   const calls = { draft: [] as unknown[][], saved: [] as unknown[][] };
-  useAppStore.setState({
+  setStoreState({
     providers: [],
     loadProviders: async () => {},
     probeDraft: async (...args: unknown[]) => {
@@ -37,7 +36,7 @@ function setupProfileDialog(
       if (overrides.saved instanceof Error) throw overrides.saved;
       return overrides.saved ?? OK_RESULT;
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return calls;
 }
 
@@ -137,7 +136,7 @@ test('editing a saved profile without retyping the key probes stored credentials
 
 test('a vault-referenced profile resolves its key through providerId, not inline text', async () => {
   const calls = setupProfileDialog();
-  useAppStore.setState({ providers: [providerFixture()] });
+  setStoreState({ providers: [providerFixture()] });
   render(
     <ProfileDialog
       harness={harnessFixture()}
@@ -322,7 +321,7 @@ type VaultCalls = { drafts: unknown[][] };
 
 function setupVaultDialog(): VaultCalls {
   const calls: VaultCalls = { drafts: [] };
-  useAppStore.setState({
+  setStoreState({
     providers: [providerFixture()],
     providersLoading: false,
     providersError: null,
@@ -335,7 +334,7 @@ function setupVaultDialog(): VaultCalls {
       calls.drafts.push(args);
       return OK_RESULT;
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return calls;
 }
 

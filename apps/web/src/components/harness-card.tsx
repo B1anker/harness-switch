@@ -15,6 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { harnessWords } from '@/lib/harness-words';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -47,6 +48,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
     harness.profiles.filter((profile) => profile.extras.providerType === 'official').length === 1;
   // The stored name of the official entry is data on disk, so the display text
   // comes from the `official` flag rather than from matching the name.
+  const words = harnessWords(harness.id);
   const activeName = harness.active?.official
     ? t('harness.official')
     : (harness.active?.name ?? null);
@@ -59,7 +61,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
             <div className="min-w-0 sm:pr-5">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span className="size-2 rounded-full bg-primary shadow-[0_0_0_4px_rgb(99_91_255/0.1)]" />
-                {harness.id === 'dsh' ? t('harness.defaultModel') : t('harness.activeConfig')}
+                {t(words.applied)}
               </div>
               <CardTitle className="mt-3 truncate text-xl">
                 {activeName === null
@@ -96,9 +98,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">
-              {harness.id === 'dsh' ? t('harness.providers') : t('harness.profiles')}
-            </h3>
+            <h3 className="text-sm font-semibold">{t(words.collection)}</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               {t('harness.profileCount', { count: visibleProfiles.length })}
             </p>
@@ -177,11 +177,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium">{profile.name}</p>
-                        {active ? (
-                          <Badge>
-                            {harness.id === 'dsh' ? t('harness.default') : t('harness.active')}
-                          </Badge>
-                        ) : null}
+                        {active ? <Badge>{t(words.appliedBadge)}</Badge> : null}
                         {profile.overriddenTargets.length > 0 ? (
                           <Badge variant="outline">{t('harness.manualOverride')}</Badge>
                         ) : null}
@@ -204,13 +200,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                       disabled={active}
                     >
                       {!active ? <Play /> : null}
-                      {active
-                        ? harness.id === 'dsh'
-                          ? t('harness.default')
-                          : t('harness.active')
-                        : harness.id === 'dsh'
-                          ? t('harness.setDefault')
-                          : t('harness.activate')}
+                      {t(active ? words.appliedBadge : words.apply)}
                     </Button>
                     <Button
                       size="icon"

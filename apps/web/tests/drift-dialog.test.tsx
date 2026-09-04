@@ -2,8 +2,7 @@ import { expect, test } from '@rstest/core';
 import type { DriftSummary } from '@seaveyon/harness-switch-shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DriftDialog } from '@/components/drift-dialog';
-import { useAppStore } from '@/stores/app-store';
-import { driftFileFixture, driftSummaryFixture, harnessFixture } from './fixtures';
+import { driftFileFixture, driftSummaryFixture, harnessFixture, setStoreState } from './support';
 
 type Recorded = {
   reapplied: string[];
@@ -12,7 +11,7 @@ type Recorded = {
 
 function setup(reports: DriftSummary[]): Recorded {
   const recorded: Recorded = { reapplied: [], adopted: [] };
-  useAppStore.setState({
+  setStoreState({
     drift: reports,
     driftLoading: false,
     driftError: null,
@@ -28,7 +27,7 @@ function setup(reports: DriftSummary[]): Recorded {
         warnings: [],
       };
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   return recorded;
 }
 
@@ -101,7 +100,7 @@ test('an inactive harness offers nothing to reapply or adopt', () => {
 });
 
 test('an adopt failure surfaces the server message', async () => {
-  useAppStore.setState({
+  setStoreState({
     drift: [driftSummaryFixture({ status: 'drifted', files: [driftFileFixture()] })],
     driftLoading: false,
     driftError: null,
@@ -109,7 +108,7 @@ test('an adopt failure surfaces the server message', async () => {
     adoptDrift: async () => {
       throw new Error('存在手动 override 的文件，无法采纳');
     },
-  } as Partial<ReturnType<typeof useAppStore.getState>> as never);
+  });
   renderDialog();
 
   fireEvent.click(screen.getByRole('button', { name: '采纳现场配置' }));

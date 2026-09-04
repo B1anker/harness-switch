@@ -743,9 +743,9 @@ describe('dsh adapter', () => {
       }),
       {},
     );
-    const settings = parseYaml(rendered.settings);
-    expect(settings['llm-deepseek'].apiKeyEnv).toBe('DEEPSEEK_API_KEY');
-    expect(settings['llm-deepseek'].models).toHaveLength(2);
+    const written = parseYaml(rendered.settings);
+    expect(written['llm-deepseek'].apiKeyEnv).toBe('DEEPSEEK_API_KEY');
+    expect(written['llm-deepseek'].models).toHaveLength(2);
     expect(parseYaml(rendered.credentials).refs.DEEPSEEK_API_KEY).toBe('sk-new');
   });
 
@@ -765,8 +765,8 @@ describe('dsh adapter', () => {
       credentials: 'version: 1\nrefs:\n  DEEPSEEK_API_KEY: sk-native\n',
     });
 
-    const settings = parseYaml(rendered.settings);
-    expect(settings['agent-default-model']).toEqual({
+    const written = parseYaml(rendered.settings);
+    expect(written['agent-default-model']).toEqual({
       provider: 'deepseek-official',
       model: 'old-model',
     });

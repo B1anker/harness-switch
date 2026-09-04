@@ -1,12 +1,11 @@
-import { afterEach, beforeEach, expect, test } from '@rstest/core';
+import { beforeEach, expect, test } from '@rstest/core';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { UserPane } from '@/components/transfer/user-pane';
 import { useAppStore } from '@/stores/app-store';
-
-const realFetch = globalThis.fetch;
+import { recordRequests, setStoreState, status, stubFetch } from '../support';
 
 beforeEach(() => {
-  useAppStore.setState({
+  setStoreState({
     currentUser: 'owner',
     users: [
       {
@@ -31,41 +30,30 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  globalThis.fetch = realFetch;
-  useAppStore.setState({ currentUser: '', users: [], notice: null });
-});
-
 test('requires a final confirmation before migrating a source Codex login cache', async () => {
-  const requests: Array<{ path: string; body: string }> = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push({ path, body: String(init.body ?? '') });
-    const body =
-      path === '/api/users/sync/preview'
-        ? {
-            sourceUser: 'source',
-            targetUser: 'owner',
-            profileCount: 1,
-            providerCount: 0,
-            conflicts: [],
-            codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
-          }
-        : {
-            ok: true,
-            sourceUser: 'source',
-            targetUser: 'owner',
-            imported: 1,
-            overwritten: 0,
-            skipped: 0,
-            providersCopied: 0,
-            codexLoginCacheMigrated: true,
-            warnings: [],
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+  const { handler, requests } = recordRequests((url) =>
+    url === '/api/users/sync/preview'
+      ? {
+          sourceUser: 'source',
+          targetUser: 'owner',
+          profileCount: 1,
+          providerCount: 0,
+          conflicts: [],
+          codexLoginCache: { available: true, targetExists: true, migrationNeeded: true },
+        }
+      : {
+          ok: true,
+          sourceUser: 'source',
+          targetUser: 'owner',
+          imported: 1,
+          overwritten: 0,
+          skipped: 0,
+          providersCopied: 0,
+          codexLoginCacheMigrated: true,
+          warnings: [],
+        },
+  );
+  stubFetch(handler);
 
   render(<UserPane onDone={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
@@ -94,33 +82,28 @@ test('requires a final confirmation before migrating a source Codex login cache'
 });
 
 test('does not offer migration when the Codex login caches already match', async () => {
-  globalThis.fetch = (async (path: string) => {
-    const body =
-      path === '/api/users/sync/preview'
-        ? {
-            sourceUser: 'source',
-            targetUser: 'owner',
-            profileCount: 0,
-            providerCount: 0,
-            conflicts: [],
-            codexLoginCache: { available: true, targetExists: true, migrationNeeded: false },
-          }
-        : {
-            ok: true,
-            sourceUser: 'source',
-            targetUser: 'owner',
-            imported: 0,
-            overwritten: 0,
-            skipped: 0,
-            providersCopied: 0,
-            codexLoginCacheMigrated: false,
-            warnings: [],
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+  stubFetch((url) =>
+    url === '/api/users/sync/preview'
+      ? {
+          sourceUser: 'source',
+          targetUser: 'owner',
+          profileCount: 0,
+          providerCount: 0,
+          conflicts: [],
+          codexLoginCache: { available: true, targetExists: true, migrationNeeded: false },
+        }
+      : {
+          ok: true,
+          sourceUser: 'source',
+          targetUser: 'owner',
+          imported: 0,
+          overwritten: 0,
+          skipped: 0,
+          providersCopied: 0,
+          codexLoginCacheMigrated: false,
+          warnings: [],
+        },
+  );
 
   render(<UserPane onDone={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
@@ -129,39 +112,33 @@ test('does not offer migration when the Codex login caches already match', async
 });
 
 test('lets the user overwrite conflicts for selected harnesses only', async () => {
-  const requests: Array<{ path: string; body: string }> = [];
-  globalThis.fetch = (async (path: string, init: RequestInit = {}) => {
-    requests.push({ path, body: String(init.body ?? '') });
-    const body =
-      path === '/api/users/sync/preview'
-        ? {
-            sourceUser: 'source',
-            targetUser: 'owner',
-            profileCount: 4,
-            providerCount: 1,
-            conflicts: [
-              { harness: 'claude', name: 'main' },
-              { harness: 'claude', name: 'backup' },
-              { harness: 'kimi', name: 'main' },
-            ],
-            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
-          }
-        : {
-            ok: true,
-            sourceUser: 'source',
-            targetUser: 'owner',
-            imported: 1,
-            overwritten: 2,
-            skipped: 1,
-            providersCopied: 1,
-            codexLoginCacheMigrated: false,
-            warnings: [],
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+  const { handler, requests } = recordRequests((url) =>
+    url === '/api/users/sync/preview'
+      ? {
+          sourceUser: 'source',
+          targetUser: 'owner',
+          profileCount: 4,
+          providerCount: 1,
+          conflicts: [
+            { harness: 'claude', name: 'main' },
+            { harness: 'claude', name: 'backup' },
+            { harness: 'kimi', name: 'main' },
+          ],
+          codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
+        }
+      : {
+          ok: true,
+          sourceUser: 'source',
+          targetUser: 'owner',
+          imported: 1,
+          overwritten: 2,
+          skipped: 1,
+          providersCopied: 1,
+          codexLoginCacheMigrated: false,
+          warnings: [],
+        },
+  );
+  stubFetch(handler);
 
   render(<UserPane onDone={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: '检查可同步内容' }));
@@ -184,33 +161,28 @@ test('lets the user overwrite conflicts for selected harnesses only', async () =
 });
 
 test('finishes on a successful sync and reports the result in the toast', async () => {
-  globalThis.fetch = (async (path: string) => {
-    const body =
-      path === '/api/users/sync/preview'
-        ? {
-            sourceUser: 'source',
-            targetUser: 'owner',
-            profileCount: 3,
-            providerCount: 2,
-            conflicts: [],
-            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
-          }
-        : {
-            ok: true,
-            sourceUser: 'source',
-            targetUser: 'owner',
-            imported: 3,
-            overwritten: 0,
-            skipped: 1,
-            providersCopied: 2,
-            codexLoginCacheMigrated: false,
-            warnings: [{ code: 'warning.transfer.credentialMissing' }],
-          };
-    return new Response(JSON.stringify(body), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }) as typeof globalThis.fetch;
+  stubFetch((url) =>
+    url === '/api/users/sync/preview'
+      ? {
+          sourceUser: 'source',
+          targetUser: 'owner',
+          profileCount: 3,
+          providerCount: 2,
+          conflicts: [],
+          codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
+        }
+      : {
+          ok: true,
+          sourceUser: 'source',
+          targetUser: 'owner',
+          imported: 3,
+          overwritten: 0,
+          skipped: 1,
+          providersCopied: 2,
+          codexLoginCacheMigrated: false,
+          warnings: [{ code: 'warning.transfer.credentialMissing' }],
+        },
+  );
 
   let done = 0;
   render(<UserPane onDone={() => (done += 1)} />);
@@ -231,23 +203,18 @@ test('finishes on a successful sync and reports the result in the toast', async 
 });
 
 test('keeps a failed sync on screen with its reason instead of finishing', async () => {
-  globalThis.fetch = (async (path: string) =>
-    path === '/api/users/sync/preview'
-      ? new Response(
-          JSON.stringify({
-            sourceUser: 'source',
-            targetUser: 'owner',
-            profileCount: 1,
-            providerCount: 0,
-            conflicts: [],
-            codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        )
-      : new Response(JSON.stringify({ msg: '来源用户目录不可读' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        })) as typeof globalThis.fetch;
+  stubFetch((url) =>
+    url === '/api/users/sync/preview'
+      ? {
+          sourceUser: 'source',
+          targetUser: 'owner',
+          profileCount: 1,
+          providerCount: 0,
+          conflicts: [],
+          codexLoginCache: { available: false, targetExists: false, migrationNeeded: false },
+        }
+      : status(500, { msg: '来源用户目录不可读' }),
+  );
 
   let done = 0;
   render(<UserPane onDone={() => (done += 1)} />);
@@ -260,7 +227,7 @@ test('keeps a failed sync on screen with its reason instead of finishing', async
 });
 
 test('says so when there is no other manageable account to copy from', () => {
-  useAppStore.setState({
+  setStoreState({
     currentUser: 'owner',
     users: [
       {
