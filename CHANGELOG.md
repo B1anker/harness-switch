@@ -1,3 +1,10 @@
+# [0.31.0](https://github.com/B1anker/harness-switch/compare/v0.30.1...v0.31.0) (2026-09-05)
+
+
+### Features
+
+* **web:** fetch models and test completions ([3b2c56b](https://github.com/B1anker/harness-switch/commit/3b2c56b88080b58c53b5d605314d71f7ffc2e4a4))
+
 ## [0.30.1](https://github.com/B1anker/harness-switch/compare/v0.30.0...v0.30.1) (2026-09-04)
 
 
