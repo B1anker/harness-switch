@@ -1,10 +1,9 @@
 import {
-  catalogKey,
   type FavoritePlanRequest,
   type HarnessId,
   type ModelFavorite,
 } from '@seaveyon/harness-switch-shared';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Loader2, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -20,7 +19,7 @@ import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { FavoritePreview } from './preview';
+import { PreviewTabs } from './preview-tabs';
 import { ToolSelection } from './tool-selection';
 
 export function ModelFavoriteApplyDialog({
@@ -177,11 +176,11 @@ export function ModelFavoriteApplyDialog({
               aria-label={t('favorites.reviewChanges')}
               aria-hidden={step !== 1}
               inert={step !== 1}
-              className="h-full w-1/2 shrink-0 space-y-4 overflow-y-auto bg-muted/20 p-6 sm:px-8"
+              className="flex h-full w-1/2 shrink-0 flex-col gap-4 overflow-hidden bg-muted/20 p-6 sm:px-8"
             >
               {plan ? (
                 <>
-                  <div className="grid grid-cols-3 gap-3 rounded-xl border bg-card p-4">
+                  <div className="grid shrink-0 grid-cols-3 gap-3 rounded-xl border bg-card p-4">
                     <div>
                       <p className="text-2xl font-semibold">{plan.items.length}</p>
                       <p className="text-xs text-muted-foreground">{t('favorites.targetTools')}</p>
@@ -209,33 +208,13 @@ export function ModelFavoriteApplyDialog({
                     <ShieldCheck className="size-4 shrink-0" />
                     {t('favorites.autoBackupNotice')}
                   </p>
-                  {plan.items.map((item) => (
-                    <FavoritePreview key={item.harness} item={item} />
-                  ))}
+                  <PreviewTabs
+                    key={plan.id}
+                    items={plan.items}
+                    history={history.filter((entry) => !previousRequests.has(entry.requestId))}
+                  />
                 </>
               ) : null}
-              {history
-                .filter((entry) => !previousRequests.has(entry.requestId))
-                .flatMap((entry) =>
-                  entry.items.map((item) => (
-                    <div
-                      className="flex items-center gap-2 rounded-xl border bg-card p-4 text-sm"
-                      role="status"
-                      key={`${entry.requestId}/${item.harness}`}
-                    >
-                      <CheckCircle2
-                        className={cn(
-                          'size-4',
-                          item.status === 'failed' ? 'text-destructive' : 'text-primary',
-                        )}
-                      />
-                      <span>
-                        {t(`favorites.toolNames.${item.harness}`)} / {item.profile}:{' '}
-                        {t(`favorites.${item.status}`)} {item.code ? t(catalogKey(item.code)) : ''}
-                      </span>
-                    </div>
-                  )),
-                )}
             </section>
           </div>
         </div>

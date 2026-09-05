@@ -1100,7 +1100,7 @@
     "after": "变更后",
     "noParameterChanges": "参数保持不变",
     "mappingDetails": "映射依据与保留设置",
-    "redactedDiffHint": "敏感值已隐藏；以下以统一结构展示文件内容差异。",
+    "redactedDiffHint": "仅隐藏 API key、token 等凭据，保留模型与普通配置；以下以统一结构展示文件差异。",
     "modeLabel": {
       "save": "仅保存",
       "activate": "保存并激活"

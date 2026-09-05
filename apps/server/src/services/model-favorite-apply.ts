@@ -267,8 +267,8 @@ export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
           nativeFiles: writes.map((write) => ({
             key: write.key,
             changed: current[write.key] !== write.content,
-            before: favoriteNativePreview(write.format, current[write.key]),
-            after: favoriteNativePreview(write.format, write.content),
+            before: favoriteNativePreview(write.format, current[write.key], [profile.apiKey]),
+            after: favoriteNativePreview(write.format, write.content, [profile.apiKey]),
           })),
         };
         return {

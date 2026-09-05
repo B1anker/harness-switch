@@ -1100,7 +1100,7 @@
     "after": "After",
     "noParameterChanges": "No parameter changes",
     "mappingDetails": "Mapping and preserved settings",
-    "redactedDiffHint": "Sensitive values are hidden. File contents are shown in a normalized structure.",
+    "redactedDiffHint": "Only credentials such as API keys and tokens are hidden; models and ordinary settings remain visible. Files are shown in a normalized structure.",
     "modeLabel": {
       "save": "Save only",
       "activate": "Save and activate"

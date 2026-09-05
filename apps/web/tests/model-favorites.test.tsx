@@ -2,6 +2,7 @@ import { expect, test } from '@rstest/core';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { GlobalBackups } from '@/components/global-backups';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
+import { PreviewTabs } from '@/components/model-favorite-apply-dialog/preview-tabs';
 import { ModelFavorites } from '@/components/model-favorites';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
 import {
@@ -12,6 +13,24 @@ import {
   setStoreState,
   stubStoreActions,
 } from './support';
+
+test('preview tabs show one tool at a time and support keyboard switching without applying', () => {
+  const item = favoritePlanFixture(favoriteFixture('daily', 'model')).items[0]!;
+  const actions = stubStoreActions(['applyFavorite', 'planFavorite']);
+  renderWithI18n(
+    <PreviewTabs items={[item, { ...item, harness: 'claude', profile: 'claude-profile' }]} />,
+  );
+  expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+  expect(screen.queryByText('claude-profile')).toBeNull();
+  fireEvent.click(screen.getByRole('tab', { name: 'Claude Code' }));
+  expect(screen.getByRole('tabpanel', { name: 'Claude Code' })).toHaveTextContent('claude-profile');
+  expect(screen.getAllByRole('table')).toHaveLength(1);
+  fireEvent.keyDown(screen.getByRole('tab', { name: 'Claude Code' }), { key: 'ArrowLeft' });
+  expect(screen.getByRole('tabpanel', { name: 'Pi' })).toBeInTheDocument();
+  expect(screen.queryByText('claude-profile')).toBeNull();
+  expect(actions.applyFavorite).toHaveLength(0);
+  expect(actions.planFavorite).toHaveLength(0);
+});
 
 test('selection and review are separate steps, and going back preserves choices without applying', async () => {
   const favorite = favoriteFixture('daily', 'model');

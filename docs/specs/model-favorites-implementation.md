@@ -38,9 +38,12 @@ ProfileService 不依赖收藏服务；adapter 投影是无凭据纯函数。仅
 
 ## 自动化和隔离验证
 
+- 文件预览保留模型映射、环境变量中的普通配置、地址及权限设置，仅隐藏凭据字段、已知 API key 和 URL 内的认证信息；JSON/TOML/YAML 均有脱敏回归测试。
+- 预览按工具分成 Tab，固定标签栏与底部操作区，每个工具的差异独立滚动；切换 Tab 不改变批次应用范围。实际 localhost:8787 验证 Claude/Kimi 切换及 Pierre 差异中的模型值与凭据脱敏，未执行激活。
+
 日期：2026-09-05。测试沿用仓库 support，凭据均为测试数据。
 
-最终完整运行（修复开发 chunk 丢失及改用单选按钮后）：服务端 391 项通过，Web 182 项通过；typecheck、lint、Biome 和 Web build 退出码均为 0。
+最终完整运行（凭据脱敏与工具 Tab 预览调整后）：服务端 393 项通过，Web 183 项通过；typecheck、lint、Biome 和 Web build 退出码均为 0。
 
 开发服务输出到 `apps/server/.dev-public`，生产构建输出到 `apps/server/public`。开发环境保留旧的带哈希 chunk，生产构建不再清理开发资源；CopyRspackPlugin 跟随实际输出目录。缺失的静态资源返回不可缓存的 404，不回退为 SPA HTML。已在开发服务运行期间执行生产构建并逐文件核对：50 个开发文件哈希不变，8787 端口的全部 9 个 JavaScript chunk 返回正确类型及内容。
 
