@@ -49,9 +49,7 @@ export function Workspace({
   const linked = harness?.profiles.find(
     (profile) => !harness.active?.official && profile.name === harness.active?.name,
   )?.modelFavorite?.favoriteId;
-  const favoriteId = harness
-    ? (choices[harness.id] ?? linked ?? (favorites?.length === 1 ? favorites[0]?.id : ''))
-    : '';
+  const favoriteId = harness ? (choices[harness.id] ?? linked ?? '') : '';
   const favorite = favorites?.find((entry) => entry.id === favoriteId);
   const currentProfile = harness?.profiles.find(
     (profile) =>

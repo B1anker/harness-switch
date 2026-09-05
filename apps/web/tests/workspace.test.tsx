@@ -89,6 +89,10 @@ test('workspace previews one selected tool directly and applies only after confi
       onHistory={() => {}}
     />,
   );
+  expect(screen.queryByRole('button', { name: '预览切换' })).toBeNull();
+  expect(screen.queryByText('本次将切换到 Pi')).toBeNull();
+  fireEvent.click(screen.getByRole('combobox', { name: '选择收藏模型' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() => expect(screen.getByRole('button', { name: '预览切换' })).toBeEnabled());
   expect(screen.getByText('本次将切换到 Pi')).toBeInTheDocument();
   expect(
@@ -138,6 +142,8 @@ test('ambiguous channels require an explicit choice instead of silently switchin
       onHistory={() => {}}
     />,
   );
+  fireEvent.click(screen.getByRole('combobox', { name: '选择收藏模型' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: '选择渠道' })).toBeInTheDocument(),
   );
