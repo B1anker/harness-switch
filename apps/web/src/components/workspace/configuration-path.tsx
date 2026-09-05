@@ -72,7 +72,18 @@ export function SwitchMap({
             candidate
           />
         </div>
-        <div aria-hidden className="switch-tree-merge switch-tree-merge-flow" />
+        <div aria-hidden className="switch-tree-merge">
+          <svg className="switch-tree-flow" viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path
+              className="switch-tree-current-flow"
+              d="M 0 25 H 14 Q 20 25 20 31 V 44 Q 20 50 26 50 H 100"
+            />
+            <path
+              className="switch-tree-new-flow"
+              d="M 0 75 H 14 Q 20 75 20 69 V 56 Q 20 50 26 50 H 100"
+            />
+          </svg>
+        </div>
         <ol className="switch-tree-tool">
           <PathNode
             icon={<HarnessIcon id={harness.id} />}
@@ -134,6 +145,9 @@ function PathBranch({
           value={path.model}
           mono
         />
+        <li aria-hidden className="path-arrow branch-to-tool">
+          <ArrowRight />
+        </li>
       </ol>
     </div>
   );

@@ -88,8 +88,8 @@ test('unified configuration workspace previews a selected favorite as an uncommi
   fireEvent.click(screen.getByRole('combobox', { name: '选择模板' }));
   fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() => expect(screen.getByRole('button', { name: '预览切换' })).toBeEnabled());
-  expect(screen.getByText('当前与候选链路')).toBeInTheDocument();
-  expect(screen.getByText('Pi 的候选旁路')).toBeInTheDocument();
+  expect(screen.getByText('当前与新链路')).toBeInTheDocument();
+  expect(screen.getByText('新链路')).toBeInTheDocument();
   expect(
     screen.getByText('这是 Pi 的预览目标，尚未写入；其他工具保持各自当前配置。'),
   ).toBeInTheDocument();

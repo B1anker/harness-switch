@@ -178,24 +178,33 @@
   border-color: color-mix(in srgb, var(--primary) 56%, var(--border));
   background: color-mix(in srgb, var(--primary) 4%, var(--card));
 }
-.switch-branch-candidate .path-arrow::before {
+.switch-branch .path-arrow {
+  position: relative;
+}
+.switch-branch .path-arrow::before {
   position: absolute;
   right: 0;
   left: 0;
   height: 2px;
+  background: color-mix(in srgb, var(--primary) 62%, var(--border));
+  content: "";
+}
+.switch-branch-candidate .path-arrow::before {
   background: repeating-linear-gradient(90deg, var(--primary) 0 7px, transparent 7px 14px);
   background-size: 28px 2px;
   animation: candidate-flow 0.85s linear infinite;
-  content: "";
 }
-.switch-branch-candidate .path-arrow {
-  position: relative;
-}
-.switch-branch-candidate .path-arrow > svg {
+.switch-branch .path-arrow > svg {
   position: relative;
   z-index: 1;
   margin-left: auto;
+  background: var(--card);
+}
+.switch-branch-candidate .path-arrow > svg {
   background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+.switch-branch .branch-to-tool::before {
+  right: -13px;
 }
 .switch-branch-label {
   font-size: 12px;
@@ -205,7 +214,7 @@
 }
 .switch-branch-path {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.2fr) 24px;
   gap: 8px;
   align-items: stretch;
 }
@@ -213,41 +222,39 @@
   position: relative;
   min-height: 100%;
 }
-.switch-tree-merge::before {
-  position: absolute;
-  top: 25%;
-  bottom: 25%;
-  left: 18px;
-  width: 2px;
-  background: repeating-linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--primary) 58%, var(--border)) 0 7px,
-    transparent 7px 14px
-  );
-  background-size: 2px 28px;
-  content: "";
+.switch-tree-flow {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.switch-tree-current-flow,
+.switch-tree-new-flow {
+  fill: none;
+  stroke: color-mix(in srgb, var(--primary) 58%, var(--border));
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.switch-tree-new-flow {
+  stroke: var(--primary);
+  stroke-dasharray: 7 7;
+  animation: candidate-flow 0.85s linear infinite;
 }
 .switch-tree-merge::after {
   position: absolute;
-  top: 50%;
-  right: 0;
-  left: 18px;
-  height: 2px;
-  background: repeating-linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--primary) 58%, var(--border)) 0 7px,
-    transparent 7px 14px
-  );
-  background-size: 28px 2px;
+  top: calc(50% - 6px);
+  right: -1px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
+  border-right: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
+  transform: rotate(45deg);
   content: "";
-}
-.switch-tree-merge-flow::before,
-.switch-tree-merge-flow::after {
-  animation: candidate-flow 0.85s linear infinite;
 }
 @keyframes candidate-flow {
   to {
     background-position: 28px 28px;
+    stroke-dashoffset: -28;
   }
 }
 .switch-tree-tool {
@@ -414,8 +421,7 @@
     transition: none;
   }
   .switch-branch-candidate .path-arrow::before,
-  .switch-tree-merge-flow::before,
-  .switch-tree-merge-flow::after {
+  .switch-tree-new-flow {
     animation: none;
   }
 }
