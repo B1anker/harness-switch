@@ -1032,6 +1032,7 @@
     "ignorePreference": "Ignore unsupported reasoning preference",
     "overwriteDiverged": "Overwrite diverged controlled fields from template",
     "preview": "Preview",
+    "appliedToast": "Applied the template to {{count}} tools.",
     "confirm": "Apply reviewed plan",
     "rendererDefault": "Renderer default",
     "notRepresented": "Fields not represented",
@@ -1180,6 +1181,7 @@
   },
   "workspace": {
     "navigation": "Main navigation",
+    "breadcrumb": "Breadcrumb",
     "nav": {
       "workspace": "Workspace",
       "favorites": "Templates",

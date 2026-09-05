@@ -19,9 +19,11 @@ import { SwitchMap } from './configuration-path';
 export function SwitchPanel({
   favorite,
   harness,
+  onApplied,
 }: {
   favorite: ModelFavorite;
   harness: HarnessSummary;
+  onApplied?(): void;
 }) {
   const { t } = useTranslation();
   const { targets, loading, error: targetError } = useFavoriteTargets(favorite);
@@ -100,6 +102,7 @@ export function SwitchPanel({
             clear();
             setReview(null);
           }}
+          onApplied={onApplied}
         />
       ) : null}
     </div>

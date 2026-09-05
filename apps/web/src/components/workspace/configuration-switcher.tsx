@@ -134,6 +134,10 @@ export function ConfigurationSwitcher({
               key={template.id + '/' + template.revision}
               favorite={template}
               harness={harness}
+              onApplied={() => {
+                setTemplateId('');
+                setTemplatePickerOpen(false);
+              }}
             />
           ) : (
             <p className="text-sm text-muted-foreground">{t('workspace.pickTemplateHint')}</p>

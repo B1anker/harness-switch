@@ -229,6 +229,7 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => {
       set({
         favoriteOperation: result.data,
         favoriteOperationHistory: [...get().favoriteOperationHistory, result.data].slice(-10),
+        notice: [{ key: 'favorites.appliedToast', params: { count: result.data.items.length } }],
       });
       await Promise.all([get().loadFavorites(), get().loadHarnesses()]);
     },

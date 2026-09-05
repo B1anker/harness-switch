@@ -28,12 +28,14 @@ export function ModelFavoriteApplyDialog({
   initialItems = [],
   initialMode = 'save',
   initialPreview = false,
+  onApplied,
 }: {
   favorite: ModelFavorite;
   onClose(): void;
   initialItems?: FavoritePlanRequest['items'];
   initialMode?: 'save' | 'activate';
   initialPreview?: boolean;
+  onApplied?(): void;
 }) {
   const { t } = useTranslation();
   const plan = useAppStore((state) => state.favoritePlan);
@@ -63,10 +65,20 @@ export function ModelFavoriteApplyDialog({
     setError('');
     try {
       await action();
+      return true;
     } catch (cause) {
       setError(lineText(t, errorLine(cause)));
+      return false;
     } finally {
       setBusy(false);
+    }
+  };
+  const applyAndClose = async () => {
+    const succeeded = await run(() => apply(requestId));
+    if (succeeded) {
+      clear();
+      onApplied?.();
+      onClose();
     }
   };
   const change = (harness: HarnessId, patch: Partial<FavoritePlanRequest['items'][number]>) => {
@@ -269,7 +281,7 @@ export function ModelFavoriteApplyDialog({
             ) : (
               <Button
                 disabled={busy || !plan || !!operation || blocked}
-                onClick={() => void run(() => apply(requestId))}
+                onClick={() => void applyAndClose()}
               >
                 {busy ? <Loader2 className="animate-spin" /> : <Check />}
                 {t(

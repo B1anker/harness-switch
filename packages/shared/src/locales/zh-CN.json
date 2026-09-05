@@ -1032,6 +1032,7 @@
     "ignorePreference": "确认忽略无法表达的思考偏好",
     "overwriteDiverged": "以模板覆盖已分歧的受控字段",
     "preview": "生成预览",
+    "appliedToast": "已将模板应用到 {{count}} 个工具。",
     "confirm": "确认执行计划",
     "rendererDefault": "工具渲染默认值",
     "notRepresented": "无法表达的字段",
@@ -1180,6 +1181,7 @@
   },
   "workspace": {
     "navigation": "主导航",
+    "breadcrumb": "路径导航",
     "nav": {
       "workspace": "工作台",
       "favorites": "模板",
