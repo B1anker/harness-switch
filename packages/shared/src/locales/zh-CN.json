@@ -1230,6 +1230,7 @@
     "activeNow": "生效中",
     "switchMap": "当前与新链路",
     "candidateChain": "新链路",
+    "appliesAfterConfirm": "应用后生效",
     "notWritten": "未写入",
     "switchTarget": "本次将切换到 {{name}}",
     "switchTargetHint": "这是 {{name}} 的预览目标，尚未写入；其他工具保持各自当前配置。",

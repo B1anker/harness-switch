@@ -10,6 +10,7 @@ type FlowNodeData = {
   label: string;
   value: string;
   kind: 'source' | 'model' | 'tool';
+  lane?: 'current' | 'next';
   harnessId?: HarnessId;
 };
 
@@ -29,31 +30,51 @@ export function SwitchFlow({
     {
       id: 'current-source',
       type: 'route',
-      position: { x: 108, y: 20 },
-      data: { label: t('workspace.configuration'), value: current.provider, kind: 'source' },
+      position: { x: 108, y: 38 },
+      data: {
+        label: t('workspace.configuration'),
+        value: current.provider,
+        kind: 'source',
+        lane: 'current',
+      },
     },
     {
       id: 'current-model',
       type: 'route',
-      position: { x: 344, y: 20 },
-      data: { label: t('favorites.modelPicker'), value: current.model, kind: 'model' },
+      position: { x: 344, y: 38 },
+      data: {
+        label: t('favorites.modelPicker'),
+        value: current.model,
+        kind: 'model',
+        lane: 'current',
+      },
     },
     {
       id: 'new-source',
       type: 'route',
-      position: { x: 108, y: 166 },
-      data: { label: t('workspace.provider'), value: candidate.provider, kind: 'source' },
+      position: { x: 108, y: 184 },
+      data: {
+        label: t('workspace.provider'),
+        value: candidate.provider,
+        kind: 'source',
+        lane: 'next',
+      },
     },
     {
       id: 'new-model',
       type: 'route',
-      position: { x: 344, y: 166 },
-      data: { label: t('favorites.modelPicker'), value: candidate.model, kind: 'model' },
+      position: { x: 344, y: 184 },
+      data: {
+        label: t('favorites.modelPicker'),
+        value: candidate.model,
+        kind: 'model',
+        lane: 'next',
+      },
     },
     {
       id: 'tool',
       type: 'route',
-      position: { x: 610, y: 92 },
+      position: { x: 536, y: 111 },
       data: {
         label: t('workspace.tool'),
         value: harness.label,
@@ -76,6 +97,7 @@ export function SwitchFlow({
         </span>
         <span className="switch-flow-label switch-flow-label-new">
           {t('workspace.candidateChain')}
+          <span>{t('workspace.appliesAfterConfirm')}</span>
         </span>
         <ReactFlow
           nodes={nodes}
@@ -114,8 +136,12 @@ function edge(source: string, target: string, targetHandle?: string, animated = 
 function RouteNode({ data }: NodeProps<Node<FlowNodeData>>) {
   const model = data.kind === 'model';
   return (
-    <div className="switch-flow-node">
-      {data.kind !== 'source' ? (
+    <div
+      className={
+        data.lane === 'next' ? 'switch-flow-node switch-flow-node-next' : 'switch-flow-node'
+      }
+    >
+      {data.kind === 'model' ? (
         <Handle type="target" position={Position.Left} className="switch-flow-handle" />
       ) : null}
       {data.kind === 'tool' ? (

@@ -1230,6 +1230,7 @@
     "activeNow": "Active",
     "switchMap": "Current and new routes",
     "candidateChain": "New route",
+    "appliesAfterConfirm": "Active after apply",
     "notWritten": "Not written",
     "switchTarget": "Switching {{name}} in this preview",
     "switchTargetHint": "This is a preview target for {{name}} and has not been written. Other tools keep their own current configuration.",

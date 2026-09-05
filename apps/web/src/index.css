@@ -155,7 +155,7 @@
 }
 .switch-flow-canvas {
   position: relative;
-  height: 292px;
+  height: 310px;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -185,6 +185,10 @@
 .switch-flow-node > svg {
   flex: none;
 }
+.switch-flow-node-next {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
 .switch-flow-handle {
   width: 8px;
   height: 8px;
@@ -194,18 +198,27 @@
 .switch-flow-label {
   position: absolute;
   z-index: 2;
-  left: 22px;
+  left: 108px;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted-foreground);
   pointer-events: none;
 }
 .switch-flow-label-current {
-  top: 59px;
+  top: 14px;
 }
 .switch-flow-label-new {
-  top: 205px;
+  top: 160px;
   color: var(--primary);
+}
+.switch-flow-label-new > span {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+  font-size: 10px;
+  font-weight: 600;
 }
 .favorite-graph {
   display: grid;
