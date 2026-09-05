@@ -27,7 +27,7 @@ export function CurrentConfigurationPath({ harness }: { harness: HarnessSummary 
               label: path.sourceLabel!,
               value: path.provider,
             }),
-            flowNode('model', 260, 40, {
+            flowNode('model', 315, 40, {
               kind: 'model',
               label: t('favorites.modelPicker'),
               value: path.model,

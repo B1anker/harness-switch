@@ -60,7 +60,7 @@ export function flowEdge(
   source: string,
   target: string,
   targetHandle?: string,
-  animated = false,
+  highlighted = false,
   type: Edge['type'] = 'default',
 ): Edge {
   return {
@@ -69,9 +69,11 @@ export function flowEdge(
     target,
     targetHandle,
     type,
-    animated,
+    animated: true,
     style: {
-      stroke: animated ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 58%, var(--border))',
+      stroke: highlighted
+        ? 'var(--primary)'
+        : 'color-mix(in srgb, var(--primary) 58%, var(--border))',
       strokeWidth: 2,
     },
   };
