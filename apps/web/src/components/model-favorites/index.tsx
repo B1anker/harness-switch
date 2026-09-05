@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
-import { FavoriteBackups } from './backups';
 import { FavoriteEditor } from './editor';
 import { FavoriteSelect } from './fields';
 
@@ -25,7 +24,6 @@ export function ModelFavorites() {
   const detach = useAppStore((state) => state.detachFavorite);
   const harnesses = useAppStore((state) => state.harnesses);
   const [search, setSearch] = useState('');
-  const [backupsOpen, setBackupsOpen] = useState(false);
   const [editing, setEditing] = useState<ModelFavorite | 'new' | null>(null);
   const [applying, setApplying] = useState<ModelFavorite | null>(null);
   const [source, setSource] = useState('');
@@ -71,9 +69,6 @@ export function ModelFavorites() {
           <p className="text-muted-foreground">{t('favorites.subtitle')}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setBackupsOpen(true)}>
-            {t('favorites.backups')}
-          </Button>
           <Button onClick={() => setEditing('new')}>{t('favorites.add')}</Button>
         </div>
       </div>
@@ -223,7 +218,6 @@ export function ModelFavorites() {
           onClose={() => setEditing(null)}
         />
       ) : null}
-      {backupsOpen ? <FavoriteBackups onClose={() => setBackupsOpen(false)} /> : null}
       {applying ? (
         <ModelFavoriteApplyDialog favorite={applying} onClose={() => setApplying(null)} />
       ) : null}

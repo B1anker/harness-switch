@@ -1,14 +1,13 @@
 import {
   catalogKey,
-  ERROR_CODES,
   type FavoritePlanRequest,
-  HARNESS_IDS,
+  type HarnessId,
   type ModelFavorite,
 } from '@seaveyon/harness-switch-shared';
-import { useEffect, useState } from 'react';
-import { FavoriteSelect } from '@/components/model-favorites/fields';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -16,13 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Disclosure } from '@/components/ui/disclosure';
-import { FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
+import { SegmentedControl } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { FavoritePreview } from './preview';
+import { ToolSelection } from './tool-selection';
 
 export function ModelFavoriteApplyDialog({
   favorite,
@@ -39,17 +38,21 @@ export function ModelFavoriteApplyDialog({
   const makePlan = useAppStore((state) => state.planFavorite);
   const apply = useAppStore((state) => state.applyFavorite);
   const clear = useAppStore((state) => state.clearFavoritePlan);
-  const harnesses = useAppStore((state) => state.harnesses);
   const targets = useAppStore((state) => state.favoriteTargets[favorite.id]);
   const loadTargets = useAppStore((state) => state.loadFavoriteTargets);
   const [items, setItems] = useState<FavoritePlanRequest['items']>([]);
   const [mode, setMode] = useState<'save' | 'activate'>('save');
+  const [step, setStep] = useState<0 | 1>(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     void loadTargets(favorite.id).catch((cause) => setError(lineText(t, errorLine(cause))));
   }, [favorite.id, loadTargets, t]);
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  useEffect(() => {
+    title.current?.focus({ preventScroll: true });
+  }, [step]);
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -61,271 +64,237 @@ export function ModelFavoriteApplyDialog({
       setBusy(false);
     }
   };
-  const change = (
-    harness: (typeof HARNESS_IDS)[number],
-    patch: Partial<FavoritePlanRequest['items'][number]>,
-  ) => {
+  const change = (harness: HarnessId, patch: Partial<FavoritePlanRequest['items'][number]>) => {
     clear();
     setItems(items.map((item) => (item.harness === harness ? { ...item, ...patch } : item)));
   };
+  const preview = async (selection = items) => {
+    setRequestId(crypto.randomUUID());
+    await makePlan({
+      favoriteId: favorite.id,
+      expectedRevision: favorite.revision,
+      items: selection,
+    });
+    setStep(1);
+  };
+  const failed = operation?.items.some(
+    (item) => item.status === 'failed' || item.status === 'skipped',
+  );
+  const complete = !!operation && !failed;
+  const blocked = plan?.items.some((item) => item.projection.blockers.length > 0);
+  const close = () => {
+    if (!busy) {
+      clear();
+      onClose();
+    }
+  };
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) {
-          clear();
-          onClose();
-        }
-      }}
-    >
-      <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{t('favorites.configure')}</DialogTitle>
-          <DialogDescription>{t('favorites.saveOnlyHint')}</DialogDescription>
+    <Dialog open onOpenChange={(open) => !open && close()}>
+      <DialogContent
+        className="flex h-[min(820px,92dvh)] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+        onEscapeKeyDown={(event) => busy && event.preventDefault()}
+      >
+        <DialogHeader className="shrink-0 border-b px-6 pb-5 pt-6 text-left sm:px-8">
+          <div
+            className="mb-4 flex items-center gap-2 pr-8 text-xs font-medium text-muted-foreground"
+            aria-label={t('favorites.workflow')}
+          >
+            <span
+              className={cn('flex items-center gap-2', step === 0 && 'text-primary')}
+              aria-current={step === 0 ? 'step' : undefined}
+            >
+              <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {step === 1 ? <Check className="size-3.5" /> : '1'}
+              </span>
+              {t('favorites.chooseTools')}
+            </span>
+            <span className="h-px w-8 bg-border" />
+            <span
+              className={cn('flex items-center gap-2', step === 1 && 'text-primary')}
+              aria-current={step === 1 ? 'step' : undefined}
+            >
+              <span className="flex size-6 items-center justify-center rounded-full bg-muted">
+                2
+              </span>
+              {t('favorites.reviewChanges')}
+            </span>
+          </div>
+          <DialogTitle ref={title} tabIndex={-1} className="text-xl outline-none">
+            {t(step === 0 ? 'favorites.configure' : 'favorites.reviewChanges')}
+          </DialogTitle>
+          <DialogDescription>
+            {favorite.name} · {t(step === 0 ? 'favorites.chooseHint' : 'favorites.reviewHint')}
+          </DialogDescription>
         </DialogHeader>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="favorite-activate"
-            checked={mode === 'activate'}
-            onCheckedChange={(checked) => {
-              const next = checked === true ? 'activate' : 'save';
-              setMode(next);
-              clear();
-              setItems(items.map((item) => ({ ...item, mode: next })));
-            }}
-          />
-          <label htmlFor="favorite-activate">{t('favorites.activateSelected')}</label>
-        </div>
-        {HARNESS_IDS.map((harness) => {
-          const connections = favorite.connections.filter((connection) =>
-            targets
-              ?.find((target) => target.harness === harness)
-              ?.connections.some(
-                (entry) => entry.id === connection.id && entry.projection.blockers.length === 0,
-              ),
-          );
-          const item = items.find((entry) => entry.harness === harness);
-          const linked =
-            harnesses
-              .find((entry) => entry.id === harness)
-              ?.profiles.filter((profile) => profile.modelFavorite?.favoriteId === favorite.id) ??
-            [];
-          return (
-            <fieldset key={harness} className="space-y-3 rounded-xl border p-3">
-              <legend className="flex items-center gap-2">
-                <Checkbox
-                  id={`target-${harness}`}
-                  checked={!!item}
-                  disabled={!connections.length}
-                  onCheckedChange={(checked) => {
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <div
+            className="flex h-full w-[200%] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            style={{ transform: `translateX(${step === 1 ? '-50%' : '0'})` }}
+          >
+            <section
+              aria-label={t('favorites.chooseTools')}
+              aria-hidden={step !== 0}
+              inert={step !== 0 || busy}
+              className="h-full w-1/2 shrink-0 space-y-5 overflow-y-auto p-6 sm:px-8"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-medium">{t('favorites.targetTools')}</p>
+                <SegmentedControl
+                  options={['save', 'activate'] as const}
+                  value={mode}
+                  onChange={(next) => {
+                    setMode(next);
                     clear();
-                    setItems(
-                      checked
-                        ? [
-                            ...items,
-                            {
-                              harness,
-                              connectionId:
-                                linked.length === 1 &&
-                                connections.some(
-                                  (connection) =>
-                                    connection.id === linked[0]!.modelFavorite!.connectionId,
-                                )
-                                  ? linked[0]!.modelFavorite!.connectionId
-                                  : connections.length === 1
-                                    ? connections[0]!.id
-                                    : '',
-                              existing: linked.length === 1,
-                              profile: linked.length === 1 ? linked[0]!.name : undefined,
-                              mode,
-                              ignorePreference: false,
-                              overwriteDiverged: false,
-                            },
-                          ]
-                        : items.filter((entry) => entry.harness !== harness),
-                    );
+                    setItems(items.map((item) => ({ ...item, mode: next })));
                   }}
-                />
-                <label htmlFor={`target-${harness}`}>{harness}</label>
-              </legend>
-              {!connections.length ? (
-                <p className="text-sm text-muted-foreground">
-                  {t('favorites.noCompatibleChannel')}
-                </p>
-              ) : null}
-              {item ? (
+                >
+                  {(value) => t(`favorites.modeLabel.${value}`)}
+                </SegmentedControl>
+              </div>
+              <ToolSelection
+                favorite={favorite}
+                items={items}
+                setItems={setItems}
+                mode={mode}
+                plan={plan}
+                targets={targets}
+                clear={clear}
+                change={change}
+              />
+            </section>
+            <section
+              aria-label={t('favorites.reviewChanges')}
+              aria-hidden={step !== 1}
+              inert={step !== 1}
+              className="h-full w-1/2 shrink-0 space-y-4 overflow-y-auto bg-muted/20 p-6 sm:px-8"
+            >
+              {plan ? (
                 <>
-                  {connections.length > 1 ? (
-                    <FavoriteSelect
-                      id={`connection-${harness}`}
-                      label={t('favorites.connection')}
-                      value={item.connectionId}
-                      options={connections.map((connection) => ({
-                        value: connection.id,
-                        label: `${connection.label} · ${connection.protocol} · ${connection.requestModelId}`,
-                      }))}
-                      onChange={(connectionId) => change(harness, { connectionId })}
-                    />
-                  ) : (
-                    <p className="text-sm">
-                      {connections[0]?.label} · {connections[0]?.requestModelId}
-                    </p>
-                  )}
-                  <p className="text-sm text-muted-foreground">
-                    {t(item.existing ? 'favorites.updateProfile' : 'favorites.newProfile')}:{' '}
-                    {item.profile || favorite.name}
-                  </p>
-                  <Disclosure title={t('favorites.targetAdvanced')}>
-                    <FavoriteSelect
-                      id={`existing-${harness}`}
-                      label={t('favorites.target')}
-                      value={item.existing ? item.profile! : '__new__'}
-                      options={[
-                        { value: '__new__', label: t('favorites.newProfile') },
-                        ...linked.map((profile) => ({ value: profile.name, label: profile.name })),
-                      ]}
-                      onChange={(value) =>
-                        change(harness, {
-                          existing: value !== '__new__',
-                          profile: value === '__new__' ? undefined : value,
-                        })
-                      }
-                    />
-                    {!item.existing ? (
-                      <FormField id={`profile-${harness}`} label={t('favorites.profileName')}>
-                        {(control) => (
-                          <Input
-                            {...control}
-                            value={item.profile ?? ''}
-                            placeholder={favorite.name}
-                            onChange={(event) =>
-                              change(harness, { profile: event.target.value || undefined })
-                            }
-                          />
-                        )}
-                      </FormField>
-                    ) : null}
-                  </Disclosure>
-                  {(['ignorePreference', 'overwriteDiverged'] as const)
-                    .filter((field) => {
-                      const projection = targets
-                        ?.find((target) => target.harness === harness)
-                        ?.connections.find(
-                          (connection) => connection.id === item.connectionId,
-                        )?.projection;
-                      return field === 'ignorePreference'
-                        ? projection?.notRepresented.includes('reasoningEffort')
-                        : item.overwriteDiverged ||
-                            plan?.items.some(
-                              (entry) =>
-                                entry.harness === harness &&
-                                entry.projection.blockers.some(
-                                  (blocker) => blocker.code === ERROR_CODES.favoriteProfileDiverged,
-                                ),
-                            );
-                    })
-                    .map((field) => (
-                      <div key={field} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`${field}-${harness}`}
-                          checked={item[field]}
-                          onCheckedChange={(value) => change(harness, { [field]: value === true })}
-                        />
-                        <label htmlFor={`${field}-${harness}`}>{t(`favorites.${field}`)}</label>
-                      </div>
-                    ))}
-                  {item.mode === 'activate' &&
-                  linked.some(
-                    (profile) =>
-                      profile.name === item.profile && profile.extras.authMode === 'openai_auth',
-                  ) ? (
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id={`auth-overwrite-${harness}`}
-                        checked={item.allowAuthOverwrite === true}
-                        onCheckedChange={(value) =>
-                          change(harness, { allowAuthOverwrite: value === true })
-                        }
-                      />
-                      <label htmlFor={`auth-overwrite-${harness}`}>
-                        {t('favorites.allowAuthOverwrite')}
-                      </label>
+                  <div className="grid grid-cols-3 gap-3 rounded-xl border bg-card p-4">
+                    <div>
+                      <p className="text-2xl font-semibold">{plan.items.length}</p>
+                      <p className="text-xs text-muted-foreground">{t('favorites.targetTools')}</p>
                     </div>
-                  ) : null}
+                    <div>
+                      <p className="text-2xl font-semibold">
+                        {plan.items.filter((item) => item.mode === 'activate').length}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {t('favorites.activateCount')}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold">
+                        {plan.items.reduce(
+                          (sum, item) =>
+                            sum + item.nativeFiles.filter((file) => file.changed).length,
+                          0,
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{t('favorites.changedFiles')}</p>
+                    </div>
+                  </div>
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <ShieldCheck className="size-4 shrink-0" />
+                    {t('favorites.autoBackupNotice')}
+                  </p>
+                  {plan.items.map((item) => (
+                    <FavoritePreview key={item.harness} item={item} />
+                  ))}
                 </>
               ) : null}
-            </fieldset>
-          );
-        })}
-        <Button
-          disabled={busy || !items.length || items.some((item) => !item.connectionId)}
-          onClick={() =>
-            void run(async () => {
-              setRequestId(crypto.randomUUID());
-              await makePlan({
-                favoriteId: favorite.id,
-                expectedRevision: favorite.revision,
-                items,
-              });
-            })
-          }
-        >
-          {t('favorites.preview')}
-        </Button>
-        {plan?.items.map((item) => (
-          <FavoritePreview key={item.harness} item={item} />
-        ))}
-        {plan ? (
-          <Button
-            disabled={
-              busy || !!operation || plan.items.some((item) => item.projection.blockers.length > 0)
-            }
-            onClick={() => void run(() => apply(requestId))}
-          >
-            {t('favorites.confirm')}
-          </Button>
-        ) : null}
-        {operation?.items.some((item) => item.status === 'failed' || item.status === 'skipped') ? (
-          <Button
-            variant="outline"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                const remaining = items.filter((item) =>
-                  operation.items.some(
-                    (result) =>
-                      result.harness === item.harness &&
-                      (result.status === 'failed' || result.status === 'skipped'),
-                  ),
-                );
-                setItems(remaining);
-                setRequestId(crypto.randomUUID());
-                await makePlan({
-                  favoriteId: favorite.id,
-                  expectedRevision: favorite.revision,
-                  items: remaining,
-                });
-              })
-            }
-          >
-            {t('favorites.retryFailed')}
-          </Button>
-        ) : null}
-        {history
-          .filter((entry) => !previousRequests.has(entry.requestId))
-          .flatMap((entry) =>
-            entry.items.map((item) => (
-              <p key={`${entry.requestId}/${item.harness}`} role="status">
-                {item.harness} / {item.profile}: {t(`favorites.${item.status}`)}{' '}
-                {item.code ? t(catalogKey(item.code)) : ''}
+              {history
+                .filter((entry) => !previousRequests.has(entry.requestId))
+                .flatMap((entry) =>
+                  entry.items.map((item) => (
+                    <div
+                      className="flex items-center gap-2 rounded-xl border bg-card p-4 text-sm"
+                      role="status"
+                      key={`${entry.requestId}/${item.harness}`}
+                    >
+                      <CheckCircle2
+                        className={cn(
+                          'size-4',
+                          item.status === 'failed' ? 'text-destructive' : 'text-primary',
+                        )}
+                      />
+                      <span>
+                        {t(`favorites.toolNames.${item.harness}`)} / {item.profile}:{' '}
+                        {t(`favorites.${item.status}`)} {item.code ? t(catalogKey(item.code)) : ''}
+                      </span>
+                    </div>
+                  )),
+                )}
+            </section>
+          </div>
+        </div>
+        <div className="shrink-0 space-y-3 border-t bg-card px-6 py-4 sm:px-8">
+          {error ? <Alert>{error}</Alert> : null}
+          {step === 1 && blocked ? (
+            <Alert variant="warning">{t('favorites.resolveBeforeApply')}</Alert>
+          ) : null}
+          <div className="flex items-center justify-between gap-3">
+            {step === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {t('favorites.selectedCount', { count: items.length })}
               </p>
-            )),
-          )}
-        {error ? (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        ) : null}
+            ) : (
+              <Button
+                variant="outline"
+                disabled={busy || !!operation}
+                onClick={() => {
+                  setError('');
+                  setStep(0);
+                }}
+              >
+                <ArrowLeft />
+                {t('favorites.backToSelection')}
+              </Button>
+            )}
+            {step === 0 ? (
+              <Button
+                disabled={busy || !items.length || items.some((item) => !item.connectionId)}
+                onClick={() => void run(() => preview())}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                {t('favorites.preview')}
+                <ArrowRight />
+              </Button>
+            ) : complete ? (
+              <Button onClick={close}>
+                <Check />
+                {t('favorites.done')}
+              </Button>
+            ) : failed ? (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    const remaining = items.filter((item) =>
+                      operation?.items.some(
+                        (result) =>
+                          result.harness === item.harness &&
+                          (result.status === 'failed' || result.status === 'skipped'),
+                      ),
+                    );
+                    setItems(remaining);
+                    await preview(remaining);
+                  })
+                }
+              >
+                {t('favorites.retryFailed')}
+              </Button>
+            ) : (
+              <Button
+                disabled={busy || !plan || !!operation || blocked}
+                onClick={() => void run(() => apply(requestId))}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : <Check />}
+                {t(mode === 'activate' ? 'favorites.confirmActivate' : 'favorites.confirmSave')}
+              </Button>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

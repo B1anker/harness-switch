@@ -3,6 +3,7 @@ import type {
   DoctorReport,
   DriftFileState,
   DriftSummary,
+  FavoritePlan,
   FavoriteProjectionResult,
   FieldSpec,
   HarnessSummary,
@@ -32,8 +33,35 @@ export function favoriteTargetFixture(favorite: FavoriteListItem) {
   return { harness: 'pi' as const, connections: [{ id: connection.id, projection }] };
 }
 
-import { createFavoriteRequestSchema } from '@seaveyon/harness-switch-shared';
+import { createFavoriteRequestSchema, resolveFavorite } from '@seaveyon/harness-switch-shared';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
+
+export function favoritePlanFixture(favorite: FavoriteListItem): FavoritePlan {
+  const connection = favorite.connections[0]!;
+  return {
+    id: '00000000-0000-4000-8000-000000000010',
+    expiresAt: '2026-09-05T00:10:00Z',
+    favoriteRevision: favorite.revision,
+    items: [
+      {
+        harness: 'pi',
+        connectionId: connection.id,
+        profile: favorite.name,
+        existing: false,
+        mode: 'save',
+        ignorePreference: false,
+        overwriteDiverged: false,
+        preservedFields: [],
+        liveState: 'inactive',
+        authMode: 'apiKey',
+        projection: favoriteTargetFixture(favorite).connections[0]!.projection,
+        resolved: resolveFavorite(favorite, connection),
+        diff: [{ field: 'model', before: null, after: connection.requestModelId }],
+        nativeFiles: [],
+      },
+    ],
+  };
+}
 
 /**
  * Mirrors the 1M flag spec the Claude adapter emits per model tier, including the catalog

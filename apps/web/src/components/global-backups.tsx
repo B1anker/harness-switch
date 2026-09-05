@@ -12,7 +12,7 @@ import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 
-export function FavoriteBackups({ onClose }: { onClose(): void }) {
+export function GlobalBackups({ onClose }: { onClose(): void }) {
   const { t } = useTranslation();
   const backups = useAppStore((state) => state.favoriteBackups);
   const load = useAppStore((state) => state.loadFavoriteBackups);

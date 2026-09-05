@@ -1,7 +1,16 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DashboardPage } from '@/pages/dashboard-page';
-import { harnessFixture, profileFixture, setStoreState } from './support';
+import { harnessFixture, profileFixture, setStoreState, stubStoreActions } from './support';
+
+test('global backups are available from the main tool view', () => {
+  setDashboardState();
+  const actions = stubStoreActions(['loadFavoriteBackups']);
+  render(<DashboardPage />);
+  fireEvent.click(screen.getByRole('button', { name: '备份与恢复' }));
+  expect(screen.getByRole('heading', { name: '备份与恢复' })).toBeInTheDocument();
+  expect(actions.loadFavoriteBackups).toHaveLength(1);
+});
 
 function setDashboardState() {
   const claudeProfile = profileFixture({ name: 'claude-main' });

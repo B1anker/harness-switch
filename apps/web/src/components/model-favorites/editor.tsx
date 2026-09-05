@@ -93,184 +93,188 @@ export function FavoriteEditor({
   };
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90dvh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">
           <DialogTitle>{t(favorite ? 'favorites.edit' : 'favorites.add')}</DialogTitle>
           <DialogDescription>{t('favorites.declared')}</DialogDescription>
         </DialogHeader>
-        <FormField id="favorite-name" label={t('favorites.name')}>
-          {(control) => (
-            <Input
-              {...control}
-              maxLength={120}
-              placeholder={draft.connections[0]?.requestModelId || t('favorites.autoName')}
-              value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-            />
-          )}
-        </FormField>
-        <Disclosure title={t('favorites.modelAdvanced')}>
-          <FormField id="favorite-notes" label={t('favorites.notes')}>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <FormField id="favorite-name" label={t('favorites.name')}>
             {(control) => (
-              <Textarea
+              <Input
                 {...control}
-                maxLength={4096}
-                value={draft.notes}
-                onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+                maxLength={120}
+                placeholder={draft.connections[0]?.requestModelId || t('favorites.autoName')}
+                value={draft.name}
+                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
               />
             )}
           </FormField>
-          <FavoriteFacts
-            id="favorite"
-            facts={draft.defaults}
-            effort={draft.preferences.reasoningEffort}
-            onFacts={(defaults) => setDraft({ ...draft, defaults })}
-            onEffort={(value) =>
-              setDraft({
-                ...draft,
-                preferences: {
-                  reasoningEffort: favoriteEffortSchema.optional().parse(value || undefined),
-                },
-              })
-            }
-          />
-        </Disclosure>
-        <h3 className="font-semibold">{t('favorites.connections')}</h3>
-        {draft.connections.map((connection) => (
-          <fieldset key={connection.id} className="space-y-3 rounded-xl border p-4">
-            <legend>{connection.label || t('favorites.connection')}</legend>
-            <Disclosure title={t('favorites.channelName')}>
-              <FormField id={`${connection.id}-label`} label={t('favorites.label')}>
-                {(control) => (
-                  <Input
-                    {...control}
-                    value={connection.label}
-                    maxLength={120}
-                    onChange={(event) => update(connection.id, { label: event.target.value })}
-                  />
-                )}
-              </FormField>
-            </Disclosure>
-            <FavoriteSelect
-              id={`${connection.id}-provider`}
-              label={t('favorites.endpoint')}
-              value={
-                connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''
-              }
-              options={providers.flatMap((provider) =>
-                provider.endpoints.map((endpoint) => ({
-                  value: `${provider.id}/${endpoint.key}`,
-                  label: `${provider.name} · ${endpoint.label || endpoint.key}`,
-                })),
-              )}
-              onChange={(value) => {
-                const [providerId, endpointKey] = value.split('/');
-                update(connection.id, { providerId, endpointKey });
-              }}
-            />
-            <FavoriteSelect
-              id={`${connection.id}-protocol`}
-              label={t('favorites.protocol')}
-              value={connection.protocol}
-              options={['openai-chat', 'openai-responses', 'anthropic-messages'].map((value) => ({
-                value,
-                label: value,
-              }))}
-              onChange={(value) =>
-                update(connection.id, { protocol: value as FavoriteConnection['protocol'] })
-              }
-            />
-            <FormField id={`${connection.id}-model`} label={t('favorites.model')}>
+          <Disclosure title={t('favorites.modelAdvanced')}>
+            <FormField id="favorite-notes" label={t('favorites.notes')}>
               {(control) => (
-                <Input
+                <Textarea
                   {...control}
-                  maxLength={120}
-                  value={connection.requestModelId}
-                  onChange={(event) =>
-                    update(connection.id, { requestModelId: event.target.value })
-                  }
+                  maxLength={4096}
+                  value={draft.notes}
+                  onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
                 />
               )}
             </FormField>
-            <ChannelOverrides
-              favorite={draft}
-              connection={connection}
-              onChange={(patch) => update(connection.id, patch)}
-            />
-            <Button
-              variant="outline"
-              disabled={busy || !connection.providerId || !connection.endpointKey}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await loadCatalog(connection.providerId, connection.endpointKey);
-                } catch (cause) {
-                  setError(lineText(t, errorLine(cause)));
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              {t('favorites.catalog')}
-            </Button>
-            {catalogs[`${connection.providerId}/${connection.endpointKey}`]?.models?.length ? (
-              <FavoriteSelect
-                id={`${connection.id}-catalog`}
-                label={t('favorites.catalogModel')}
-                value={connection.requestModelId}
-                options={catalogs[
-                  `${connection.providerId}/${connection.endpointKey}`
-                ]!.models!.map((model) => ({ value: model, label: model }))}
-                onChange={(requestModelId) => update(connection.id, { requestModelId })}
-              />
-            ) : catalogs[`${connection.providerId}/${connection.endpointKey}`] ? (
-              <p>{t('favorites.noCatalog')}</p>
-            ) : null}
-            <Button
-              variant="outline"
-              onClick={() =>
+            <FavoriteFacts
+              id="favorite"
+              facts={draft.defaults}
+              effort={draft.preferences.reasoningEffort}
+              onFacts={(defaults) => setDraft({ ...draft, defaults })}
+              onEffort={(value) =>
                 setDraft({
                   ...draft,
-                  connections: draft.connections.filter((item) => item.id !== connection.id),
+                  preferences: {
+                    reasoningEffort: favoriteEffortSchema.optional().parse(value || undefined),
+                  },
                 })
               }
-            >
-              {t('favorites.removeConnection')}
-            </Button>
-          </fieldset>
-        ))}
-        <Button
-          variant="outline"
-          disabled={draft.connections.length >= 50}
-          onClick={() =>
-            setDraft({
-              ...draft,
-              connections: [
-                ...draft.connections,
-                {
-                  id: crypto.randomUUID(),
-                  label: '',
-                  providerId: '',
-                  endpointKey: '',
-                  protocol: 'openai-responses',
-                  requestModelId: '',
-                  factOverrides: {},
-                  preferenceOverrides: {},
-                },
-              ],
-            })
-          }
-        >
-          {t('favorites.addConnection')}
-        </Button>
-        {error ? (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        ) : null}
-        <Button disabled={busy} onClick={() => void submit()}>
-          {t('favorites.saveFavorite')}
-        </Button>
+            />
+          </Disclosure>
+          <h3 className="font-semibold">{t('favorites.connections')}</h3>
+          {draft.connections.map((connection) => (
+            <fieldset key={connection.id} className="space-y-3 rounded-xl border p-4">
+              <legend>{connection.label || t('favorites.connection')}</legend>
+              <Disclosure title={t('favorites.channelName')}>
+                <FormField id={`${connection.id}-label`} label={t('favorites.label')}>
+                  {(control) => (
+                    <Input
+                      {...control}
+                      value={connection.label}
+                      maxLength={120}
+                      onChange={(event) => update(connection.id, { label: event.target.value })}
+                    />
+                  )}
+                </FormField>
+              </Disclosure>
+              <FavoriteSelect
+                id={`${connection.id}-provider`}
+                label={t('favorites.endpoint')}
+                value={
+                  connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''
+                }
+                options={providers.flatMap((provider) =>
+                  provider.endpoints.map((endpoint) => ({
+                    value: `${provider.id}/${endpoint.key}`,
+                    label: `${provider.name} · ${endpoint.label || endpoint.key}`,
+                  })),
+                )}
+                onChange={(value) => {
+                  const [providerId, endpointKey] = value.split('/');
+                  update(connection.id, { providerId, endpointKey });
+                }}
+              />
+              <FavoriteSelect
+                id={`${connection.id}-protocol`}
+                label={t('favorites.protocol')}
+                value={connection.protocol}
+                options={['openai-chat', 'openai-responses', 'anthropic-messages'].map((value) => ({
+                  value,
+                  label: value,
+                }))}
+                onChange={(value) =>
+                  update(connection.id, { protocol: value as FavoriteConnection['protocol'] })
+                }
+              />
+              <FormField id={`${connection.id}-model`} label={t('favorites.model')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    maxLength={120}
+                    value={connection.requestModelId}
+                    onChange={(event) =>
+                      update(connection.id, { requestModelId: event.target.value })
+                    }
+                  />
+                )}
+              </FormField>
+              <ChannelOverrides
+                favorite={draft}
+                connection={connection}
+                onChange={(patch) => update(connection.id, patch)}
+              />
+              <Button
+                variant="outline"
+                disabled={busy || !connection.providerId || !connection.endpointKey}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await loadCatalog(connection.providerId, connection.endpointKey);
+                  } catch (cause) {
+                    setError(lineText(t, errorLine(cause)));
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                {t('favorites.catalog')}
+              </Button>
+              {catalogs[`${connection.providerId}/${connection.endpointKey}`]?.models?.length ? (
+                <FavoriteSelect
+                  id={`${connection.id}-catalog`}
+                  label={t('favorites.catalogModel')}
+                  value={connection.requestModelId}
+                  options={catalogs[
+                    `${connection.providerId}/${connection.endpointKey}`
+                  ]!.models!.map((model) => ({ value: model, label: model }))}
+                  onChange={(requestModelId) => update(connection.id, { requestModelId })}
+                />
+              ) : catalogs[`${connection.providerId}/${connection.endpointKey}`] ? (
+                <p>{t('favorites.noCatalog')}</p>
+              ) : null}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    connections: draft.connections.filter((item) => item.id !== connection.id),
+                  })
+                }
+              >
+                {t('favorites.removeConnection')}
+              </Button>
+            </fieldset>
+          ))}
+          <Button
+            variant="outline"
+            disabled={draft.connections.length >= 50}
+            onClick={() =>
+              setDraft({
+                ...draft,
+                connections: [
+                  ...draft.connections,
+                  {
+                    id: crypto.randomUUID(),
+                    label: '',
+                    providerId: '',
+                    endpointKey: '',
+                    protocol: 'openai-responses',
+                    requestModelId: '',
+                    factOverrides: {},
+                    preferenceOverrides: {},
+                  },
+                ],
+              })
+            }
+          >
+            {t('favorites.addConnection')}
+          </Button>
+        </div>
+        <div className="shrink-0 space-y-3 border-t bg-muted/20 px-6 py-4">
+          {error ? (
+            <p role="alert" className="text-destructive">
+              {error}
+            </p>
+          ) : null}
+          <Button className="w-full" disabled={busy} onClick={() => void submit()}>
+            {t('favorites.saveFavorite')}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

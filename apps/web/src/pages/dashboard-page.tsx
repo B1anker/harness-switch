@@ -1,6 +1,7 @@
 import type { HarnessId, HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
 import { catalogKey } from '@seaveyon/harness-switch-shared';
 import {
+  ArchiveRestore,
   ArrowRightLeft,
   ChevronDown,
   KeyRound,
@@ -15,6 +16,7 @@ import { BackupPanel } from '@/components/backup-panel';
 import { BrandMark } from '@/components/brand-mark';
 import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
 import { DoctorPanel } from '@/components/doctor-panel';
+import { GlobalBackups } from '@/components/global-backups';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
 import { LanguageToggle } from '@/components/language-toggle';
@@ -48,6 +50,7 @@ type Editing = {
 
 export function DashboardPage() {
   const currentUser = useAppStore((state) => state.currentUser);
+  const [backupsOpen, setBackupsOpen] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(false);
   const { locale } = useI18n();
   const { t } = useTranslation();
@@ -90,6 +93,15 @@ export function DashboardPage() {
             </Button>
             <Button variant="outline" size="sm" onClick={() => setFavoritesOpen(!favoritesOpen)}>
               {t(favoritesOpen ? 'favorites.harnesses' : 'favorites.title')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              aria-label={t('favorites.backups')}
+              onClick={() => setBackupsOpen(true)}
+            >
+              <ArchiveRestore />
+              <span className="hidden sm:inline">{t('favorites.backups')}</span>
             </Button>
             <LanguageToggle />
             <ThemeToggle />
@@ -167,6 +179,9 @@ export function DashboardPage() {
       ) : null}
       <ConfigTransferDialog open={transferOpen} onOpenChange={setTransferOpen} />
       <ProviderVaultDialog open={vaultOpen} onOpenChange={setVaultOpen} />
+      {backupsOpen ? (
+        <GlobalBackups key={currentUser} onClose={() => setBackupsOpen(false)} />
+      ) : null}
       <NoticeToast />
     </div>
   );

@@ -1,16 +1,41 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { GlobalBackups } from '@/components/global-backups';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { ModelFavorites } from '@/components/model-favorites';
-import { FavoriteBackups } from '@/components/model-favorites/backups';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
 import {
   favoriteFixture,
+  favoritePlanFixture,
   favoriteTargetFixture,
   renderWithI18n,
   setStoreState,
   stubStoreActions,
 } from './support';
+
+test('selection and review are separate steps, and going back preserves choices without applying', async () => {
+  const favorite = favoriteFixture('daily', 'model');
+  setStoreState({
+    favoriteTargets: { [favorite.id]: [favoriteTargetFixture(favorite)] },
+    harnesses: [],
+  });
+  const actions = stubStoreActions(['loadFavoriteTargets', 'applyFavorite']);
+  setStoreState({
+    planFavorite: async () => {
+      setStoreState({ favoritePlan: favoritePlanFixture(favorite) });
+    },
+  });
+  renderWithI18n(<ModelFavoriteApplyDialog favorite={favorite} onClose={() => undefined} />);
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Pi' }));
+  fireEvent.click(screen.getByRole('button', { name: '生成预览' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '确认保存配置' })).toBeEnabled());
+  expect(screen.queryByRole('checkbox', { name: 'Pi' })).toBeNull();
+  expect(screen.getByRole('table')).toBeInTheDocument();
+  expect(actions.applyFavorite).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: '返回选择' }));
+  expect(screen.getByRole('checkbox', { name: 'Pi' })).toBeChecked();
+  expect(screen.queryByRole('table')).toBeNull();
+});
 
 test('a single channel only requires selecting a tool and leaves advanced choices collapsed', async () => {
   const favorite = favoriteFixture('daily', 'model');
@@ -20,7 +45,7 @@ test('a single channel only requires selecting a tool and leaves advanced choice
   });
   const actions = stubStoreActions(['loadFavoriteTargets', 'planFavorite']);
   renderWithI18n(<ModelFavoriteApplyDialog favorite={favorite} onClose={() => undefined} />);
-  fireEvent.click(screen.getByRole('checkbox', { name: 'pi' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Pi' }));
   expect(screen.queryByRole('combobox', { name: '选择渠道' })).toBeNull();
   expect(screen.queryByRole('combobox', { name: '目标配置' })).toBeNull();
   expect(screen.queryByRole('checkbox', { name: '以收藏覆盖已分歧的受控字段' })).toBeNull();
@@ -62,7 +87,7 @@ test('restore explains the full scope and only writes after explicit confirmatio
     'restoreFavoriteBackup',
     'createFavoriteBackup',
   ]);
-  renderWithI18n(<FavoriteBackups onClose={() => undefined} />);
+  renderWithI18n(<GlobalBackups onClose={() => undefined} />);
   fireEvent.click(screen.getByRole('button', { name: '恢复到此时' }));
   expect(actions.restoreFavoriteBackup).toHaveLength(0);
   expect(screen.getByText(/全部收藏、配置档案、凭据库/)).toBeInTheDocument();
