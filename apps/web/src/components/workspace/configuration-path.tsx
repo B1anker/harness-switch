@@ -72,7 +72,7 @@ export function SwitchMap({
             candidate
           />
         </div>
-        <div aria-hidden className="switch-tree-merge" />
+        <div aria-hidden className="switch-tree-merge switch-tree-merge-flow" />
         <ol className="switch-tree-tool">
           <PathNode
             icon={<HarnessIcon id={harness.id} />}

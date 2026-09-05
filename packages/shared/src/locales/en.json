@@ -1204,6 +1204,7 @@
     "noProfiles": "No local configuration is available to switch to yet.",
     "noTemplates": "No template yet.",
     "manageConfigurations": "Manage configuration entries",
+    "currentConfigurationManagement": "Current configuration and advanced management",
     "chooseTemplate": "Choose a template",
     "pickTemplate": "Search and select a template",
     "pickTemplateHint": "Choose a template to see its connections and preview the switch.",

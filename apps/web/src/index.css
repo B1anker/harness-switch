@@ -173,8 +173,28 @@
   background: color-mix(in srgb, var(--card) 70%, var(--background));
 }
 .switch-branch-candidate {
+  position: relative;
   border-style: dashed;
   border-color: color-mix(in srgb, var(--primary) 56%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+.switch-branch-candidate .path-arrow::before {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, var(--primary) 0 7px, transparent 7px 14px);
+  background-size: 28px 2px;
+  animation: candidate-flow 0.85s linear infinite;
+  content: "";
+}
+.switch-branch-candidate .path-arrow {
+  position: relative;
+}
+.switch-branch-candidate .path-arrow > svg {
+  position: relative;
+  z-index: 1;
+  margin-left: auto;
   background: color-mix(in srgb, var(--primary) 4%, var(--card));
 }
 .switch-branch-label {
@@ -198,8 +218,13 @@
   top: 25%;
   bottom: 25%;
   left: 18px;
-  width: 1px;
-  background: color-mix(in srgb, var(--primary) 48%, var(--border));
+  width: 2px;
+  background: repeating-linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 58%, var(--border)) 0 7px,
+    transparent 7px 14px
+  );
+  background-size: 2px 28px;
   content: "";
 }
 .switch-tree-merge::after {
@@ -207,9 +232,23 @@
   top: 50%;
   right: 0;
   left: 18px;
-  height: 1px;
-  background: color-mix(in srgb, var(--primary) 48%, var(--border));
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--primary) 58%, var(--border)) 0 7px,
+    transparent 7px 14px
+  );
+  background-size: 28px 2px;
   content: "";
+}
+.switch-tree-merge-flow::before,
+.switch-tree-merge-flow::after {
+  animation: candidate-flow 0.85s linear infinite;
+}
+@keyframes candidate-flow {
+  to {
+    background-position: 28px 28px;
+  }
 }
 .switch-tree-tool {
   display: flex;
@@ -373,5 +412,10 @@
   }
   .timeline-point {
     transition: none;
+  }
+  .switch-branch-candidate .path-arrow::before,
+  .switch-tree-merge-flow::before,
+  .switch-tree-merge-flow::after {
+    animation: none;
   }
 }

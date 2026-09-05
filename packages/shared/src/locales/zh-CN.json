@@ -1204,6 +1204,7 @@
     "noProfiles": "还没有可用于切换的本地配置。",
     "noTemplates": "还没有模板。",
     "manageConfigurations": "管理配置条目",
+    "currentConfigurationManagement": "当前配置与高级管理",
     "chooseTemplate": "选择模板",
     "pickTemplate": "搜索并选择模板",
     "pickTemplateHint": "选一个模板，即可查看配置关系和切换影响。",
