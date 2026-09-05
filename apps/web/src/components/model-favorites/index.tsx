@@ -23,7 +23,6 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
   const load = useAppStore((state) => state.loadFavorites);
   const loadProviders = useAppStore((state) => state.loadProviders);
   const remove = useAppStore((state) => state.deleteFavorite);
-  const detach = useAppStore((state) => state.detachFavorite);
   const clear = useAppStore((state) => state.clearFavoritePlan);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(initialSelectedId);
@@ -170,14 +169,6 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
                         {ref.needsUpdate ? t('favorites.needsUpdate') : ''}{' '}
                         {ref.diverged ? t('favorites.diverged') : ''}
                       </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => void run(() => detach(ref.harness, ref.name))}
-                      >
-                        {t('favorites.detach')}
-                      </Button>
                     </div>
                   ))}
                   <Button

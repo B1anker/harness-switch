@@ -27,9 +27,19 @@ type HarnessCardProps = {
   onEdit: (profile: ProfilePublic) => void;
   onCopy?: (profile: ProfilePublic) => void;
   extraActions?: ReactNode;
+  onOpenTemplate?: (id: string) => void;
+  switching?: boolean;
 };
 
-export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: HarnessCardProps) {
+export function HarnessCard({
+  harness,
+  onAdd,
+  onEdit,
+  onCopy,
+  extraActions,
+  onOpenTemplate,
+  switching,
+}: HarnessCardProps) {
   const { t } = useTranslation();
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
@@ -99,7 +109,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">{t(words.collection)}</h3>
+            {!switching ? <h3 className="text-sm font-semibold">{t(words.collection)}</h3> : null}
             <p className="mt-1 text-xs text-muted-foreground">
               {t('harness.profileCount', { count: visibleProfiles.length })}
             </p>
@@ -191,7 +201,9 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                           {profile.model}
                         </p>
                       ) : null}
-                      {profile.modelFavorite ? <FavoriteLinkStatus profile={profile} /> : null}
+                      {profile.modelFavorite ? (
+                        <FavoriteLinkStatus profile={profile} onOpenTemplate={onOpenTemplate} />
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
@@ -202,7 +214,15 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                       disabled={active}
                     >
                       {!active ? <Play /> : null}
-                      {t(active ? words.appliedBadge : words.apply)}
+                      {t(
+                        switching
+                          ? active
+                            ? 'workspace.activeNow'
+                            : 'workspace.useConfiguration'
+                          : active
+                            ? words.appliedBadge
+                            : words.apply,
+                      )}
                     </Button>
                     <Button
                       size="icon"

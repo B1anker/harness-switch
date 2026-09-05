@@ -19,7 +19,6 @@ import { BackupPanel } from '@/components/backup-panel';
 import { BrandMark } from '@/components/brand-mark';
 import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
 import { DoctorPanel } from '@/components/doctor-panel';
-import { HarnessCard } from '@/components/harness-card';
 import { HarnessTabs } from '@/components/harness-tabs';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ModelFavorites } from '@/components/model-favorites';
@@ -178,27 +177,17 @@ export function DashboardPage() {
                 <ConfigurationSwitcher
                   harness={selectedHarness}
                   onNewProfile={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
+                  onEditProfile={(profile) =>
+                    setEditing({ harnessId: selectedHarness.id, profile })
+                  }
+                  onCopyProfile={(copySource) =>
+                    setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
+                  }
                   onOpenTemplate={(id) => {
                     setTemplateToOpen(id);
                     setView('favorites');
                   }}
                 />
-                <details className="group rounded-2xl border bg-card px-5 py-4 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
-                    <span>{t('workspace.currentConfigurationManagement')}</span>
-                    <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                  </summary>
-                  <div className="mt-6">
-                    <HarnessCard
-                      harness={selectedHarness}
-                      onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
-                      onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
-                      onCopy={(copySource) =>
-                        setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
-                      }
-                    />
-                  </div>
-                </details>
                 <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
                     <span className="font-mono text-[13px]">{t('env.title')}</span>

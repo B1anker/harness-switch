@@ -1,7 +1,7 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { Check, Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { ActivateDialog } from '@/components/activate-dialog';
+import { HarnessCard } from '@/components/harness-card';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,14 @@ export function ConfigurationSwitcher({
   harness,
   onNewProfile,
   onOpenTemplate,
+  onEditProfile,
+  onCopyProfile,
 }: {
   harness: HarnessSummary;
   onNewProfile(): void;
   onOpenTemplate(id: string): void;
+  onEditProfile(profile: ProfilePublic): void;
+  onCopyProfile(profile: ProfilePublic): void;
 }) {
   const { t } = useTranslation();
   const favorites = useAppStore((state) => state.favorites);
@@ -26,15 +30,11 @@ export function ConfigurationSwitcher({
   const load = useAppStore((state) => state.loadFavorites);
   const loadProviders = useAppStore((state) => state.loadProviders);
   const [templateId, setTemplateId] = useState('');
-  const [activating, setActivating] = useState<ProfilePublic | null>(null);
   useEffect(() => {
     void load();
     void loadProviders();
   }, [load, loadProviders]);
   const template = favorites?.find((entry) => entry.id === templateId);
-  const profiles = harness.profiles.filter(
-    (profile) => profile.name !== harness.official?.linkedProfileName,
-  );
   return (
     <section className="workspace-surface space-y-6 p-5 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -73,53 +73,14 @@ export function ConfigurationSwitcher({
         </div>
       </div>
       {error ? <Alert>{lineText(t, error)}</Alert> : null}
-      <div className="space-y-3">
-        {profiles.length ? (
-          profiles.map((profile) => {
-            const active = !harness.active?.official && harness.active?.name === profile.name;
-            const linkedTemplate = favorites?.find(
-              (entry) => entry.id === profile.modelFavorite?.favoriteId,
-            );
-            return (
-              <div
-                key={profile.name}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
-              >
-                <span className="min-w-0">
-                  <span className="flex flex-wrap items-center gap-2 font-medium">
-                    {profile.name}
-                    {linkedTemplate ? (
-                      <button
-                        type="button"
-                        className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-ring"
-                        onClick={() => onOpenTemplate(linkedTemplate.id)}
-                      >
-                        {t('templates.tag')}
-                      </button>
-                    ) : null}
-                    {active ? <Check className="size-4 text-primary" /> : null}
-                  </span>
-                  <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">
-                    {profile.model || t('harness.currentInactive')}
-                  </span>
-                </span>
-                <Button
-                  size="sm"
-                  variant={active ? 'secondary' : 'outline'}
-                  disabled={active}
-                  onClick={() => setActivating(profile)}
-                >
-                  {active ? t('workspace.activeNow') : t('workspace.useConfiguration')}
-                </Button>
-              </div>
-            );
-          })
-        ) : (
-          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-            {t('workspace.noProfiles')}
-          </div>
-        )}
-      </div>
+      <HarnessCard
+        harness={harness}
+        onAdd={onNewProfile}
+        onEdit={onEditProfile}
+        onCopy={onCopyProfile}
+        onOpenTemplate={onOpenTemplate}
+        switching
+      />
       {template ? (
         <ModelFavoriteApplyDialog
           key={template.id}
@@ -128,18 +89,6 @@ export function ConfigurationSwitcher({
           initialMode="activate"
           initialPreview
           onClose={() => setTemplateId('')}
-        />
-      ) : null}
-      {activating ? (
-        <ActivateDialog
-          harness={harness}
-          profile={activating}
-          open
-          onOpenChange={(open) => {
-            if (!open) {
-              setActivating(null);
-            }
-          }}
         />
       ) : null}
     </section>

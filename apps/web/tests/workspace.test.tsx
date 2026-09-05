@@ -101,6 +101,8 @@ test('unified configuration workspace previews a selected favorite as an uncommi
       harness={useAppStore.getState().harnesses[0]!}
       onNewProfile={() => {}}
       onOpenTemplate={() => {}}
+      onEditProfile={() => {}}
+      onCopyProfile={() => {}}
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));
@@ -149,6 +151,8 @@ test('ambiguous channels require an explicit choice instead of silently switchin
       harness={useAppStore.getState().harnesses[0]!}
       onNewProfile={() => {}}
       onOpenTemplate={() => {}}
+      onEditProfile={() => {}}
+      onCopyProfile={() => {}}
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));

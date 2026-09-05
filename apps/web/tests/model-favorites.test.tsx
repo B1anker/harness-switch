@@ -227,5 +227,5 @@ test('linked profiles show updates and cannot be deleted with their favorite', (
   fireEvent.click(screen.getByRole('button', { name: '管理已生成配置与收藏' }));
   expect(screen.getByRole('button', { name: '删除模板' })).toBeDisabled();
   expect(screen.getByText(/pi \/ main/)).toHaveTextContent('有本地分歧');
-  expect(screen.getByRole('button', { name: '解除关联，保留配置' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '解除关联，保留配置' })).toBeNull();
 });
