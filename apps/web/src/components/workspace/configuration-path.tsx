@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import { HarnessIcon } from '@/components/harness-icon';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/lib/i18n';
-import { useAppStore } from '@/stores/app-store';
 import { SwitchFlow } from './switch-flow';
 
 type Path = { provider: string; model: string };
@@ -38,16 +37,15 @@ export function CurrentConfigurationPath({ harness }: { harness: HarnessSummary 
 export function SwitchMap({
   connection,
   harness,
+  templateName,
 }: {
   connection: FavoriteConnection;
   harness: HarnessSummary;
+  templateName: string;
 }) {
   const { t } = useTranslation();
-  const provider = useAppStore((state) =>
-    state.providers?.find((entry) => entry.id === connection.providerId),
-  );
   const candidate = {
-    provider: provider?.name ?? t('workspace.missingProvider'),
+    provider: templateName,
     model: connection.requestModelId,
   };
   return (

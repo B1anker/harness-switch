@@ -39,7 +39,7 @@ export function SwitchFlow({
     return () => observer.disconnect();
   }, []);
   const zoom = Math.min(1, width / 820);
-  const offsetX = Math.max(0, (width - 820) / 2);
+  const offsetX = 0;
   const nodes: Node<FlowNodeData>[] = [
     {
       id: 'current-source',
@@ -66,9 +66,9 @@ export function SwitchFlow({
     {
       id: 'new-source',
       type: 'route',
-      position: { x: 24, y: 184 },
+      position: { x: 24, y: 154 },
       data: {
-        label: t('workspace.provider'),
+        label: t('templates.tag'),
         value: candidate.provider,
         kind: 'source',
         lane: 'next',
@@ -77,7 +77,7 @@ export function SwitchFlow({
     {
       id: 'new-model',
       type: 'route',
-      position: { x: 260, y: 184 },
+      position: { x: 260, y: 154 },
       data: {
         label: t('favorites.modelPicker'),
         value: candidate.model,
@@ -88,7 +88,7 @@ export function SwitchFlow({
     {
       id: 'tool',
       type: 'route',
-      position: { x: 606, y: 111 },
+      position: { x: 606, y: 96 },
       data: {
         label: t('workspace.tool'),
         value: harness.label,
@@ -105,7 +105,7 @@ export function SwitchFlow({
   ];
   return (
     <TooltipProvider delayDuration={250}>
-      <div ref={canvasRef} className="switch-flow-canvas" style={{ height: 310 * zoom }}>
+      <div ref={canvasRef} className="switch-flow-canvas" style={{ height: 250 * zoom }}>
         <div
           style={{
             position: 'absolute',

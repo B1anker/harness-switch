@@ -79,7 +79,9 @@ export function SwitchPanel({
           onChange={setChosen}
         />
       ) : null}
-      {connection ? <SwitchMap connection={connection} harness={harness} /> : null}
+      {connection ? (
+        <SwitchMap connection={connection} harness={harness} templateName={favorite.name} />
+      ) : null}
       {error ? <Alert>{error}</Alert> : null}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="flex max-w-sm items-center gap-2 text-xs leading-relaxed text-muted-foreground">
