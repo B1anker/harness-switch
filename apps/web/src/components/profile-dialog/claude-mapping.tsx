@@ -2,6 +2,13 @@ import type { FieldSpec } from '@seaveyon/harness-switch-shared';
 import { Checkbox } from '@/components/ui/checkbox';
 import { controlProps, FieldError, FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useTranslation } from '@/lib/i18n';
 import { fieldText, lineText, type MessageLine, placeholderText } from '@/lib/messages';
 import type { ProfileFieldErrors } from './types';
@@ -37,11 +44,14 @@ export function ClaudeModelMappingFields({
   fields,
   values,
   errors,
+  modelOptions,
   onChange,
 }: {
   fields: FieldSpec[];
   values: Record<string, string>;
   errors: ProfileFieldErrors;
+  /** A successful catalog request makes model-id fields selectable rather than free text. */
+  modelOptions: string[];
   onChange: (key: string, value: string) => void;
 }) {
   const { t } = useTranslation();
@@ -99,6 +109,7 @@ export function ClaudeModelMappingFields({
                 field={modelField}
                 value={values[modelKey] ?? ''}
                 error={modelError}
+                modelOptions={modelOptions}
                 onChange={(value) => onChange(modelKey, value)}
               />
               <OneMCell
@@ -124,6 +135,7 @@ export function ClaudeModelMappingFields({
               field={subagentField}
               value={values.subagentModel ?? ''}
               error={errors['extra:subagentModel']}
+              modelOptions={modelOptions}
               onChange={(value) => onChange('subagentModel', value)}
             />
             <OneMCell
@@ -146,31 +158,50 @@ function MappingCell({
   value,
   placeholder,
   error,
+  modelOptions = [],
   onChange,
 }: {
   field: FieldSpec;
   value: string;
   placeholder?: string;
   error?: MessageLine;
+  modelOptions?: string[];
   onChange: (value: string) => void;
 }) {
   const { t } = useTranslation();
+  const options = value && !modelOptions.includes(value) ? [value, ...modelOptions] : modelOptions;
+  const label = fieldText(t, field.labelCode, field.params);
   return (
     <FormField
       id={`extra-${field.key}`}
-      label={fieldText(t, field.labelCode, field.params)}
+      label={label}
       labelClassName="text-xs md:sr-only"
       error={error ? lineText(t, error) : undefined}
       className="space-y-1.5"
     >
-      {(control) => (
-        <Input
-          {...control}
-          value={value}
-          placeholder={placeholder ?? placeholderText(t, field)}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      )}
+      {(control) =>
+        options.length > 0 ? (
+          <Select value={value} onValueChange={onChange}>
+            <SelectTrigger {...control} aria-label={label}>
+              <SelectValue placeholder={placeholder ?? placeholderText(t, field)} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Input
+            {...control}
+            value={value}
+            placeholder={placeholder ?? placeholderText(t, field)}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        )
+      }
     </FormField>
   );
 }
