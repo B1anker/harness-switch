@@ -84,9 +84,9 @@ export function SwitchFlow({
     },
   ];
   const edges: Edge[] = [
-    edge('current-source', 'current-model'),
+    edge('current-source', 'current-model', undefined, false, 'straight'),
     edge('current-model', 'tool', 'current'),
-    edge('new-source', 'new-model', undefined, true),
+    edge('new-source', 'new-model', undefined, true, 'straight'),
     edge('new-model', 'tool', 'new', true),
   ];
   return (
@@ -118,13 +118,19 @@ export function SwitchFlow({
   );
 }
 
-function edge(source: string, target: string, targetHandle?: string, animated = false): Edge {
+function edge(
+  source: string,
+  target: string,
+  targetHandle?: string,
+  animated = false,
+  type: Edge['type'] = 'default',
+): Edge {
   return {
     id: `${source}-${target}`,
     source,
     target,
     targetHandle,
-    type: 'smoothstep',
+    type,
     animated,
     style: {
       stroke: animated ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 58%, var(--border))',
