@@ -59,19 +59,27 @@ export function SwitchMap({
           {t('workspace.notWritten')}
         </span>
       </div>
-      <div className="switch-map">
-        <PathLane
-          label={t('workspace.currentChain')}
-          path={currentPath(harness, t)}
-          harness={harness}
-          sourceLabel={t('workspace.configuration')}
-        />
-        <PathLane
-          label={t('workspace.candidateChain', { name: harness.label })}
-          path={candidate}
-          harness={harness}
-          candidate
-        />
+      <div className="switch-tree">
+        <div className="switch-tree-branches">
+          <PathBranch
+            label={t('workspace.currentChain')}
+            path={currentPath(harness, t)}
+            sourceLabel={t('workspace.configuration')}
+          />
+          <PathBranch
+            label={t('workspace.candidateChain', { name: harness.label })}
+            path={candidate}
+            candidate
+          />
+        </div>
+        <div aria-hidden className="switch-tree-merge" />
+        <ol className="switch-tree-tool">
+          <PathNode
+            icon={<HarnessIcon id={harness.id} />}
+            label={t('workspace.tool')}
+            value={harness.label}
+          />
+        </ol>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
         {t('workspace.switchTargetHint', { name: harness.label })}
@@ -83,21 +91,35 @@ export function SwitchMap({
 function PathLane({
   path,
   harness,
+  sourceLabel,
+}: {
+  path: Path;
+  harness: HarnessSummary;
+  sourceLabel?: string;
+}) {
+  return (
+    <div className="configuration-path-frame">
+      <PathSteps path={path} harness={harness} sourceLabel={sourceLabel} />
+    </div>
+  );
+}
+
+function PathBranch({
+  path,
   candidate = false,
   label,
   sourceLabel,
 }: {
   path: Path;
-  harness: HarnessSummary;
   candidate?: boolean;
-  label?: string;
+  label: string;
   sourceLabel?: string;
 }) {
   const { t } = useTranslation();
   return (
-    <div className={candidate ? 'switch-lane switch-lane-candidate' : 'switch-lane'}>
-      {label ? <p className="switch-lane-label">{label}</p> : null}
-      <ol className="configuration-path">
+    <div className={candidate ? 'switch-branch switch-branch-candidate' : 'switch-branch'}>
+      <p className="switch-branch-label">{label}</p>
+      <ol className="switch-branch-path">
         <PathNode
           icon={<Network className="text-primary" />}
           label={sourceLabel ?? t('workspace.provider')}
@@ -112,16 +134,46 @@ function PathLane({
           value={path.model}
           mono
         />
-        <li aria-hidden className="path-arrow">
-          <ArrowRight />
-        </li>
-        <PathNode
-          icon={<HarnessIcon id={harness.id} />}
-          label={t('workspace.tool')}
-          value={harness.label}
-        />
       </ol>
     </div>
+  );
+}
+
+function PathSteps({
+  path,
+  harness,
+  sourceLabel,
+}: {
+  path: Path;
+  harness: HarnessSummary;
+  sourceLabel?: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ol className="configuration-path">
+      <PathNode
+        icon={<Network className="text-primary" />}
+        label={sourceLabel ?? t('workspace.provider')}
+        value={path.provider}
+      />
+      <li aria-hidden className="path-arrow">
+        <ArrowRight />
+      </li>
+      <PathNode
+        icon={<Box className="text-primary" />}
+        label={t('favorites.modelPicker')}
+        value={path.model}
+        mono
+      />
+      <li aria-hidden className="path-arrow">
+        <ArrowRight />
+      </li>
+      <PathNode
+        icon={<HarnessIcon id={harness.id} />}
+        label={t('workspace.tool')}
+        value={harness.label}
+      />
+    </ol>
   );
 }
 

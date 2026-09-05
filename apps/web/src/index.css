@@ -125,6 +125,12 @@
   gap: 8px;
   align-items: stretch;
 }
+.configuration-path-frame {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card) 70%, var(--background));
+}
 .path-node {
   display: flex;
   align-items: center;
@@ -146,13 +152,19 @@
   align-items: center;
   color: var(--primary);
 }
-.switch-map {
+.switch-tree {
   display: grid;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 54px minmax(10rem, 0.32fr);
+  gap: 0;
+  align-items: stretch;
 }
-.switch-lane {
+.switch-tree-branches {
   display: grid;
-  grid-template-columns: minmax(7.5rem, 0.24fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.switch-branch {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.26fr) minmax(0, 1fr);
   gap: 14px;
   align-items: center;
   padding: 12px;
@@ -160,16 +172,54 @@
   border-radius: 16px;
   background: color-mix(in srgb, var(--card) 70%, var(--background));
 }
-.switch-lane-candidate {
+.switch-branch-candidate {
   border-style: dashed;
   border-color: color-mix(in srgb, var(--primary) 56%, var(--border));
   background: color-mix(in srgb, var(--primary) 4%, var(--card));
 }
-.switch-lane-label {
+.switch-branch-label {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.45;
   color: var(--muted-foreground);
+}
+.switch-branch-path {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.2fr);
+  gap: 8px;
+  align-items: stretch;
+}
+.switch-tree-merge {
+  position: relative;
+  min-height: 100%;
+}
+.switch-tree-merge::before {
+  position: absolute;
+  top: 25%;
+  bottom: 25%;
+  left: 18px;
+  width: 1px;
+  background: color-mix(in srgb, var(--primary) 48%, var(--border));
+  content: "";
+}
+.switch-tree-merge::after {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 18px;
+  height: 1px;
+  background: color-mix(in srgb, var(--primary) 48%, var(--border));
+  content: "";
+}
+.switch-tree-tool {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.switch-tree-tool .path-node {
+  width: 100%;
+  min-height: 6.5rem;
+  background: color-mix(in srgb, var(--primary) 5%, var(--card));
 }
 .favorite-graph {
   display: grid;
@@ -300,8 +350,20 @@
   .favorite-graph {
     min-height: auto;
   }
-  .switch-lane {
+  .switch-tree {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .switch-branch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .switch-branch-path {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .switch-tree-merge {
+    display: none;
+  }
+  .switch-tree-tool .path-node {
+    min-height: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
