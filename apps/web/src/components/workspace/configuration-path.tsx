@@ -73,16 +73,9 @@ export function SwitchMap({
           />
         </div>
         <div aria-hidden className="switch-tree-merge">
-          <svg className="switch-tree-flow" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <path
-              className="switch-tree-current-flow"
-              d="M 0 25 H 14 Q 20 25 20 31 V 44 Q 20 50 26 50 H 100"
-            />
-            <path
-              className="switch-tree-new-flow"
-              d="M 0 75 H 14 Q 20 75 20 69 V 56 Q 20 50 26 50 H 100"
-            />
-          </svg>
+          <span className="switch-tree-current-flow" />
+          <span className="switch-tree-new-flow" />
+          <span className="switch-tree-output-flow" />
         </div>
         <ol className="switch-tree-tool">
           <PathNode
