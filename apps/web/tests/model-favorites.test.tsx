@@ -70,6 +70,26 @@ test('a single channel only requires selecting a tool and leaves advanced choice
   ]);
 });
 
+test('save mode uses mutually exclusive radio options and sends the selected activation mode', async () => {
+  const favorite = favoriteFixture('daily', 'model');
+  setStoreState({
+    favoriteTargets: { [favorite.id]: [favoriteTargetFixture(favorite)] },
+    harnesses: [],
+  });
+  const actions = stubStoreActions(['loadFavoriteTargets', 'planFavorite']);
+  renderWithI18n(<ModelFavoriteApplyDialog favorite={favorite} onClose={() => undefined} />);
+  expect(screen.getByRole('radio', { name: '仅保存' })).toBeChecked();
+  fireEvent.click(screen.getByRole('radio', { name: '保存并激活' }));
+  expect(screen.getByRole('radio', { name: '仅保存' })).toHaveAttribute('aria-checked', 'false');
+  expect(screen.getByRole('radio', { name: '保存并激活' })).toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Pi' }));
+  fireEvent.click(screen.getByRole('button', { name: '生成预览' }));
+  await waitFor(() => expect(actions.planFavorite).toHaveLength(1));
+  expect(actions.planFavorite[0]![0]).toMatchObject({
+    items: [{ harness: 'pi', mode: 'activate' }],
+  });
+});
+
 test('model capability fields are optional and hidden until advanced settings are opened', () => {
   setStoreState({ providers: [] });
   renderWithI18n(<FavoriteEditor onClose={() => undefined} />);

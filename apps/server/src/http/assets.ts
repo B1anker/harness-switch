@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
 import type { Hono } from 'hono';
 
@@ -15,9 +15,19 @@ export function registerAssetRoutes(app: Hono, publicDir: string): void {
       return next();
     }
     const assetPath = resolve(publicDir, c.req.path.replace(/^\//, ''));
-    if (c.req.path !== '/' && isPublicAsset(publicDir, assetPath) && existsSync(assetPath)) {
+    if (
+      c.req.path !== '/' &&
+      isPublicAsset(publicDir, assetPath) &&
+      existsSync(assetPath) &&
+      statSync(assetPath).isFile()
+    ) {
       c.header('Content-Type', contentType(assetPath));
       return c.body(readFileSync(assetPath));
+    }
+    // HTML is valid for client-side routes, but cannot stand in for a missing JS chunk.
+    if (c.req.path.startsWith('/assets/') || extname(c.req.path)) {
+      c.header('Cache-Control', 'no-store');
+      return c.notFound();
     }
     const index = join(publicDir, 'index.html');
     if (existsSync(index)) {

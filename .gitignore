@@ -8,6 +8,7 @@ bun.lockb
 # Build outputs
 dist/
 apps/server/public/
+apps/server/.dev-public/
 apps/server/README.md
 apps/server/LICENSE
 apps/web/dist/

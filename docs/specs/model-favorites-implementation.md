@@ -40,7 +40,9 @@ ProfileService 不依赖收藏服务；adapter 投影是无凭据纯函数。仅
 
 日期：2026-09-05。测试沿用仓库 support，凭据均为测试数据。
 
-最终完整运行（两步向导及全局备份入口增补后）：服务端 389 项通过，Web 181 项通过；typecheck、lint、Biome 和 Web build 退出码均为 0。
+最终完整运行（修复开发 chunk 丢失及改用单选按钮后）：服务端 391 项通过，Web 182 项通过；typecheck、lint、Biome 和 Web build 退出码均为 0。
+
+开发服务输出到 `apps/server/.dev-public`，生产构建输出到 `apps/server/public`。开发环境保留旧的带哈希 chunk，生产构建不再清理开发资源；CopyRspackPlugin 跟随实际输出目录。缺失的静态资源返回不可缓存的 404，不回退为 SPA HTML。已在开发服务运行期间执行生产构建并逐文件核对：50 个开发文件哈希不变，8787 端口的全部 9 个 JavaScript chunk 返回正确类型及内容。
 
 ### 交互精简与恢复点
 

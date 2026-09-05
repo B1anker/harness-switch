@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { SegmentedControl } from '@/components/ui/tabs';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
@@ -139,17 +139,28 @@ export function ModelFavoriteApplyDialog({
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-medium">{t('favorites.targetTools')}</p>
-                <SegmentedControl
-                  options={['save', 'activate'] as const}
+                <RadioGroup
+                  aria-label={t('favorites.mode')}
+                  className="flex flex-wrap items-center gap-x-6 gap-y-3"
                   value={mode}
-                  onChange={(next) => {
+                  onValueChange={(value) => {
+                    const next = value === 'activate' ? 'activate' : 'save';
                     setMode(next);
                     clear();
                     setItems(items.map((item) => ({ ...item, mode: next })));
                   }}
                 >
-                  {(value) => t(`favorites.modeLabel.${value}`)}
-                </SegmentedControl>
+                  {(['save', 'activate'] as const).map((value) => (
+                    <label
+                      key={value}
+                      className="flex cursor-pointer items-center gap-2.5 py-2 text-sm font-medium"
+                      htmlFor={`favorite-mode-${value}`}
+                    >
+                      <RadioGroupItem value={value} id={`favorite-mode-${value}`} />
+                      {t(`favorites.modeLabel.${value}`)}
+                    </label>
+                  ))}
+                </RadioGroup>
               </div>
               <ToolSelection
                 favorite={favorite}
