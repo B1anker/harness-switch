@@ -9,7 +9,6 @@ import {
   LayoutGrid,
   Lock,
   LogOut,
-  Plus,
   Server,
   Star,
   UserRound,
@@ -40,7 +39,7 @@ import { TabList, TabPanel } from '@/components/ui/tabs';
 import { UpdateButton } from '@/components/update-button';
 import { DevModeBadge, VersionBadge } from '@/components/version-badge';
 import { Workspace } from '@/components/workspace';
-import { harnessWords } from '@/lib/harness-words';
+import { ConfigurationSwitcher } from '@/components/workspace/configuration-switcher';
 import { useI18n, useTranslation } from '@/lib/i18n';
 import { lineText, specText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
@@ -129,7 +128,6 @@ export function DashboardPage() {
               setSelectedHarnessId(id);
               setView('tools');
             }}
-            onFavorites={() => setView('favorites')}
             onHistory={() => setView('history')}
           />
         ) : view === 'favorites' ? (
@@ -157,29 +155,29 @@ export function DashboardPage() {
                   value={selectedHarness.id}
                   className="min-w-0 space-y-6 p-4 sm:p-6 xl:p-8"
                 >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h2 className="text-2xl font-semibold tracking-tight">
-                        {selectedHarness.label}
-                      </h2>
-                      <p className="mt-1 text-sm text-muted-foreground">{t('harness.subtitle')}</p>
-                    </div>
-                    <Button
-                      className="self-start sm:self-auto"
-                      onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
-                    >
-                      <Plus />
-                      {t(harnessWords(selectedHarness.id).add)}
-                    </Button>
-                  </div>
-                  <HarnessCard
+                  <ConfigurationSwitcher
                     harness={selectedHarness}
-                    onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
-                    onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
-                    onCopy={(copySource) =>
-                      setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
+                    onNewProfile={() =>
+                      setEditing({ harnessId: selectedHarness.id, profile: null })
                     }
+                    onManageFavorites={() => setView('favorites')}
                   />
+                  <details className="group rounded-2xl border bg-card px-5 py-4 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+                      <span>{t('workspace.manageConfigurations')}</span>
+                      <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                    </summary>
+                    <div className="mt-6">
+                      <HarnessCard
+                        harness={selectedHarness}
+                        onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
+                        onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
+                        onCopy={(copySource) =>
+                          setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
+                        }
+                      />
+                    </div>
+                  </details>
                   <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
                       <span className="font-mono text-[13px]">{t('env.title')}</span>

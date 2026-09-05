@@ -146,6 +146,31 @@
   align-items: center;
   color: var(--primary);
 }
+.switch-map {
+  display: grid;
+  gap: 14px;
+}
+.switch-lane {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.24fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card) 70%, var(--background));
+}
+.switch-lane-candidate {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--primary) 56%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+}
+.switch-lane-label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+}
 .favorite-graph {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr) 20px minmax(0, 1fr);
@@ -274,6 +299,9 @@
   }
   .favorite-graph {
     min-height: auto;
+  }
+  .switch-lane {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (prefers-reduced-motion: reduce) {

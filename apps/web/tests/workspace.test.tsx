@@ -2,6 +2,7 @@ import { expect, test } from '@rstest/core';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { RecoveryTimeline } from '@/components/recovery-timeline';
 import { Workspace } from '@/components/workspace';
+import { ConfigurationSwitcher } from '@/components/workspace/configuration-switcher';
 import { useAppStore } from '@/stores/app-store';
 import {
   favoriteFixture,
@@ -15,7 +16,7 @@ import {
   stubStoreActions,
 } from './support';
 
-test('first-use capture starts from the selected tool and preserves explicit credential consent', () => {
+test('home shows only the active route and opens the unified configuration workspace', () => {
   const profile = profileFixture({ harness: 'pi', name: 'current-profile' });
   setStoreState({
     favorites: [],
@@ -29,31 +30,26 @@ test('first-use capture starts from the selected tool and preserves explicit cre
       }),
     ],
   });
-  const actions = stubStoreActions([
-    'loadFavorites',
-    'loadProviders',
-    'loadFavoriteBackups',
-    'captureFavorite',
-  ]);
+  let configured = '';
   renderWithI18n(
     <Workspace
       selectedHarnessId="pi"
       onSelectHarness={() => {}}
-      onConfigure={() => {}}
-      onFavorites={() => {}}
+      onConfigure={(id) => {
+        configured = id;
+      }}
       onHistory={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '从已有配置收藏' }));
-  expect(screen.getByLabelText('收藏名称')).toHaveValue('current-profile');
-  expect(screen.getByRole('combobox', { name: '从已有配置收藏' })).toHaveTextContent(
-    'pi / current-profile',
-  );
-  expect(screen.getByRole('checkbox', { name: /凭据/ })).toHaveAttribute('aria-checked', 'false');
-  expect(actions.captureFavorite).toHaveLength(0);
+  expect(screen.getByText('当前链路')).toBeInTheDocument();
+  expect(screen.getByText('current-profile')).toBeInTheDocument();
+  expect(screen.getByText(profile.model)).toBeInTheDocument();
+  expect(screen.queryByLabelText('选择收藏模型')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
+  expect(configured).toBe('pi');
 });
 
-test('workspace previews one selected tool directly and applies only after confirmation', async () => {
+test('unified configuration workspace previews a selected favorite as an uncommitted branch', async () => {
   const favorite = favoriteFixture('daily', 'exact/request-id');
   const plan = favoritePlanFixture(favorite);
   setStoreState({
@@ -81,25 +77,22 @@ test('workspace previews one selected tool directly and applies only after confi
     'applyFavorite',
   ]);
   renderWithI18n(
-    <Workspace
-      selectedHarnessId="pi"
-      onSelectHarness={() => {}}
-      onConfigure={() => {}}
-      onFavorites={() => {}}
-      onHistory={() => {}}
+    <ConfigurationSwitcher
+      harness={useAppStore.getState().harnesses[0]!}
+      onNewProfile={() => {}}
+      onManageFavorites={() => {}}
     />,
   );
+  fireEvent.click(screen.getByRole('button', { name: '收藏模型' }));
   expect(screen.queryByRole('button', { name: '预览切换' })).toBeNull();
-  expect(screen.queryByText('本次将切换到 Pi')).toBeNull();
   fireEvent.click(screen.getByRole('combobox', { name: '选择收藏模型' }));
   fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() => expect(screen.getByRole('button', { name: '预览切换' })).toBeEnabled());
-  expect(screen.getByText('本次将切换到 Pi')).toBeInTheDocument();
+  expect(screen.getByText('当前与候选链路')).toBeInTheDocument();
+  expect(screen.getByText('Pi 的候选旁路')).toBeInTheDocument();
   expect(
     screen.getByText('这是 Pi 的预览目标，尚未写入；其他工具保持各自当前配置。'),
   ).toBeInTheDocument();
-  expect(screen.getByText('Pi 当前')).toBeInTheDocument();
-  expect(screen.getByText('Pi 将切换为')).toBeInTheDocument();
   expect(screen.getByText('gpt-5.6-terra')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '预览切换' }));
   await waitFor(() =>
@@ -134,14 +127,13 @@ test('ambiguous channels require an explicit choice instead of silently switchin
     'planFavorite',
   ]);
   renderWithI18n(
-    <Workspace
-      selectedHarnessId="pi"
-      onSelectHarness={() => {}}
-      onConfigure={() => {}}
-      onFavorites={() => {}}
-      onHistory={() => {}}
+    <ConfigurationSwitcher
+      harness={useAppStore.getState().harnesses[0]!}
+      onNewProfile={() => {}}
+      onManageFavorites={() => {}}
     />,
   );
+  fireEvent.click(screen.getByRole('button', { name: '收藏模型' }));
   fireEvent.click(screen.getByRole('combobox', { name: '选择收藏模型' }));
   fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() =>

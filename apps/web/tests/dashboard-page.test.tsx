@@ -74,23 +74,23 @@ test('switches the visible harness with the app tabs', () => {
   expect(screen.getByRole('heading', { name: '配置迁移' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '关闭对话框' }));
 
-  fireEvent.click(screen.getByRole('button', { name: '管理工具配置' }));
+  fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
   const claudeTab = screen.getByRole('tab', { name: /Claude Code/ });
   const codexTab = screen.getByRole('tab', { name: /Codex/ });
   expect(claudeTab).toHaveAttribute('aria-selected', 'true');
   expect(
-    within(screen.getByRole('tabpanel', { name: /Claude Code/ })).getByText('claude-main'),
-  ).toBeInTheDocument();
+    within(screen.getByRole('tabpanel', { name: /Claude Code/ })).getAllByText('claude-main'),
+  ).not.toHaveLength(0);
 
   fireEvent.click(codexTab);
 
   expect(codexTab).toHaveAttribute('aria-selected', 'true');
   expect(
-    within(screen.getByRole('tabpanel', { name: /Codex/ })).getByText('codex-main'),
-  ).toBeInTheDocument();
+    within(screen.getByRole('tabpanel', { name: /Codex/ })).getAllByText('codex-main'),
+  ).not.toHaveLength(0);
   expect(
-    within(screen.getByRole('tabpanel', { name: /Codex/ })).queryByText('claude-main'),
-  ).toBeNull();
+    within(screen.getByRole('tabpanel', { name: /Codex/ })).queryAllByText('claude-main'),
+  ).toHaveLength(0);
 
   fireEvent.click(screen.getByRole('button', { name: '返回工作台' }));
   expect(screen.getByRole('tab', { name: /Codex/ })).toHaveAttribute('aria-selected', 'true');
@@ -211,7 +211,7 @@ test('the right column shows the doctor and operations cards for the selected ha
 
   render(<DashboardPage />);
 
-  fireEvent.click(screen.getByRole('button', { name: '管理工具配置' }));
+  fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
   expect(screen.getByText('诊断')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '查看差异' })).toBeNull();
   expect(screen.getByText('操作记录')).toBeInTheDocument();

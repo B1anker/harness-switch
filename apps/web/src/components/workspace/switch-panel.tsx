@@ -14,7 +14,7 @@ import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useFavoriteTargets } from '@/lib/use-favorite-targets';
 import { useAppStore } from '@/stores/app-store';
-import { ConfigurationPath } from './configuration-path';
+import { SwitchMap } from './configuration-path';
 
 export function SwitchPanel({
   favorite,
@@ -77,25 +77,7 @@ export function SwitchPanel({
           onChange={setChosen}
         />
       ) : null}
-      {connection ? (
-        <ConfigurationPath connection={connection} harness={harness.id} name={harness.label} />
-      ) : null}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-5 text-sm">
-        <span className="text-muted-foreground">
-          {t('workspace.currentToolModel', { name: harness.label })}
-        </span>
-        <span className="max-w-full break-all font-mono">
-          {harness.active?.model ||
-            t(harness.active?.official ? 'harness.official' : 'harness.currentInactive')}
-        </span>
-        <ArrowRight className="size-4 shrink-0 text-primary" />
-        <span className="text-muted-foreground">
-          {t('workspace.targetToolModel', { name: harness.label })}
-        </span>
-        <span className="max-w-full break-all font-medium">
-          {connection?.requestModelId ?? favorite.name}
-        </span>
-      </div>
+      {connection ? <SwitchMap connection={connection} harness={harness} /> : null}
       {error ? <Alert>{error}</Alert> : null}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <p className="flex max-w-sm items-center gap-2 text-xs leading-relaxed text-muted-foreground">
