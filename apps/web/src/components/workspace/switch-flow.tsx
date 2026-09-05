@@ -1,6 +1,7 @@
 import type { HarnessId, HarnessSummary } from '@seaveyon/harness-switch-shared';
 import { type Edge, Handle, type Node, type NodeProps, Position, ReactFlow } from '@xyflow/react';
 import { Box, Network } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { HarnessIcon } from '@/components/harness-icon';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/lib/i18n';
@@ -26,11 +27,24 @@ export function SwitchFlow({
   harness: HarnessSummary;
 }) {
   const { t } = useTranslation();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(820);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+  const zoom = Math.min(1, width / 820);
+  const offsetX = Math.max(0, (width - 820) / 2);
   const nodes: Node<FlowNodeData>[] = [
     {
       id: 'current-source',
       type: 'route',
-      position: { x: 108, y: 38 },
+      position: { x: 24, y: 38 },
       data: {
         label: t('workspace.configuration'),
         value: current.provider,
@@ -41,7 +55,7 @@ export function SwitchFlow({
     {
       id: 'current-model',
       type: 'route',
-      position: { x: 344, y: 38 },
+      position: { x: 260, y: 38 },
       data: {
         label: t('favorites.modelPicker'),
         value: current.model,
@@ -52,7 +66,7 @@ export function SwitchFlow({
     {
       id: 'new-source',
       type: 'route',
-      position: { x: 108, y: 184 },
+      position: { x: 24, y: 184 },
       data: {
         label: t('workspace.provider'),
         value: candidate.provider,
@@ -63,7 +77,7 @@ export function SwitchFlow({
     {
       id: 'new-model',
       type: 'route',
-      position: { x: 344, y: 184 },
+      position: { x: 260, y: 184 },
       data: {
         label: t('favorites.modelPicker'),
         value: candidate.model,
@@ -74,7 +88,7 @@ export function SwitchFlow({
     {
       id: 'tool',
       type: 'route',
-      position: { x: 536, y: 111 },
+      position: { x: 606, y: 111 },
       data: {
         label: t('workspace.tool'),
         value: harness.label,
@@ -91,15 +105,28 @@ export function SwitchFlow({
   ];
   return (
     <TooltipProvider delayDuration={250}>
-      <div className="switch-flow-canvas">
-        <span className="switch-flow-label switch-flow-label-current">
-          {t('workspace.currentChain')}
-        </span>
-        <span className="switch-flow-label switch-flow-label-new">
-          {t('workspace.candidateChain')}
-          <span>{t('workspace.appliesAfterConfirm')}</span>
-        </span>
+      <div ref={canvasRef} className="switch-flow-canvas" style={{ height: 310 * zoom }}>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            transformOrigin: 'top left',
+            transform: `translateX(${offsetX}px) scale(${zoom})`,
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        >
+          <span className="switch-flow-label switch-flow-label-current">
+            {t('workspace.currentChain')}
+          </span>
+          <span className="switch-flow-label switch-flow-label-new">
+            {t('workspace.candidateChain')}
+            <span>{t('workspace.appliesAfterConfirm')}</span>
+          </span>
+        </div>
         <ReactFlow
+          viewport={{ x: offsetX, y: 0, zoom }}
+          minZoom={0.1}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}

@@ -198,7 +198,7 @@
 .switch-flow-label {
   position: absolute;
   z-index: 2;
-  left: 108px;
+  left: 24px;
   font-size: 12px;
   font-weight: 600;
   color: var(--muted-foreground);
