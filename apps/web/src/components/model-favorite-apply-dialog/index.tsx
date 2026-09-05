@@ -25,9 +25,15 @@ import { ToolSelection } from './tool-selection';
 export function ModelFavoriteApplyDialog({
   favorite,
   onClose,
+  initialItems = [],
+  initialMode = 'save',
+  initialPreview = false,
 }: {
   favorite: ModelFavorite;
   onClose(): void;
+  initialItems?: FavoritePlanRequest['items'];
+  initialMode?: 'save' | 'activate';
+  initialPreview?: boolean;
 }) {
   const { t } = useTranslation();
   const plan = useAppStore((state) => state.favoritePlan);
@@ -39,9 +45,9 @@ export function ModelFavoriteApplyDialog({
   const clear = useAppStore((state) => state.clearFavoritePlan);
   const targets = useAppStore((state) => state.favoriteTargets[favorite.id]);
   const loadTargets = useAppStore((state) => state.loadFavoriteTargets);
-  const [items, setItems] = useState<FavoritePlanRequest['items']>([]);
-  const [mode, setMode] = useState<'save' | 'activate'>('save');
-  const [step, setStep] = useState<0 | 1>(0);
+  const [items, setItems] = useState<FavoritePlanRequest['items']>(initialItems);
+  const [mode, setMode] = useState<'save' | 'activate'>(initialMode);
+  const [step, setStep] = useState<0 | 1>(initialPreview ? 1 : 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());

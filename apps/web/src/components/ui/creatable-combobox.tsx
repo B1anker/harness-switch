@@ -14,6 +14,7 @@ export function CreatableCombobox({
   searchLabel,
   emptyHint,
   customLabel,
+  getLabel = (item: string) => item,
   disabled,
   ...control
 }: FieldControlProps & {
@@ -23,13 +24,16 @@ export function CreatableCombobox({
   placeholder: string;
   searchLabel: string;
   emptyHint: string;
-  customLabel(value: string): string;
+  customLabel?(value: string): string;
+  getLabel?(value: string): string;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const candidates = [...new Set(value ? [value, ...options] : options)];
-  const filtered = candidates.filter((item) => item.toLowerCase().includes(query.toLowerCase()));
+  const filtered = candidates.filter((item) =>
+    `${getLabel(item)} ${item}`.toLowerCase().includes(query.toLowerCase()),
+  );
   const custom = query.trim();
   const select = (next: string) => {
     onChange(next);
@@ -53,7 +57,7 @@ export function CreatableCombobox({
           className="h-auto min-h-11 w-full justify-between gap-3 px-3 py-2 text-left font-normal"
         >
           <span className={cn('min-w-0 truncate', value ? 'font-mono' : 'text-muted-foreground')}>
-            {value || placeholder}
+            {value ? getLabel(value) : placeholder}
           </span>
           <ChevronsUpDown className="shrink-0 text-muted-foreground" />
         </Button>
@@ -81,7 +85,7 @@ export function CreatableCombobox({
               label={searchLabel}
               className="max-h-64 overflow-y-auto overscroll-contain p-1.5"
             >
-              {!filtered.length && !custom ? (
+              {!filtered.length && (!custom || !customLabel) ? (
                 <p className="px-3 py-4 text-xs text-muted-foreground">{emptyHint}</p>
               ) : null}
               {filtered.map((item) => (
@@ -92,10 +96,10 @@ export function CreatableCombobox({
                   className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2.5 text-sm data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
                 >
                   <Check className={cn('size-4 shrink-0', value !== item && 'invisible')} />
-                  <span className="break-all font-mono">{item}</span>
+                  <span className="break-all">{getLabel(item)}</span>
                 </Command.Item>
               ))}
-              {custom && !candidates.includes(custom) ? (
+              {customLabel && custom && !candidates.includes(custom) ? (
                 <Command.Item
                   value={custom}
                   onSelect={() => select(custom)}

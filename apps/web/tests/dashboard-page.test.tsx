@@ -7,9 +7,9 @@ test('global backups are available from the main tool view', () => {
   setDashboardState();
   const actions = stubStoreActions(['loadFavoriteBackups']);
   render(<DashboardPage />);
-  fireEvent.click(screen.getByRole('button', { name: '备份与恢复' }));
-  expect(screen.getByRole('heading', { name: '备份与恢复' })).toBeInTheDocument();
-  expect(actions.loadFavoriteBackups).toHaveLength(1);
+  fireEvent.click(screen.getByRole('tab', { name: '恢复时间线' }));
+  expect(screen.getByRole('heading', { name: '恢复时间线' })).toBeInTheDocument();
+  expect(actions.loadFavoriteBackups).toHaveLength(2);
 });
 
 function setDashboardState() {
@@ -47,6 +47,9 @@ function setDashboardState() {
     ],
     usersLoading: false,
     notice: null,
+    favorites: [],
+    loadFavorites: async () => {},
+    loadFavoriteBackups: async () => {},
     providers: [],
     drift: [],
     doctor: [],
@@ -71,16 +74,23 @@ test('switches the visible harness with the app tabs', () => {
   expect(screen.getByRole('heading', { name: '配置迁移' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '关闭对话框' }));
 
+  fireEvent.click(screen.getByRole('button', { name: '管理工具配置' }));
   const claudeTab = screen.getByRole('tab', { name: /Claude Code/ });
   const codexTab = screen.getByRole('tab', { name: /Codex/ });
   expect(claudeTab).toHaveAttribute('aria-selected', 'true');
-  expect(within(screen.getByRole('tabpanel')).getByText('claude-main')).toBeInTheDocument();
+  expect(
+    within(screen.getByRole('tabpanel', { name: /Claude Code/ })).getByText('claude-main'),
+  ).toBeInTheDocument();
 
   fireEvent.click(codexTab);
 
   expect(codexTab).toHaveAttribute('aria-selected', 'true');
-  expect(within(screen.getByRole('tabpanel')).getByText('codex-main')).toBeInTheDocument();
-  expect(within(screen.getByRole('tabpanel')).queryByText('claude-main')).toBeNull();
+  expect(
+    within(screen.getByRole('tabpanel', { name: /Codex/ })).getByText('codex-main'),
+  ).toBeInTheDocument();
+  expect(
+    within(screen.getByRole('tabpanel', { name: /Codex/ })).queryByText('claude-main'),
+  ).toBeNull();
 });
 
 test('the header opens the vault dialog', () => {
@@ -194,6 +204,7 @@ test('the right column shows the doctor and operations cards for the selected ha
 
   render(<DashboardPage />);
 
+  fireEvent.click(screen.getByRole('button', { name: '管理工具配置' }));
   expect(screen.getByText('诊断')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '查看差异' })).toBeNull();
   expect(screen.getByText('操作记录')).toBeInTheDocument();

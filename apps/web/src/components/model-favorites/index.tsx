@@ -1,16 +1,19 @@
-import type { ModelFavorite } from '@seaveyon/harness-switch-shared';
+import type { FavoritePlanRequest, ModelFavorite } from '@seaveyon/harness-switch-shared';
+import { ArrowDownToLine, Box, Plus, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Disclosure } from '@/components/ui/disclosure';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { CaptureFavorite } from './capture';
 import { FavoriteEditor } from './editor';
-import { FavoriteSelect } from './fields';
+import { FavoriteRelationships } from './relationships';
 
 export function ModelFavorites() {
   const { t } = useTranslation();
@@ -20,16 +23,13 @@ export function ModelFavorites() {
   const load = useAppStore((state) => state.loadFavorites);
   const loadProviders = useAppStore((state) => state.loadProviders);
   const remove = useAppStore((state) => state.deleteFavorite);
-  const capture = useAppStore((state) => state.captureFavorite);
   const detach = useAppStore((state) => state.detachFavorite);
-  const harnesses = useAppStore((state) => state.harnesses);
+  const clear = useAppStore((state) => state.clearFavoritePlan);
   const [search, setSearch] = useState('');
+  const [selectedId, setSelectedId] = useState('');
   const [editing, setEditing] = useState<ModelFavorite | 'new' | null>(null);
-  const [applying, setApplying] = useState<ModelFavorite | null>(null);
-  const [source, setSource] = useState('');
-  const [name, setName] = useState('');
-  const [credential, setCredential] = useState(false);
-  const [linkSource, setLinkSource] = useState(false);
+  const [applying, setApplying] = useState<FavoritePlanRequest['items'] | null>(null);
+  const [capturing, setCapturing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -47,179 +47,167 @@ export function ModelFavorites() {
       setBusy(false);
     }
   };
-  const sources = harnesses.flatMap((harness) =>
-    harness.profiles
-      .filter(
-        (profile) =>
-          !profile.modelFavorite &&
-          !profile.overriddenTargets.length &&
-          profile.name !== harness.official?.linkedProfileName,
-      )
-      .map((profile) => ({
-        harness: harness.id,
-        profile,
-        value: JSON.stringify([harness.id, profile.name]),
-      })),
-  );
+  const filtered =
+    favorites?.filter((favorite) =>
+      [
+        favorite.name,
+        ...favorite.connections.flatMap((connection) => [
+          connection.label,
+          connection.requestModelId,
+        ]),
+      ].some((text) => text.toLowerCase().includes(search.toLowerCase())),
+    ) ?? [];
+  const selected = filtered.find((entry) => entry.id === selectedId) ?? filtered[0];
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <main className="workspace-page space-y-7">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold">{t('favorites.title')}</h2>
-          <p className="text-muted-foreground">{t('favorites.subtitle')}</p>
+          <p className="workspace-eyebrow">{t('workspace.favoriteEyebrow')}</p>
+          <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">{t('favorites.title')}</h2>
+          <p className="mt-3 text-sm text-muted-foreground">{t('workspace.favoriteHint')}</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setEditing('new')}>{t('favorites.add')}</Button>
-        </div>
-      </div>
-      <Disclosure title={t('favorites.capture')}>
-        <section className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2">
-          <FavoriteSelect
-            id="favorite-source"
-            label={t('favorites.capture')}
-            value={source}
-            options={sources.map((item) => ({
-              value: item.value,
-              label: `${item.harness} / ${item.profile.name}`,
-            }))}
-            onChange={(value) => {
-              setSource(value);
-              const item = sources.find((candidate) => candidate.value === value);
-              setName(item?.profile.name ?? '');
-            }}
-          />
-          <FormField id="capture-name" label={t('favorites.name')}>
-            {(control) => (
-              <Input
-                {...control}
-                maxLength={120}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            )}
-          </FormField>
-          {source && !sources.find((item) => item.value === source)?.profile.providerId ? (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="capture-credential"
-                checked={credential}
-                onCheckedChange={(value) => setCredential(value === true)}
-              />
-              <label htmlFor="capture-credential">{t('favorites.extractCredential')}</label>
-            </div>
-          ) : null}
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="capture-link"
-              checked={linkSource}
-              onCheckedChange={(value) => setLinkSource(value === true)}
-            />
-            <label htmlFor="capture-link">{t('favorites.linkSource')}</label>
-          </div>
-          <Button
-            disabled={busy || !source || !name}
-            onClick={() =>
-              void run(async () => {
-                const item = sources.find((candidate) => candidate.value === source);
-                if (item) {
-                  await capture(item.harness, item.profile.name, name, credential, linkSource);
-                  setSource('');
-                }
-              })
-            }
-          >
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setCapturing(true)}>
+            <ArrowDownToLine />
             {t('favorites.capture')}
           </Button>
-        </section>
-      </Disclosure>
-      <FormField id="favorite-search" label={t('favorites.search')}>
-        {(control) => (
-          <Input {...control} value={search} onChange={(event) => setSearch(event.target.value)} />
-        )}
-      </FormField>
+          <Button onClick={() => setEditing('new')}>
+            <Plus />
+            {t('favorites.add')}
+          </Button>
+        </div>
+      </div>
       {loading ? <p role="status">{t('favorites.loading')}</p> : null}
-      {loadError ? <p role="alert">{lineText(t, loadError)}</p> : null}
-      {!favorites?.length && !loading && !loadError ? <p>{t('favorites.empty')}</p> : null}
-      {favorites
-        ?.filter((favorite) =>
-          [
-            favorite.name,
-            ...favorite.connections.flatMap((connection) => [
-              connection.label,
-              connection.requestModelId,
-            ]),
-          ].some((text) => text.toLowerCase().includes(search.toLowerCase())),
-        )
-        .map((favorite) => (
-          <article key={favorite.id} className="space-y-3 rounded-xl border bg-card p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-semibold">{favorite.name}</h3>
-                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-                  {favorite.notes}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setEditing(favorite)}>
-                  {t('favorites.edit')}
-                </Button>
-                <Button
-                  disabled={!favorite.connections.length}
-                  onClick={() => setApplying(favorite)}
+      {loadError ? <Alert>{lineText(t, loadError)}</Alert> : null}
+      {error ? <Alert>{error}</Alert> : null}
+      {!favorites?.length && !loading && !loadError ? (
+        <section className="workspace-surface space-y-4 p-8 sm:p-12">
+          <Star className="size-10 text-primary" />
+          <h3 className="text-xl font-semibold">{t('workspace.startTitle')}</h3>
+          <p className="max-w-xl text-sm leading-7 text-muted-foreground">
+            {t('workspace.startHint')}
+          </p>
+          <Button onClick={() => setCapturing(true)}>{t('favorites.capture')}</Button>
+        </section>
+      ) : (
+        <div className="grid items-start gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
+          <aside className="space-y-4">
+            <FormField id="favorite-search" label={t('favorites.search')}>
+              {(control) => (
+                <Input
+                  {...control}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              )}
+            </FormField>
+            <div className="space-y-2">
+              {filtered.map((favorite) => (
+                <button
+                  key={favorite.id}
+                  type="button"
+                  aria-pressed={favorite.id === selected?.id}
+                  onClick={() => setSelectedId(favorite.id)}
+                  className={cn(
+                    'flex w-full items-start gap-3 rounded-xl border px-4 py-4 text-left transition-colors focus-visible:outline-2 focus-visible:outline-ring',
+                    favorite.id === selected?.id
+                      ? 'border-primary/50 bg-primary/5'
+                      : 'border-transparent hover:bg-card',
+                  )}
                 >
-                  {t('favorites.configure')}
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={busy || !!favorite.references.length}
-                  onClick={() => void run(() => remove(favorite))}
-                >
-                  {t('favorites.delete')}
-                </Button>
-              </div>
+                  <Box className="mt-1 size-5 shrink-0 text-primary" />
+                  <span className="min-w-0">
+                    <h3 className="break-words font-semibold">{favorite.name}</h3>
+                    <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
+                      {favorite.connections[0]?.requestModelId ?? t('favorites.pending')}
+                    </span>
+                  </span>
+                </button>
+              ))}
             </div>
-            <p>
-              {t('favorites.connections')}: {favorite.connections.length || t('favorites.pending')}
-            </p>
-            {favorite.connections.map((connection) => (
-              <p key={connection.id} className="text-sm">
-                {connection.label} · {connection.requestModelId} · {connection.protocol}
-              </p>
-            ))}
-            <h4 className="font-medium">{t('favorites.generated')}</h4>
-            {favorite.references.map((ref) => (
-              <div
-                key={`${ref.harness}/${ref.name}`}
-                className="flex items-center justify-between gap-2"
-              >
-                <p>
-                  {ref.harness} / {ref.name} {ref.needsUpdate ? t('favorites.needsUpdate') : ''}{' '}
-                  {ref.diverged ? t('favorites.diverged') : ''}
-                </p>
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void run(() => detach(ref.harness, ref.name))}
-                >
-                  {t('favorites.detach')}
-                </Button>
+            {!filtered.length ? (
+              <p className="text-sm text-muted-foreground">{t('workspace.noMatches')}</p>
+            ) : null}
+          </aside>
+          {selected ? (
+            <article className="workspace-surface min-w-0 space-y-6 p-5 sm:p-7">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground">
+                  {selected.notes || t('workspace.favoriteDetail')}
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setEditing(selected)}>
+                    {t('favorites.edit')}
+                  </Button>
+                  <Button
+                    disabled={!selected.connections.length}
+                    onClick={() => {
+                      clear();
+                      setApplying([]);
+                    }}
+                  >
+                    {t('favorites.configure')}
+                  </Button>
+                </div>
               </div>
-            ))}
-          </article>
-        ))}
-      {error ? (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      ) : null}
+              <FavoriteRelationships
+                key={selected.id + '/' + selected.revision}
+                favorite={selected}
+                onApply={(items) => {
+                  clear();
+                  setApplying(items);
+                }}
+              />
+              <Disclosure title={t('workspace.manageLinks')}>
+                <div className="space-y-3">
+                  {selected.references.map((ref) => (
+                    <div
+                      key={ref.harness + '/' + ref.name}
+                      className="flex flex-wrap items-center justify-between gap-3 border-b py-3"
+                    >
+                      <p className="min-w-0 break-all text-sm">
+                        {ref.harness} / {ref.name}{' '}
+                        {ref.needsUpdate ? t('favorites.needsUpdate') : ''}{' '}
+                        {ref.diverged ? t('favorites.diverged') : ''}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void run(() => detach(ref.harness, ref.name))}
+                      >
+                        {t('favorites.detach')}
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="ghost"
+                    className="text-destructive"
+                    disabled={busy || !!selected.references.length}
+                    onClick={() => void run(() => remove(selected))}
+                  >
+                    {t('favorites.delete')}
+                  </Button>
+                </div>
+              </Disclosure>
+            </article>
+          ) : null}
+        </div>
+      )}
       {editing ? (
         <FavoriteEditor
           favorite={editing === 'new' ? undefined : editing}
           onClose={() => setEditing(null)}
         />
       ) : null}
-      {applying ? (
-        <ModelFavoriteApplyDialog favorite={applying} onClose={() => setApplying(null)} />
+      {capturing ? <CaptureFavorite onClose={() => setCapturing(false)} /> : null}
+      {applying && selected ? (
+        <ModelFavoriteApplyDialog
+          favorite={selected}
+          initialItems={applying}
+          initialMode={applying.length ? 'activate' : 'save'}
+          onClose={() => setApplying(null)}
+        />
       ) : null}
     </main>
   );

@@ -1,11 +1,11 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { GlobalBackups } from '@/components/global-backups';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { FavoritePreview } from '@/components/model-favorite-apply-dialog/preview';
 import { PreviewTabs } from '@/components/model-favorite-apply-dialog/preview-tabs';
 import { ModelFavorites } from '@/components/model-favorites';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
+import { RecoveryTimeline } from '@/components/recovery-timeline';
 import {
   favoriteFixture,
   favoritePlanFixture,
@@ -38,10 +38,10 @@ test('failed impact preview cannot restore using a previously loaded backup prev
     },
   });
   const actions = stubStoreActions(['loadFavoriteBackups', 'restoreFavoriteBackup']);
-  renderWithI18n(<GlobalBackups onClose={() => undefined} />);
-  fireEvent.click(screen.getByRole('button', { name: '查看恢复影响' }));
-  await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
-  expect(screen.getByRole('button', { name: '确认恢复' })).toBeDisabled();
+  renderWithI18n(<RecoveryTimeline />);
+  fireEvent.click(screen.getByRole('button', { name: /手动恢复点/ }));
+  await waitFor(() => expect(screen.getByText('preview unavailable')).toBeInTheDocument());
+  expect(screen.getByRole('button', { name: '全局恢复到此时' })).toBeDisabled();
   expect(actions.restoreFavoriteBackup).toHaveLength(0);
 });
 
@@ -175,14 +175,14 @@ test('restore explains the full scope and only writes after explicit confirmatio
       });
     },
   });
-  renderWithI18n(<GlobalBackups onClose={() => undefined} />);
-  fireEvent.click(screen.getByRole('button', { name: '查看恢复影响' }));
+  renderWithI18n(<RecoveryTimeline />);
+  fireEvent.click(screen.getByRole('button', { name: /手动恢复点/ }));
   expect(actions.restoreFavoriteBackup).toHaveLength(0);
   expect(screen.getByText(/全部收藏、配置档案、凭据库/)).toBeInTheDocument();
-  await waitFor(() => expect(screen.getByRole('button', { name: '确认恢复' })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole('button', { name: '全局恢复到此时' })).toBeEnabled());
   expect(screen.getByText('删除备份时不存在的文件')).toBeInTheDocument();
   expect(screen.getByText('/test/kimi.toml')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '确认恢复' }));
+  fireEvent.click(screen.getByRole('button', { name: '全局恢复到此时' }));
   await waitFor(() =>
     expect(actions.restoreFavoriteBackup).toEqual([['checkpoint', 'preview-fingerprint']]),
   );
@@ -222,8 +222,9 @@ test('linked profiles show updates and cannot be deleted with their favorite', (
     },
   ];
   setStoreState({ favorites: [favorite], providers: [], harnesses: [] });
-  stubStoreActions(['loadFavorites', 'loadProviders']);
+  stubStoreActions(['loadFavorites', 'loadProviders', 'loadFavoriteTargets']);
   renderWithI18n(<ModelFavorites />);
+  fireEvent.click(screen.getByRole('button', { name: '管理已生成配置与收藏' }));
   expect(screen.getByRole('button', { name: '删除收藏' })).toBeDisabled();
   expect(screen.getByText(/pi \/ main/)).toHaveTextContent('有本地分歧');
   expect(screen.getByRole('button', { name: '解除关联，保留配置' })).toBeInTheDocument();
