@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { RecoveryTimeline } from '@/components/recovery-timeline';
 import { Workspace } from '@/components/workspace';
 import { ConfigurationSwitcher } from '@/components/workspace/configuration-switcher';
+import { SwitchFlow } from '@/components/workspace/switch-flow';
 import { useAppStore } from '@/stores/app-store';
 import {
   favoriteFixture,
@@ -15,6 +16,25 @@ import {
   stubFetch,
   stubStoreActions,
 } from './support';
+
+test('identical routes render all edges immediately on every mount without measuring handles', () => {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const view = renderWithI18n(
+      <SwitchFlow
+        current={{ provider: 'same', model: 'same-model' }}
+        candidate={{ provider: 'same', model: 'same-model' }}
+        harness={harnessFixture({ id: 'pi', label: 'Pi' })}
+      />,
+    );
+    const edges = view.container.querySelectorAll('.react-flow__edge-path');
+    expect(edges).toHaveLength(4);
+    for (const edge of edges) {
+      expect(edge.getAttribute('d')).toMatch(/^M/);
+      expect(edge.getAttribute('d')).not.toContain('NaN');
+    }
+    view.unmount();
+  }
+});
 
 test('home shows only the active route and opens the unified configuration workspace', () => {
   const profile = profileFixture({ harness: 'pi', name: 'current-profile' });

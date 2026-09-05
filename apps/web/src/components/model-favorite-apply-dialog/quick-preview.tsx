@@ -7,7 +7,7 @@ import { FavoriteSelect } from '@/components/model-favorites/fields';
 import { TabList, TabPanel } from '@/components/ui/tabs';
 import { SwitchMap } from '@/components/workspace/configuration-path';
 import { useTranslation } from '@/lib/i18n';
-import { PreviewTabs } from './preview-tabs';
+import { FavoritePreview } from './preview';
 
 export function QuickPreview({
   connections,
@@ -79,7 +79,7 @@ export function QuickPreview({
           <TabPanel
             idPrefix="quick-preview"
             value={reviewTab}
-            className="min-h-0 flex-1 overflow-auto"
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
           >
             {reviewTab === 'route' ? (
               <SwitchMap
@@ -88,7 +88,11 @@ export function QuickPreview({
                 templateName={templateName}
               />
             ) : quickReady && plan ? (
-              <PreviewTabs items={plan.items} />
+              <div className="space-y-4">
+                {plan.items.map((item) => (
+                  <FavoritePreview key={item.harness} item={item} />
+                ))}
+              </div>
             ) : (
               <p role="status">{t('activate.loading')}</p>
             )}

@@ -113,7 +113,10 @@ export function ActivateDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="flex h-[min(720px,90dvh)] flex-col overflow-hidden sm:max-w-4xl data-[state=open]:animate-none data-[state=closed]:animate-none">
+      <AlertDialogContent
+        style={{ height: profile && tab === 'route' ? 'min(520px, 90dvh)' : 'min(820px, 90dvh)' }}
+        className="flex flex-col overflow-hidden sm:max-w-4xl data-[state=open]:animate-none data-[state=closed]:animate-none"
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             {official ? t('activate.officialTitle') : t('activate.title')}

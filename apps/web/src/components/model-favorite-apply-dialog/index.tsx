@@ -163,6 +163,9 @@ export function ModelFavoriteApplyDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && close()}>
       <DialogContent
+        style={{
+          height: quickHarness && reviewTab === 'route' ? 'min(580px, 90dvh)' : 'min(820px, 90dvh)',
+        }}
         className="flex h-[min(720px,90dvh)] max-w-4xl flex-col gap-0 overflow-hidden p-0 data-[state=open]:animate-none data-[state=closed]:animate-none"
         onEscapeKeyDown={(event) => busy && event.preventDefault()}
       >

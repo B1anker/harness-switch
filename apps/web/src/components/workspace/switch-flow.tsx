@@ -1,7 +1,7 @@
 import type { HarnessId, HarnessSummary } from '@seaveyon/harness-switch-shared';
 import { type Edge, Handle, type Node, type NodeProps, Position, ReactFlow } from '@xyflow/react';
 import { Box, Network } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { HarnessIcon } from '@/components/harness-icon';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/lib/i18n';
@@ -37,7 +37,12 @@ export function SwitchFlow({
     let frame = 0;
     const observer = new ResizeObserver(([entry]) => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setWidth(entry.contentRect.width));
+      const nextWidth = Math.floor(entry.contentRect.width);
+      frame = requestAnimationFrame(() => {
+        if (nextWidth > 0) {
+          setWidth((previous) => (previous === nextWidth ? previous : nextWidth));
+        }
+      });
     });
     observer.observe(canvas);
     return () => {
@@ -47,63 +52,83 @@ export function SwitchFlow({
   }, []);
   const zoom = Math.min(1, width / 820);
   const offsetX = 0;
-  const nodes: Node<FlowNodeData>[] = [
-    {
-      id: 'current-source',
-      type: 'route',
-      position: { x: 24, y: 38 },
-      data: {
-        label: current.sourceLabel ?? t('workspace.configuration'),
-        value: current.provider,
-        kind: 'source',
-        lane: 'current',
-      },
-    },
-    {
-      id: 'current-model',
-      type: 'route',
-      position: { x: 260, y: 38 },
-      data: {
-        label: t('favorites.modelPicker'),
-        value: current.model,
-        kind: 'model',
-        lane: 'current',
-      },
-    },
-    {
-      id: 'new-source',
-      type: 'route',
-      position: { x: 24, y: 154 },
-      data: {
-        label: candidate.sourceLabel ?? t('templates.tag'),
-        value: candidate.provider,
-        kind: 'source',
-        lane: 'next',
-      },
-    },
-    {
-      id: 'new-model',
-      type: 'route',
-      position: { x: 260, y: 154 },
-      data: {
-        label: t('favorites.modelPicker'),
-        value: candidate.model,
-        kind: 'model',
-        lane: 'next',
-      },
-    },
-    {
-      id: 'tool',
-      type: 'route',
-      position: { x: 606, y: 96 },
-      data: {
-        label: t('workspace.tool'),
-        value: harness.label,
-        kind: 'tool',
-        harnessId: harness.id,
-      },
-    },
-  ];
+  const nodes = useMemo<Node<FlowNodeData>[]>(
+    () =>
+      [
+        {
+          id: 'current-source',
+          type: 'route',
+          position: { x: 24, y: 38 },
+          data: {
+            label: current.sourceLabel ?? t('workspace.configuration'),
+            value: current.provider,
+            kind: 'source',
+            lane: 'current',
+          },
+        },
+        {
+          id: 'current-model',
+          type: 'route',
+          position: { x: 260, y: 38 },
+          data: {
+            label: t('favorites.modelPicker'),
+            value: current.model,
+            kind: 'model',
+            lane: 'current',
+          },
+        },
+        {
+          id: 'new-source',
+          type: 'route',
+          position: { x: 24, y: 154 },
+          data: {
+            label: candidate.sourceLabel ?? t('templates.tag'),
+            value: candidate.provider,
+            kind: 'source',
+            lane: 'next',
+          },
+        },
+        {
+          id: 'new-model',
+          type: 'route',
+          position: { x: 260, y: 154 },
+          data: {
+            label: t('favorites.modelPicker'),
+            value: candidate.model,
+            kind: 'model',
+            lane: 'next',
+          },
+        },
+        {
+          id: 'tool',
+          type: 'route',
+          position: { x: 606, y: 96 },
+          data: {
+            label: t('workspace.tool'),
+            value: harness.label,
+            kind: 'tool',
+            harnessId: harness.id,
+          },
+        },
+      ].map((node) => ({
+        ...node,
+        data: node.data as FlowNodeData,
+        width: 190,
+        height: 66,
+        handles: routeHandles(node.data.kind),
+      })),
+    [
+      current.provider,
+      current.model,
+      current.sourceLabel,
+      candidate.provider,
+      candidate.model,
+      candidate.sourceLabel,
+      harness.id,
+      harness.label,
+      t,
+    ],
+  );
   const edges: Edge[] = [
     edge('current-source', 'current-model', undefined, false, 'straight'),
     edge('current-model', 'tool', 'current'),
@@ -136,7 +161,7 @@ export function SwitchFlow({
           height={250 * zoom}
           viewport={{ x: offsetX, y: 0, zoom }}
           minZoom={0.1}
-          nodes={nodes.map((node) => ({ ...node, width: 190, height: 66 }))}
+          nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
           nodesDraggable={false}
@@ -147,11 +172,46 @@ export function SwitchFlow({
           zoomOnPinch={false}
           zoomOnDoubleClick={false}
           preventScrolling={false}
-          proOptions={{ hideAttribution: true }}
         />
       </div>
     </TooltipProvider>
   );
+}
+
+function routeHandles(kind: string): NonNullable<Node['handles']> {
+  if (kind === 'tool') {
+    return [
+      {
+        id: 'current',
+        type: 'target',
+        position: Position.Left,
+        x: -4,
+        y: 66 * 0.32 - 4,
+        width: 8,
+        height: 8,
+      },
+      {
+        id: 'new',
+        type: 'target',
+        position: Position.Left,
+        x: -4,
+        y: 66 * 0.68 - 4,
+        width: 8,
+        height: 8,
+      },
+    ];
+  }
+  const source = {
+    type: 'source' as const,
+    position: Position.Right,
+    x: 186,
+    y: 29,
+    width: 8,
+    height: 8,
+  };
+  return kind === 'model'
+    ? [source, { type: 'target', position: Position.Left, x: -4, y: 29, width: 8, height: 8 }]
+    : [source];
 }
 
 function edge(
