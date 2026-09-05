@@ -40,7 +40,7 @@ export function ConfigurationSwitcher({
   return (
     <section className="workspace-surface space-y-6 p-5 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="workspace-eyebrow">{t('workspace.switcherEyebrow')}</p>
           <h3 className="mt-2 text-xl font-semibold">
             {t('workspace.switcherTitle', { name: harness.label })}
@@ -49,10 +49,19 @@ export function ConfigurationSwitcher({
             {t('workspace.switcherHint')}
           </p>
         </div>
+        <div className="ml-auto flex flex-wrap justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onNewProfile}>
+            <Plus />
+            {t('workspace.newConfiguration')}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setTemplatePickerOpen(true)}>
+            <Sparkles />
+            {t('workspace.newFromTemplate')}
+          </Button>
+        </div>
       </div>
       {error ? <Alert>{lineText(t, error)}</Alert> : null}
       <div className="space-y-3">
-        <p className="text-sm font-medium">{t('workspace.configurations')}</p>
         {profiles.length ? (
           profiles.map((profile) => {
             const active = !harness.active?.official && harness.active?.name === profile.name;
@@ -98,16 +107,6 @@ export function ConfigurationSwitcher({
             {t('workspace.noProfiles')}
           </div>
         )}
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button variant="link" className="px-0" onClick={onNewProfile}>
-            <Plus />
-            {t('workspace.newConfiguration')}
-          </Button>
-          <Button variant="link" className="px-0" onClick={() => setTemplatePickerOpen(true)}>
-            <Sparkles />
-            {t('workspace.newFromTemplate')}
-          </Button>
-        </div>
       </div>
       {templatePickerOpen && loading && !favorites ? (
         <p role="status" className="text-sm text-muted-foreground">

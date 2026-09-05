@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useTranslation } from '@/lib/i18n';
 import { SwitchFlow } from './switch-flow';
 
-type Path = { provider: string; model: string };
+type Path = { provider: string; model: string; sourceLabel?: string };
 
 export function CurrentConfigurationPath({ harness }: { harness: HarnessSummary }) {
   const { t } = useTranslation();
@@ -24,7 +24,7 @@ export function CurrentConfigurationPath({ harness }: { harness: HarnessSummary 
         <PathLane
           path={currentPath(harness, t)}
           harness={harness}
-          sourceLabel={t('workspace.configuration')}
+          sourceLabel={currentPath(harness, t).sourceLabel}
         />
         <p className="text-xs leading-relaxed text-muted-foreground">
           {t('workspace.currentChainHint')}
@@ -162,6 +162,9 @@ function currentPath(
     (entry) => !harness.active?.official && entry.name === harness.active?.name,
   );
   return {
+    sourceLabel: t(
+      profile?.modelFavorite?.favoriteId ? 'templates.tag' : 'workspace.configuration',
+    ),
     provider:
       profile?.name ??
       (harness.active?.official ? t('harness.official') : t('harness.currentInactive')),

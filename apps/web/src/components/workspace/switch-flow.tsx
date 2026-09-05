@@ -6,7 +6,7 @@ import { HarnessIcon } from '@/components/harness-icon';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/lib/i18n';
 
-type Route = { provider: string; model: string };
+type Route = { provider: string; model: string; sourceLabel?: string };
 type FlowNodeData = {
   label: string;
   value: string;
@@ -46,7 +46,7 @@ export function SwitchFlow({
       type: 'route',
       position: { x: 24, y: 38 },
       data: {
-        label: t('workspace.configuration'),
+        label: current.sourceLabel ?? t('workspace.configuration'),
         value: current.provider,
         kind: 'source',
         lane: 'current',
