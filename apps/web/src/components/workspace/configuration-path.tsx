@@ -129,18 +129,14 @@ function PathBranch({
           label={sourceLabel ?? t('workspace.provider')}
           value={path.provider}
         />
-        <li aria-hidden className="path-arrow">
-          <ArrowRight />
-        </li>
+        <li aria-hidden className="path-connector" />
         <PathNode
           icon={<Box className="text-primary" />}
           label={t('favorites.modelPicker')}
           value={path.model}
           mono
         />
-        <li aria-hidden className="path-arrow branch-to-tool">
-          <ArrowRight />
-        </li>
+        <li aria-hidden className="path-connector branch-to-tool" />
       </ol>
     </div>
   );

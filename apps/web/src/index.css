@@ -178,30 +178,22 @@
   border-color: color-mix(in srgb, var(--primary) 56%, var(--border));
   background: color-mix(in srgb, var(--primary) 4%, var(--card));
 }
-.switch-branch .path-arrow {
+.switch-branch .path-connector {
   position: relative;
 }
-.switch-branch .path-arrow::before {
+.switch-branch .path-connector::before {
   position: absolute;
+  top: 50%;
   right: 0;
   left: 0;
   height: 2px;
   background: color-mix(in srgb, var(--primary) 62%, var(--border));
   content: "";
 }
-.switch-branch-candidate .path-arrow::before {
+.switch-branch-candidate .path-connector::before {
   background: repeating-linear-gradient(90deg, var(--primary) 0 7px, transparent 7px 14px);
   background-size: 28px 2px;
   animation: candidate-flow 0.85s linear infinite;
-}
-.switch-branch .path-arrow > svg {
-  position: relative;
-  z-index: 1;
-  margin-left: auto;
-  background: var(--card);
-}
-.switch-branch-candidate .path-arrow > svg {
-  background: color-mix(in srgb, var(--primary) 4%, var(--card));
 }
 .switch-branch .branch-to-tool::before {
   right: -13px;
@@ -222,46 +214,26 @@
   position: relative;
   min-height: 100%;
 }
-.switch-tree-current-flow,
-.switch-tree-new-flow {
+.switch-tree-current-flow {
   position: absolute;
+  top: 25%;
   left: 0;
   width: 20px;
-  height: 25%;
-}
-.switch-tree-current-flow {
-  top: 25%;
+  height: 50%;
   border-top: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
   border-right: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
   border-radius: 0 10px 0 0;
 }
 .switch-tree-new-flow {
-  top: 50%;
-  border-right: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
-  border-bottom: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
-  border-radius: 0 0 10px 0;
-}
-.switch-tree-new-flow::before,
-.switch-tree-new-flow::after {
   position: absolute;
+  top: calc(75% - 1px);
+  left: 0;
+  width: 20px;
+  height: 2px;
   background: repeating-linear-gradient(90deg, var(--primary) 0 7px, transparent 7px 14px);
   background-size: 28px 2px;
   content: "";
   animation: candidate-flow 0.85s linear infinite;
-}
-.switch-tree-new-flow::before {
-  right: -1px;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-}
-.switch-tree-new-flow::after {
-  top: 0;
-  right: -1px;
-  bottom: 0;
-  width: 2px;
-  background: repeating-linear-gradient(180deg, var(--primary) 0 7px, transparent 7px 14px);
-  background-size: 2px 28px;
 }
 .switch-tree-output-flow {
   position: absolute;
@@ -451,9 +423,8 @@
   .timeline-point {
     transition: none;
   }
-  .switch-branch-candidate .path-arrow::before,
-  .switch-tree-new-flow::before,
-  .switch-tree-new-flow::after {
+  .switch-branch-candidate .path-connector::before,
+  .switch-tree-new-flow {
     animation: none;
   }
 }
