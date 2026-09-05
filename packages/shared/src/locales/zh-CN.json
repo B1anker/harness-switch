@@ -717,7 +717,9 @@
     "favoriteEffortUnverified": "渠道的可选思考档位未经验证",
     "favoriteStoreInvalid": "收藏文件损坏或版本不受支持",
     "favoriteLimitReached": "收藏数量已达上限",
-    "favoriteCredentialConsentRequired": "需要明确同意将内联密钥存入凭据库"
+    "favoriteCredentialConsentRequired": "需要明确同意将内联密钥存入凭据库",
+    "favoriteBackupInvalid": "备份无效、已损坏或配置目录已改变，未恢复。",
+    "favoriteBackupRecoveryFailed": "恢复回滚未完成，已暂停配置操作以保护数据。请检查文件权限后重试。"
   },
   "warning": {
     "activation": {
@@ -1049,7 +1051,33 @@
     "needsUpdate": "有更新",
     "diverged": "有本地分歧",
     "detach": "解除关联，保留配置",
-    "harnesses": "工具配置"
+    "harnesses": "工具配置",
+    "autoName": "留空使用模型名称",
+    "modelAdvanced": "高级设置：能力、思考与备注",
+    "channelName": "自定义渠道名称",
+    "channelAdvanced": "高级设置：渠道参数覆盖",
+    "targetAdvanced": "更改目标配置或名称",
+    "changeDetails": "查看参数差异",
+    "fileDetails": "查看原生文件差异",
+    "activateSelected": "保存后立即激活到所选工具",
+    "noCompatibleChannel": "暂无兼容渠道",
+    "updateProfile": "更新已有配置",
+    "backups": "备份与恢复",
+    "backupHint": "收藏变更前自动备份，保留最近 20 次。可另存一个手动恢复点，不随自动备份轮换。备份加密保存在当前用户的本机目录。",
+    "backupNow": "备份当前状态",
+    "backupCreated": "已创建恢复点",
+    "backupRestored": "已恢复；恢复前的状态也已备份，可随时撤回",
+    "backupEmpty": "还没有恢复点，首次变更前会自动创建。",
+    "restoreScope": "将当前用户的全部收藏、配置档案、凭据库、激活记录和五种工具的原生配置恢复到此时刻，覆盖此后修改。恢复前会再次备份当前状态；账号登录和服务密码不变。",
+    "restore": "恢复到此时",
+    "restoreConfirm": "确认恢复",
+    "cancel": "取消",
+    "backupReason": {
+      "manual": "手动恢复点",
+      "change": "收藏变更前",
+      "apply": "应用到工具前",
+      "restore": "恢复前的状态"
+    }
   },
   "favorite": {
     "result": "操作完成"

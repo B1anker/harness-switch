@@ -15,6 +15,7 @@ import { getCookie } from 'hono/cookie';
 import type { InstantiationService } from '../../di';
 import { IAdapterRegistry } from '../../services/adapters';
 import { IEnvironmentService } from '../../services/environment';
+import { IFavoriteBackupService } from '../../services/favorite-backup';
 import { IModelFavoriteService } from '../../services/model-favorite';
 import { IModelFavoriteApplyService } from '../../services/model-favorite-apply';
 import { IModelFavoriteStore } from '../../services/model-favorite-store';
@@ -29,6 +30,13 @@ export function createModelFavoriteRoutes(services: InstantiationService): Hono 
   const apply = services.get(IModelFavoriteApplyService);
   const adapters = services.get(IAdapterRegistry);
   const profiles = services.get(IProfileService);
+  const backups = services.get(IFavoriteBackupService);
+  app.get('/backups', (c) => c.json({ code: FAVORITE_CODES.result, data: backups.list() }));
+  app.post('/backups', (c) => c.json({ code: FAVORITE_CODES.result, data: backups.create() }, 201));
+  app.post('/backups/:backupId/restore', (c) => {
+    backups.restore(param(c, 'backupId'));
+    return c.json({ code: FAVORITE_CODES.result, data: { ok: true } });
+  });
   app.get('/', (c) =>
     c.json({
       code: FAVORITE_CODES.result,

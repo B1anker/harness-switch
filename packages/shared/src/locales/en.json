@@ -717,7 +717,9 @@
     "favoriteEffortUnverified": "The connection reasoning effort levels are unverified.",
     "favoriteStoreInvalid": "Favorite store invalid.",
     "favoriteLimitReached": "Favorite limit reached.",
-    "favoriteCredentialConsentRequired": "Favorite credential consent required."
+    "favoriteCredentialConsentRequired": "Favorite credential consent required.",
+    "favoriteBackupInvalid": "The backup is invalid, damaged or belongs to different configuration paths. Nothing was restored.",
+    "favoriteBackupRecoveryFailed": "Restore rollback is incomplete. Configuration operations are paused to protect data. Check file permissions and retry."
   },
   "warning": {
     "activation": {
@@ -1049,7 +1051,33 @@
     "needsUpdate": "Update available",
     "diverged": "Local divergence",
     "detach": "Detach, keep profile",
-    "harnesses": "Harness profiles"
+    "harnesses": "Harness profiles",
+    "autoName": "Use the model name when empty",
+    "modelAdvanced": "Advanced: capabilities, reasoning and notes",
+    "channelName": "Customize channel name",
+    "channelAdvanced": "Advanced: channel overrides",
+    "targetAdvanced": "Change target profile or name",
+    "changeDetails": "View parameter changes",
+    "fileDetails": "View native file changes",
+    "activateSelected": "Activate in selected tools after saving",
+    "noCompatibleChannel": "No compatible channel",
+    "updateProfile": "Update existing profile",
+    "backups": "Backup and restore",
+    "backupHint": "Changes to favorites are backed up automatically; the last 20 are kept. One manual checkpoint is retained separately. Backups are encrypted and stored locally for the current user.",
+    "backupNow": "Back up current state",
+    "backupCreated": "Checkpoint created",
+    "backupRestored": "Restored. The previous state was also backed up, so you can revert this restore.",
+    "backupEmpty": "No checkpoints yet. One will be created before the first change.",
+    "restoreScope": "Restore all favorites, profiles, provider credentials, active records and native configuration for the five tools to this time, replacing later changes. The current state will be backed up first. Manager sign-in and password stay unchanged.",
+    "restore": "Restore this checkpoint",
+    "restoreConfirm": "Confirm restore",
+    "cancel": "Cancel",
+    "backupReason": {
+      "manual": "Manual checkpoint",
+      "change": "Before favorite change",
+      "apply": "Before applying to tools",
+      "restore": "Before restore"
+    }
   },
   "favorite": {
     "result": "Operation completed"

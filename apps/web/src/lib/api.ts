@@ -197,5 +197,7 @@ export const favoriteTargetsPath = (id: string) => `${favoritePath(id)}/targets`
 export const favoriteSourcePath = (harness: string, name: string, detach = false) =>
   `${favoritesPath()}/source/${encodeURIComponent(harness)}/${encodeURIComponent(name)}${detach ? '/detach' : ''}`;
 export const favoritePlansPath = () => '/api/model-favorite-plans';
+export const favoriteBackupsPath = (id?: string) =>
+  `${favoritesPath('backups')}${id ? `/${encodeURIComponent(id)}/restore` : ''}`;
 export const favoriteApplyPath = (id: string) =>
   `${favoritePlansPath()}/${encodeURIComponent(id)}/apply`;

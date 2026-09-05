@@ -275,3 +275,8 @@ export type FavoriteItemResult = {
   code?: string;
 };
 export type FavoriteOperation = { requestId: string; items: FavoriteItemResult[] };
+export type FavoriteBackupEntry = {
+  id: string;
+  createdAt: string;
+  reason: 'manual' | 'change' | 'apply' | 'restore';
+};

@@ -18,6 +18,7 @@ import { IActivationService } from './activation';
 import { type AdapterProfile, IAdapterRegistry } from './adapters';
 import { IDriftService } from './drift';
 import { IEnvironmentService } from './environment';
+import { IFavoriteBackupService } from './favorite-backup';
 import { IFileService } from './files';
 import { IJournalService } from './journal';
 import { ILiveWriteService, type PlannedWrite } from './live-write';
@@ -68,6 +69,7 @@ export const IModelFavoriteApplyService = createDecorator<IModelFavoriteApplySer
   ILiveWriteService,
   IJournalService,
   IDriftService,
+  IFavoriteBackupService,
 )
 export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
   declare readonly _serviceBrand: undefined;
@@ -83,6 +85,7 @@ export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
     private readonly liveWrite: ILiveWriteService,
     private readonly journal: IJournalService,
     private readonly drift: IDriftService,
+    private readonly backups: IFavoriteBackupService,
   ) {}
 
   state(profile: ProfilePublic) {
@@ -357,6 +360,7 @@ export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
         throw failure(prepared.public.projection.blockers[0]!.code);
       }
     }
+    this.backups.create('apply');
     const result: FavoriteOperation = { requestId, items: [] };
     for (const [index, prepared] of plan.items.entries()) {
       const item = prepared.public;

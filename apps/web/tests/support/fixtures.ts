@@ -3,11 +3,35 @@ import type {
   DoctorReport,
   DriftFileState,
   DriftSummary,
+  FavoriteProjectionResult,
   FieldSpec,
   HarnessSummary,
   ProfilePublic,
   ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
+
+export function favoriteTargetFixture(favorite: FavoriteListItem) {
+  const connection = favorite.connections[0]!;
+  const projection: FavoriteProjectionResult = {
+    projectionVersion: 1,
+    projection: {
+      harness: 'pi',
+      model: connection.requestModelId,
+      providerId: connection.providerId,
+      providerEndpoint: connection.endpointKey,
+      extras: {},
+    },
+    ownedFields: [],
+    set: {},
+    remove: [],
+    notRepresented: [],
+    rendererDefaults: {},
+    warnings: [],
+    blockers: [],
+  };
+  return { harness: 'pi' as const, connections: [{ id: connection.id, projection }] };
+}
+
 import { createFavoriteRequestSchema } from '@seaveyon/harness-switch-shared';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 

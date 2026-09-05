@@ -8,6 +8,7 @@ import { CryptoService, ICryptoService } from './services/crypto';
 import { DoctorService, IDoctorService } from './services/doctor';
 import { DriftService, IDriftService } from './services/drift';
 import { EnvironmentService, IEnvironmentService } from './services/environment';
+import { FavoriteBackupService, IFavoriteBackupService } from './services/favorite-backup';
 import { FileService, IFileService } from './services/files';
 import { GitHubSyncService, IGitHubSyncService } from './services/github-sync';
 import { HarnessService, IHarnessService } from './services/harness';
@@ -80,6 +81,7 @@ export function createServices(): InstantiationService {
     new SyncDescriptor(ModelFavoriteApplyService, [], DELAYED),
   );
   collection.set(IModelFavoriteStore, new SyncDescriptor(ModelFavoriteStore, [], DELAYED));
+  collection.set(IFavoriteBackupService, new SyncDescriptor(FavoriteBackupService, [], DELAYED));
 
   // Orchestration: multi-service workflows, each behind a single route family.
   collection.set(IActivationService, new SyncDescriptor(ActivationService));

@@ -1,5 +1,6 @@
 import {
   catalogKey,
+  ERROR_CODES,
   type FavoritePlanRequest,
   HARNESS_IDS,
   type ModelFavorite,
@@ -15,11 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Disclosure } from '@/components/ui/disclosure';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
+import { FavoritePreview } from './preview';
 
 export function ModelFavoriteApplyDialog({
   favorite,
@@ -40,6 +43,7 @@ export function ModelFavoriteApplyDialog({
   const targets = useAppStore((state) => state.favoriteTargets[favorite.id]);
   const loadTargets = useAppStore((state) => state.loadFavoriteTargets);
   const [items, setItems] = useState<FavoritePlanRequest['items']>([]);
+  const [mode, setMode] = useState<'save' | 'activate'>('save');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -79,6 +83,19 @@ export function ModelFavoriteApplyDialog({
           <DialogTitle>{t('favorites.configure')}</DialogTitle>
           <DialogDescription>{t('favorites.saveOnlyHint')}</DialogDescription>
         </DialogHeader>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="favorite-activate"
+            checked={mode === 'activate'}
+            onCheckedChange={(checked) => {
+              const next = checked === true ? 'activate' : 'save';
+              setMode(next);
+              clear();
+              setItems(items.map((item) => ({ ...item, mode: next })));
+            }}
+          />
+          <label htmlFor="favorite-activate">{t('favorites.activateSelected')}</label>
+        </div>
         {HARNESS_IDS.map((harness) => {
           const connections = favorite.connections.filter((connection) =>
             targets
@@ -108,9 +125,19 @@ export function ModelFavoriteApplyDialog({
                             ...items,
                             {
                               harness,
-                              connectionId: connections.length === 1 ? connections[0]!.id : '',
-                              existing: false,
-                              mode: 'save',
+                              connectionId:
+                                linked.length === 1 &&
+                                connections.some(
+                                  (connection) =>
+                                    connection.id === linked[0]!.modelFavorite!.connectionId,
+                                )
+                                  ? linked[0]!.modelFavorite!.connectionId
+                                  : connections.length === 1
+                                    ? connections[0]!.id
+                                    : '',
+                              existing: linked.length === 1,
+                              profile: linked.length === 1 ? linked[0]!.name : undefined,
+                              mode,
                               ignorePreference: false,
                               overwriteDiverged: false,
                             },
@@ -121,67 +148,92 @@ export function ModelFavoriteApplyDialog({
                 />
                 <label htmlFor={`target-${harness}`}>{harness}</label>
               </legend>
+              {!connections.length ? (
+                <p className="text-sm text-muted-foreground">
+                  {t('favorites.noCompatibleChannel')}
+                </p>
+              ) : null}
               {item ? (
                 <>
-                  <FavoriteSelect
-                    id={`connection-${harness}`}
-                    label={t('favorites.connection')}
-                    value={item.connectionId}
-                    options={connections.map((connection) => ({
-                      value: connection.id,
-                      label: `${connection.label} · ${connection.protocol} · ${connection.requestModelId}`,
-                    }))}
-                    onChange={(connectionId) => change(harness, { connectionId })}
-                  />
-                  <FavoriteSelect
-                    id={`existing-${harness}`}
-                    label={t('favorites.target')}
-                    value={item.existing ? item.profile! : '__new__'}
-                    options={[
-                      { value: '__new__', label: t('favorites.newProfile') },
-                      ...linked.map((profile) => ({ value: profile.name, label: profile.name })),
-                    ]}
-                    onChange={(value) =>
-                      change(harness, {
-                        existing: value !== '__new__',
-                        profile: value === '__new__' ? undefined : value,
-                      })
-                    }
-                  />
-                  {!item.existing ? (
-                    <FormField id={`profile-${harness}`} label={t('favorites.profileName')}>
-                      {(control) => (
-                        <Input
-                          {...control}
-                          value={item.profile ?? ''}
-                          placeholder={favorite.name}
-                          onChange={(event) =>
-                            change(harness, { profile: event.target.value || undefined })
-                          }
+                  {connections.length > 1 ? (
+                    <FavoriteSelect
+                      id={`connection-${harness}`}
+                      label={t('favorites.connection')}
+                      value={item.connectionId}
+                      options={connections.map((connection) => ({
+                        value: connection.id,
+                        label: `${connection.label} · ${connection.protocol} · ${connection.requestModelId}`,
+                      }))}
+                      onChange={(connectionId) => change(harness, { connectionId })}
+                    />
+                  ) : (
+                    <p className="text-sm">
+                      {connections[0]?.label} · {connections[0]?.requestModelId}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {t(item.existing ? 'favorites.updateProfile' : 'favorites.newProfile')}:{' '}
+                    {item.profile || favorite.name}
+                  </p>
+                  <Disclosure title={t('favorites.targetAdvanced')}>
+                    <FavoriteSelect
+                      id={`existing-${harness}`}
+                      label={t('favorites.target')}
+                      value={item.existing ? item.profile! : '__new__'}
+                      options={[
+                        { value: '__new__', label: t('favorites.newProfile') },
+                        ...linked.map((profile) => ({ value: profile.name, label: profile.name })),
+                      ]}
+                      onChange={(value) =>
+                        change(harness, {
+                          existing: value !== '__new__',
+                          profile: value === '__new__' ? undefined : value,
+                        })
+                      }
+                    />
+                    {!item.existing ? (
+                      <FormField id={`profile-${harness}`} label={t('favorites.profileName')}>
+                        {(control) => (
+                          <Input
+                            {...control}
+                            value={item.profile ?? ''}
+                            placeholder={favorite.name}
+                            onChange={(event) =>
+                              change(harness, { profile: event.target.value || undefined })
+                            }
+                          />
+                        )}
+                      </FormField>
+                    ) : null}
+                  </Disclosure>
+                  {(['ignorePreference', 'overwriteDiverged'] as const)
+                    .filter((field) => {
+                      const projection = targets
+                        ?.find((target) => target.harness === harness)
+                        ?.connections.find(
+                          (connection) => connection.id === item.connectionId,
+                        )?.projection;
+                      return field === 'ignorePreference'
+                        ? projection?.notRepresented.includes('reasoningEffort')
+                        : item.overwriteDiverged ||
+                            plan?.items.some(
+                              (entry) =>
+                                entry.harness === harness &&
+                                entry.projection.blockers.some(
+                                  (blocker) => blocker.code === ERROR_CODES.favoriteProfileDiverged,
+                                ),
+                            );
+                    })
+                    .map((field) => (
+                      <div key={field} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`${field}-${harness}`}
+                          checked={item[field]}
+                          onCheckedChange={(value) => change(harness, { [field]: value === true })}
                         />
-                      )}
-                    </FormField>
-                  ) : null}
-                  <FavoriteSelect
-                    id={`mode-${harness}`}
-                    label={t('favorites.mode')}
-                    value={item.mode}
-                    options={['save', 'activate'].map((value) => ({
-                      value,
-                      label: t(`favorites.${value}`),
-                    }))}
-                    onChange={(mode) => change(harness, { mode: mode as 'save' | 'activate' })}
-                  />
-                  {(['ignorePreference', 'overwriteDiverged'] as const).map((field) => (
-                    <div key={field} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`${field}-${harness}`}
-                        checked={item[field]}
-                        onCheckedChange={(value) => change(harness, { [field]: value === true })}
-                      />
-                      <label htmlFor={`${field}-${harness}`}>{t(`favorites.${field}`)}</label>
-                    </div>
-                  ))}
+                        <label htmlFor={`${field}-${harness}`}>{t(`favorites.${field}`)}</label>
+                      </div>
+                    ))}
                   {item.mode === 'activate' &&
                   linked.some(
                     (profile) =>
@@ -221,68 +273,7 @@ export function ModelFavoriteApplyDialog({
           {t('favorites.preview')}
         </Button>
         {plan?.items.map((item) => (
-          <section key={item.harness} className="space-y-2 rounded-xl border p-3">
-            <h3 className="font-semibold">
-              {item.harness} / {item.profile}
-            </h3>
-            <p>
-              {t('favorites.authentication')}: {item.authMode}
-            </p>
-            <p>
-              {t('favorites.liveState')}: {item.liveState}
-            </p>
-            {item.preservedFields.length ? (
-              <p>
-                {t('favorites.preserved')}: {item.preservedFields.join(', ')}
-              </p>
-            ) : null}
-            {Object.entries(item.resolved.sources).map(([field, source]) => (
-              <p key={field} className="text-xs text-muted-foreground">
-                {t(`favorites.${field}`)}:{' '}
-                {t(
-                  source === 'favorite'
-                    ? 'favorites.inherited'
-                    : source === 'connection'
-                      ? 'favorites.overridden'
-                      : 'favorites.unknown',
-                )}
-              </p>
-            ))}
-            {item.diff.map((diff) => (
-              <p key={diff.field} className="break-all font-mono text-xs">
-                {diff.field}: {diff.before ?? '∅'} → {diff.after ?? '∅'}
-              </p>
-            ))}
-            {Object.entries(item.projection.rendererDefaults).map(([field, value]) => (
-              <p key={field}>
-                {t('favorites.rendererDefault')}: {field} = {value}
-              </p>
-            ))}
-            {item.projection.notRepresented.length ? (
-              <p>
-                {t('favorites.notRepresented')}: {item.projection.notRepresented.join(', ')}
-              </p>
-            ) : null}
-            {[...item.projection.warnings, ...item.projection.blockers].map((warning, index) => (
-              <p key={`${warning.code}-${index}`} className="text-amber-700">
-                {t(catalogKey(warning.code))}
-              </p>
-            ))}
-            <p>
-              {t('favorites.nativeFiles')}:{' '}
-              {item.nativeFiles.map((file) => file.key).join(', ') || t('favorites.none')}
-            </p>
-            {item.nativeFiles.map((file) => (
-              <div key={file.key} className="grid gap-2 sm:grid-cols-2">
-                <pre className="max-h-64 overflow-auto rounded border p-2 text-xs">
-                  {file.before ?? '∅'}
-                </pre>
-                <pre className="max-h-64 overflow-auto rounded border p-2 text-xs">
-                  {file.after ?? '∅'}
-                </pre>
-              </div>
-            ))}
-          </section>
+          <FavoritePreview key={item.harness} item={item} />
         ))}
         {plan ? (
           <Button

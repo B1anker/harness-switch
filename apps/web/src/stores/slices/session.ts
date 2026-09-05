@@ -25,6 +25,7 @@ export type SessionSlice = {
 /** Everything a user switch or a sign-out invalidates, since both start from scratch. */
 const USER_SCOPED: Partial<AppState> = {
   favoriteCatalogs: {},
+  favoriteBackups: [],
   favoriteTargets: {},
   favoriteOperationHistory: [],
   favorites: null,

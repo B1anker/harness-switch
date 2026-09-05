@@ -25,6 +25,8 @@ export const ERROR_CODES = {
   favoritePreferenceNotRepresented: 'favoritePreferenceNotRepresented',
   favoriteEffortUnverified: 'favoriteEffortUnverified',
   favoriteStoreInvalid: 'favoriteStoreInvalid',
+  favoriteBackupInvalid: 'favoriteBackupInvalid',
+  favoriteBackupRecoveryFailed: 'favoriteBackupRecoveryFailed',
   favoriteLimitReached: 'favoriteLimitReached',
   favoriteCredentialConsentRequired: 'favoriteCredentialConsentRequired',
 

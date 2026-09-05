@@ -10,6 +10,7 @@ import { createDecorator, inject } from '../di';
 import { assertParsable } from './adapters/serialize';
 import { type FileSnapshot, IBackupService } from './backup';
 import { IEnvironmentService } from './environment';
+import { IFavoriteBackupService } from './favorite-backup';
 import { IFileService } from './files';
 import { IJournalService } from './journal';
 import { ILogService } from './log';
@@ -60,7 +61,14 @@ export interface ILiveWriteService {
 
 export const ILiveWriteService = createDecorator<ILiveWriteService>('liveWriteService');
 
-@inject(IFileService, IBackupService, IJournalService, ILogService, IEnvironmentService)
+@inject(
+  IFileService,
+  IBackupService,
+  IJournalService,
+  ILogService,
+  IEnvironmentService,
+  IFavoriteBackupService,
+)
 export class LiveWriteService implements ILiveWriteService {
   declare readonly _serviceBrand: undefined;
 
@@ -70,6 +78,7 @@ export class LiveWriteService implements ILiveWriteService {
     private readonly journal: IJournalService,
     private readonly log: ILogService,
     private readonly environment: IEnvironmentService,
+    private readonly favoriteBackups: IFavoriteBackupService,
   ) {}
 
   /**
@@ -82,6 +91,13 @@ export class LiveWriteService implements ILiveWriteService {
   }
 
   transaction<T>(plan: OperationPlan, operation: () => T): T {
+    if (plan.metadata?.includes('favorites')) {
+      return this.favoriteBackups.protect('change', () => this.execute(plan, operation));
+    }
+    return this.execute(plan, operation);
+  }
+
+  private execute<T>(plan: OperationPlan, operation: () => T): T {
     const { harness, profile, writes } = plan;
     for (const write of writes) {
       this.files.assertManaged(write.path);

@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Disclosure } from '@/components/ui/disclosure';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
+import { FavoriteBackups } from './backups';
 import { FavoriteEditor } from './editor';
 import { FavoriteSelect } from './fields';
 
@@ -23,6 +25,7 @@ export function ModelFavorites() {
   const detach = useAppStore((state) => state.detachFavorite);
   const harnesses = useAppStore((state) => state.harnesses);
   const [search, setSearch] = useState('');
+  const [backupsOpen, setBackupsOpen] = useState(false);
   const [editing, setEditing] = useState<ModelFavorite | 'new' | null>(null);
   const [applying, setApplying] = useState<ModelFavorite | null>(null);
   const [source, setSource] = useState('');
@@ -67,64 +70,73 @@ export function ModelFavorites() {
           <h2 className="text-2xl font-semibold">{t('favorites.title')}</h2>
           <p className="text-muted-foreground">{t('favorites.subtitle')}</p>
         </div>
-        <Button onClick={() => setEditing('new')}>{t('favorites.add')}</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setBackupsOpen(true)}>
+            {t('favorites.backups')}
+          </Button>
+          <Button onClick={() => setEditing('new')}>{t('favorites.add')}</Button>
+        </div>
       </div>
-      <section className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2">
-        <FavoriteSelect
-          id="favorite-source"
-          label={t('favorites.capture')}
-          value={source}
-          options={sources.map((item) => ({
-            value: item.value,
-            label: `${item.harness} / ${item.profile.name}`,
-          }))}
-          onChange={(value) => {
-            setSource(value);
-            const item = sources.find((candidate) => candidate.value === value);
-            setName(item?.profile.name ?? '');
-          }}
-        />
-        <FormField id="capture-name" label={t('favorites.name')}>
-          {(control) => (
-            <Input
-              {...control}
-              maxLength={120}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
+      <Disclosure title={t('favorites.capture')}>
+        <section className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2">
+          <FavoriteSelect
+            id="favorite-source"
+            label={t('favorites.capture')}
+            value={source}
+            options={sources.map((item) => ({
+              value: item.value,
+              label: `${item.harness} / ${item.profile.name}`,
+            }))}
+            onChange={(value) => {
+              setSource(value);
+              const item = sources.find((candidate) => candidate.value === value);
+              setName(item?.profile.name ?? '');
+            }}
+          />
+          <FormField id="capture-name" label={t('favorites.name')}>
+            {(control) => (
+              <Input
+                {...control}
+                maxLength={120}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            )}
+          </FormField>
+          {source && !sources.find((item) => item.value === source)?.profile.providerId ? (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="capture-credential"
+                checked={credential}
+                onCheckedChange={(value) => setCredential(value === true)}
+              />
+              <label htmlFor="capture-credential">{t('favorites.extractCredential')}</label>
+            </div>
+          ) : null}
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="capture-link"
+              checked={linkSource}
+              onCheckedChange={(value) => setLinkSource(value === true)}
             />
-          )}
-        </FormField>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="capture-credential"
-            checked={credential}
-            onCheckedChange={(value) => setCredential(value === true)}
-          />
-          <label htmlFor="capture-credential">{t('favorites.extractCredential')}</label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="capture-link"
-            checked={linkSource}
-            onCheckedChange={(value) => setLinkSource(value === true)}
-          />
-          <label htmlFor="capture-link">{t('favorites.linkSource')}</label>
-        </div>
-        <Button
-          disabled={busy || !source || !name}
-          onClick={() =>
-            void run(async () => {
-              const item = sources.find((candidate) => candidate.value === source);
-              if (item) {
-                await capture(item.harness, item.profile.name, name, credential, linkSource);
-                setSource('');
-              }
-            })
-          }
-        >
-          {t('favorites.capture')}
-        </Button>
-      </section>
+            <label htmlFor="capture-link">{t('favorites.linkSource')}</label>
+          </div>
+          <Button
+            disabled={busy || !source || !name}
+            onClick={() =>
+              void run(async () => {
+                const item = sources.find((candidate) => candidate.value === source);
+                if (item) {
+                  await capture(item.harness, item.profile.name, name, credential, linkSource);
+                  setSource('');
+                }
+              })
+            }
+          >
+            {t('favorites.capture')}
+          </Button>
+        </section>
+      </Disclosure>
       <FormField id="favorite-search" label={t('favorites.search')}>
         {(control) => (
           <Input {...control} value={search} onChange={(event) => setSearch(event.target.value)} />
@@ -211,6 +223,7 @@ export function ModelFavorites() {
           onClose={() => setEditing(null)}
         />
       ) : null}
+      {backupsOpen ? <FavoriteBackups onClose={() => setBackupsOpen(false)} /> : null}
       {applying ? (
         <ModelFavoriteApplyDialog favorite={applying} onClose={() => setApplying(null)} />
       ) : null}

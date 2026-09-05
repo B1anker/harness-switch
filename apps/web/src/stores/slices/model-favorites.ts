@@ -1,4 +1,5 @@
 import type {
+  FavoriteBackupEntry,
   FavoriteInput,
   FavoriteOperation,
   FavoritePlan,
@@ -12,6 +13,7 @@ import type {
 import {
   api,
   favoriteApplyPath,
+  favoriteBackupsPath,
   favoritePath,
   favoritePlansPath,
   favoriteSourcePath,
@@ -34,6 +36,10 @@ export type FavoriteListItem = ModelFavorite & {
   }>;
 };
 export type FavoriteSlice = {
+  favoriteBackups: FavoriteBackupEntry[];
+  loadFavoriteBackups(): Promise<void>;
+  createFavoriteBackup(): Promise<void>;
+  restoreFavoriteBackup(id: string): Promise<void>;
   favoriteTargets: Record<
     string,
     Array<{
@@ -66,6 +72,39 @@ export type FavoriteSlice = {
   clearFavoritePlan(): void;
 };
 export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => ({
+  favoriteBackups: [],
+  loadFavoriteBackups: async () => {
+    const user = get().currentUser;
+    const result = await api<{ data: FavoriteBackupEntry[] }>(favoriteBackupsPath());
+    if (user === get().currentUser) {
+      set({ favoriteBackups: result.data });
+    }
+  },
+  createFavoriteBackup: async () => {
+    await api(favoriteBackupsPath(), { method: 'POST' });
+    await get().loadFavoriteBackups();
+  },
+  restoreFavoriteBackup: async (id) => {
+    const user = get().currentUser;
+    await api(favoriteBackupsPath(id), { method: 'POST' });
+    if (user !== get().currentUser) {
+      return;
+    }
+    set({
+      favoritePlan: null,
+      favoriteOperation: null,
+      favoriteOperationHistory: [],
+      favoriteTargets: {},
+      favoriteCatalogs: {},
+    });
+    await Promise.all([
+      get().loadFavoriteBackups(),
+      get().loadFavorites(),
+      get().loadHarnesses(),
+      get().loadProviders(),
+      get().loadBackups(),
+    ]);
+  },
   favoriteTargets: {},
   loadFavoriteTargets: async (id) => {
     const user = get().currentUser;
