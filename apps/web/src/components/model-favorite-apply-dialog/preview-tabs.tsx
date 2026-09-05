@@ -6,6 +6,7 @@ import {
 import { useId, useState } from 'react';
 import { HarnessIcon } from '@/components/harness-icon';
 import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { TabList, TabPanel } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { FavoritePreview } from './preview';
@@ -39,6 +40,13 @@ export function PreviewTabs({
           <>
             <HarnessIcon id={item.harness} className="size-5" />
             {t(`favorites.toolNames.${item.harness}`)}
+            <Badge variant={item.projection.blockers.length ? 'destructive' : 'secondary'}>
+              {item.projection.blockers.length
+                ? t('favorites.tabBlocked')
+                : t('favorites.tabChanges', {
+                    count: item.nativeFiles.filter((file) => file.changed).length,
+                  })}
+            </Badge>
           </>
         )}
       </TabList>

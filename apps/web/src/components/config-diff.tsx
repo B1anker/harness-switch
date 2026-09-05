@@ -26,20 +26,35 @@ export function changeKind(file: BackupFileDetail): ChangeKind {
 export function ConfigDiffs({
   files,
   intent = 'restore',
+  collapseUnchanged = false,
 }: {
   files: BackupFileDetail[];
   intent?: 'restore' | 'apply';
+  collapseUnchanged?: boolean;
 }) {
   return (
     <div className="space-y-3">
       {files.map((file) => (
-        <ConfigFileDiff key={file.path} file={file} intent={intent} />
+        <ConfigFileDiff
+          key={file.path}
+          file={file}
+          intent={intent}
+          collapseUnchanged={collapseUnchanged}
+        />
       ))}
     </div>
   );
 }
 
-function ConfigFileDiff({ file, intent }: { file: BackupFileDetail; intent: 'restore' | 'apply' }) {
+function ConfigFileDiff({
+  file,
+  intent,
+  collapseUnchanged,
+}: {
+  file: BackupFileDetail;
+  intent: 'restore' | 'apply';
+  collapseUnchanged: boolean;
+}) {
   const { t } = useTranslation();
   const kind = changeKind(file);
   return (
@@ -56,7 +71,7 @@ function ConfigFileDiff({ file, intent }: { file: BackupFileDetail; intent: 'res
             <p className="px-3 py-4 text-sm text-muted-foreground">{t('diff.rendering')}</p>
           }
         >
-          <PierreFileDiff file={file} />
+          <PierreFileDiff file={file} collapseUnchanged={collapseUnchanged} />
         </Suspense>
       </DiffErrorBoundary>
     </div>

@@ -26,6 +26,7 @@ export type SessionSlice = {
 const USER_SCOPED: Partial<AppState> = {
   favoriteCatalogs: {},
   favoriteBackups: [],
+  favoriteBackupPreview: null,
   favoriteTargets: {},
   favoriteOperationHistory: [],
   favorites: null,

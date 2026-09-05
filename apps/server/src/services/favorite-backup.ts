@@ -1,6 +1,12 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { ERROR_CODES, type FavoriteBackupEntry } from '@seaveyon/harness-switch-shared';
+import {
+  ERROR_CODES,
+  type FavoriteBackupContext,
+  type FavoriteBackupEntry,
+  type FavoriteBackupPreview,
+  favoriteBackupContextSchema,
+} from '@seaveyon/harness-switch-shared';
 import { z } from 'zod';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
@@ -15,6 +21,7 @@ const entrySchema = z.object({
   createdAt: z.iso.datetime(),
   reason: z.enum(['manual', 'change', 'apply', 'restore']),
   snapshot: sealed,
+  context: sealed.optional(),
 });
 const historySchema = z.object({ version: z.literal(1), entries: z.array(entrySchema).max(21) });
 const snapshotSchema = z.object({
@@ -27,10 +34,18 @@ type Snapshot = z.infer<typeof snapshotSchema>;
 export interface IFavoriteBackupService {
   readonly _serviceBrand: undefined;
   list(): FavoriteBackupEntry[];
-  create(reason?: FavoriteBackupEntry['reason']): FavoriteBackupEntry;
-  restore(id: string): void;
+  create(
+    reason?: FavoriteBackupEntry['reason'],
+    context?: FavoriteBackupContext,
+  ): FavoriteBackupEntry;
+  preview(id: string): FavoriteBackupPreview;
+  restore(id: string, fingerprint?: string): void;
   recover(): void;
-  protect<T>(reason: FavoriteBackupEntry['reason'], operation: () => T): T;
+  protect<T>(
+    reason: FavoriteBackupEntry['reason'],
+    operation: () => T,
+    context?: FavoriteBackupContext,
+  ): T;
 }
 export const IFavoriteBackupService =
   createDecorator<IFavoriteBackupService>('favoriteBackupService');
@@ -47,16 +62,22 @@ export class FavoriteBackupService implements IFavoriteBackupService {
   ) {}
 
   list(): FavoriteBackupEntry[] {
-    return this.history().entries.map(({ snapshot: _snapshot, ...entry }) => entry);
+    return this.history().entries.map((entry) => this.summary(entry));
   }
 
-  create(reason: FavoriteBackupEntry['reason'] = 'manual'): FavoriteBackupEntry {
+  create(
+    reason: FavoriteBackupEntry['reason'] = 'manual',
+    context?: FavoriteBackupContext,
+  ): FavoriteBackupEntry {
     const history = this.history();
     const entry = {
       id: randomUUID(),
       createdAt: new Date().toISOString(),
       reason,
       snapshot: this.crypto.encrypt(JSON.stringify(this.capture())),
+      context: context
+        ? this.crypto.encrypt(JSON.stringify(favoriteBackupContextSchema.parse(context)))
+        : undefined,
     };
     // Keep one explicit checkpoint as well as twenty rolling automatic checkpoints.
     const prior =
@@ -70,13 +91,16 @@ export class FavoriteBackupService implements IFavoriteBackupService {
       version: 1,
       entries: [...manual, ...automatic].toSorted((a, b) => b.createdAt.localeCompare(a.createdAt)),
     });
-    const { snapshot: _snapshot, ...summary } = entry;
-    return summary;
+    return this.summary(entry);
   }
 
-  protect<T>(reason: FavoriteBackupEntry['reason'], operation: () => T): T {
+  protect<T>(
+    reason: FavoriteBackupEntry['reason'],
+    operation: () => T,
+    context?: FavoriteBackupContext,
+  ): T {
     if (this.depth === 0) {
-      this.create(reason);
+      this.create(reason, context);
     }
     this.depth++;
     try {
@@ -86,14 +110,46 @@ export class FavoriteBackupService implements IFavoriteBackupService {
     }
   }
 
-  restore(id: string): void {
+  preview(id: string): FavoriteBackupPreview {
+    const entry = this.history().entries.find((item) => item.id === id);
+    if (!entry) {
+      throw this.invalid();
+    }
+    const target = this.decode(entry.snapshot);
+    const current = this.capture();
+    return {
+      id,
+      fingerprint: createHash('sha256')
+        .update(JSON.stringify({ id, current, target }))
+        .digest('hex'),
+      files: target.files.map((file, index) => ({
+        key: file.key,
+        path: file.path,
+        action:
+          file.content === current.files[index]!.content
+            ? 'unchanged'
+            : file.content === null
+              ? 'delete'
+              : current.files[index]!.content === null
+                ? 'create'
+                : 'replace',
+      })),
+    };
+  }
+
+  restore(id: string, fingerprint?: string): void {
+    if (fingerprint && this.preview(id).fingerprint !== fingerprint) {
+      throw new HttpError(409, ERROR_CODES.favoriteBackupStale, {
+        code: ERROR_CODES.favoriteBackupStale,
+      });
+    }
     const entry = this.history().entries.find((item) => item.id === id);
     if (!entry) {
       throw this.invalid();
     }
     const target = this.decode(entry.snapshot);
     const before = this.capture();
-    this.create('restore');
+    this.create('restore', { action: 'restore', name: entry.createdAt });
     // A durable rollback point survives a process exit during a multi-file restore.
     this.files.writeJson(this.path('pending.json'), this.crypto.encrypt(JSON.stringify(before)));
     try {
@@ -133,6 +189,20 @@ export class FavoriteBackupService implements IFavoriteBackupService {
         })),
       ),
     ];
+  }
+
+  private summary(entry: z.infer<typeof entrySchema>): FavoriteBackupEntry {
+    const { snapshot: _snapshot, context, ...summary } = entry;
+    try {
+      return {
+        ...summary,
+        context: context
+          ? favoriteBackupContextSchema.parse(JSON.parse(this.crypto.decrypt(context)))
+          : undefined,
+      };
+    } catch {
+      throw this.invalid();
+    }
   }
 
   private capture(): Snapshot {

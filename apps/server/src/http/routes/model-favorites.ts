@@ -5,6 +5,7 @@ import {
   favoriteCaptureRequestSchema,
   favoriteDetachRequestSchema,
   favoritePlanRequestSchema,
+  favoriteRestoreRequestSchema,
   favoriteRevisionRequestSchema,
   HARNESS_IDS,
   harnessIdSchema,
@@ -21,7 +22,7 @@ import { IModelFavoriteApplyService } from '../../services/model-favorite-apply'
 import { IModelFavoriteStore } from '../../services/model-favorite-store';
 import { IProfileService } from '../../services/profiles';
 import { param } from '../params';
-import { readJsonBody } from '../validate';
+import { readJsonBody, readOptionalJsonBody } from '../validate';
 
 export function createModelFavoriteRoutes(services: InstantiationService): Hono {
   const app = new Hono();
@@ -33,8 +34,12 @@ export function createModelFavoriteRoutes(services: InstantiationService): Hono 
   const backups = services.get(IFavoriteBackupService);
   app.get('/backups', (c) => c.json({ code: FAVORITE_CODES.result, data: backups.list() }));
   app.post('/backups', (c) => c.json({ code: FAVORITE_CODES.result, data: backups.create() }, 201));
-  app.post('/backups/:backupId/restore', (c) => {
-    backups.restore(param(c, 'backupId'));
+  app.get('/backups/:backupId/preview', (c) =>
+    c.json({ code: FAVORITE_CODES.result, data: backups.preview(param(c, 'backupId')) }),
+  );
+  app.post('/backups/:backupId/restore', async (c) => {
+    const body = await readOptionalJsonBody(c, favoriteRestoreRequestSchema);
+    backups.restore(param(c, 'backupId'), body.fingerprint);
     return c.json({ code: FAVORITE_CODES.result, data: { ok: true } });
   });
   app.get('/', (c) =>

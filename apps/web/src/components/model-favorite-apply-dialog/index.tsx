@@ -180,30 +180,16 @@ export function ModelFavoriteApplyDialog({
             >
               {plan ? (
                 <>
-                  <div className="grid shrink-0 grid-cols-3 gap-3 rounded-xl border bg-card p-4">
-                    <div>
-                      <p className="text-2xl font-semibold">{plan.items.length}</p>
-                      <p className="text-xs text-muted-foreground">{t('favorites.targetTools')}</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold">
-                        {plan.items.filter((item) => item.mode === 'activate').length}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t('favorites.activateCount')}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold">
-                        {plan.items.reduce(
-                          (sum, item) =>
-                            sum + item.nativeFiles.filter((file) => file.changed).length,
-                          0,
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{t('favorites.changedFiles')}</p>
-                    </div>
-                  </div>
+                  <p className="shrink-0 text-sm font-medium">
+                    {t('favorites.batchSummary', {
+                      count: plan.items.length,
+                      activate: plan.items.filter((item) => item.mode === 'activate').length,
+                      files: plan.items.reduce(
+                        (sum, item) => sum + item.nativeFiles.filter((file) => file.changed).length,
+                        0,
+                      ),
+                    })}
+                  </p>
                   <p className="flex items-center gap-2 text-xs text-muted-foreground">
                     <ShieldCheck className="size-4 shrink-0" />
                     {t('favorites.autoBackupNotice')}
@@ -280,7 +266,12 @@ export function ModelFavoriteApplyDialog({
                 onClick={() => void run(() => apply(requestId))}
               >
                 {busy ? <Loader2 className="animate-spin" /> : <Check />}
-                {t(mode === 'activate' ? 'favorites.confirmActivate' : 'favorites.confirmSave')}
+                {t(
+                  mode === 'activate'
+                    ? 'favorites.confirmBatchActivate'
+                    : 'favorites.confirmBatchSave',
+                  { count: plan?.items.length ?? 0 },
+                )}
               </Button>
             )}
           </div>

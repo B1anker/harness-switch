@@ -30,34 +30,6 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
           </p>
           <Badge variant="outline">{t(`favorites.modeLabel.${item.mode}`)}</Badge>
         </div>
-        {item.diff.length ? (
-          <div className="overflow-x-auto rounded-lg border">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-muted/40 text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">{t('favorites.parameter')}</th>
-                  <th className="px-3 py-2 font-medium">{t('favorites.before')}</th>
-                  <th className="px-3 py-2 font-medium">{t('favorites.after')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {item.diff.map((diff) => (
-                  <tr key={diff.field} className="border-t">
-                    <td className="px-3 py-2 font-mono">{diff.field}</td>
-                    <td className="max-w-60 break-all px-3 py-2 text-muted-foreground">
-                      {diff.before ?? '—'}
-                    </td>
-                    <td className="max-w-60 break-all bg-primary/[0.025] px-3 py-2 font-medium">
-                      {diff.after ?? '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t('favorites.noParameterChanges')}</p>
-        )}
         {item.projection.notRepresented.length ? (
           <Alert variant="warning">
             {t('favorites.notRepresented')}:{' '}
@@ -69,6 +41,66 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
             {t(catalogKey(warning.code))}
           </Alert>
         ))}
+        {item.mode === 'activate' ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <FileCode2 className="size-4" />
+              {t('favorites.liveComparison')}
+            </div>
+            <p className="text-xs text-muted-foreground">{t('favorites.liveComparisonHint')}</p>
+            {item.nativeFiles.length ? (
+              <ConfigDiffs
+                collapseUnchanged
+                intent="apply"
+                files={item.nativeFiles.map((file) => ({
+                  path: file.key,
+                  existed: file.before !== null,
+                  currentContent: file.before,
+                  content: file.after,
+                }))}
+              />
+            ) : (
+              <Alert variant="warning">{t('favorites.previewBlocked')}</Alert>
+            )}
+          </div>
+        ) : (
+          <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+            {t('favorites.saveOnlyHint')}
+          </p>
+        )}
+        <Disclosure
+          title={t(item.diff.length ? 'favorites.savedComparison' : 'favorites.savedUnchanged')}
+        >
+          <p className="mb-3 text-xs text-muted-foreground">{t('favorites.savedComparisonHint')}</p>
+          {item.diff.length ? (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-muted/40 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">{t('favorites.parameter')}</th>
+                    <th className="px-3 py-2 font-medium">{t('favorites.savedBefore')}</th>
+                    <th className="px-3 py-2 font-medium">{t('favorites.savedAfter')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {item.diff.map((diff) => (
+                    <tr key={diff.field} className="border-t">
+                      <td className="px-3 py-2 font-mono">{diff.field}</td>
+                      <td className="max-w-60 break-all px-3 py-2 text-muted-foreground">
+                        {diff.before ?? '—'}
+                      </td>
+                      <td className="max-w-60 break-all bg-primary/[0.025] px-3 py-2 font-medium">
+                        {diff.after ?? '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('favorites.savedUnchangedHint')}</p>
+          )}
+        </Disclosure>
         <Disclosure title={t('favorites.mappingDetails')}>
           <dl className="grid gap-2 text-xs sm:grid-cols-2">
             {Object.entries(item.resolved.sources).map(([field, source]) => (
@@ -97,28 +129,6 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
             </p>
           ))}
         </Disclosure>
-        {item.nativeFiles.length ? (
-          <div className="space-y-3 border-t pt-4">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <FileCode2 className="size-4" />
-              {t('favorites.fileDetails')}
-            </div>
-            <p className="text-xs text-muted-foreground">{t('favorites.redactedDiffHint')}</p>
-            <ConfigDiffs
-              intent="apply"
-              files={item.nativeFiles.map((file) => ({
-                path: file.key,
-                existed: file.before !== null,
-                currentContent: file.before,
-                content: file.after,
-              }))}
-            />
-          </div>
-        ) : (
-          <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-            {t('favorites.saveOnlyHint')}
-          </p>
-        )}
       </div>
     </article>
   );

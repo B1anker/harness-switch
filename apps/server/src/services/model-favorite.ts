@@ -81,7 +81,10 @@ export class ModelFavoriteService implements IModelFavoriteService {
   create(input: FavoriteInput): ModelFavorite {
     const parsed = createFavoriteRequestSchema.parse(input);
     this.validateConnections(parsed);
-    return this.backups.protect('change', () => this.store.create(parsed));
+    return this.backups.protect('change', () => this.store.create(parsed), {
+      action: 'create',
+      name: parsed.name,
+    });
   }
 
   update(id: string, input: UpdateFavoriteRequest): ModelFavorite {
@@ -98,8 +101,10 @@ export class ModelFavoriteService implements IModelFavoriteService {
         code: ERROR_CODES.favoriteConnectionInUse,
       });
     }
-    return this.backups.protect('change', () =>
-      this.store.update(id, next, input.expectedRevision),
+    return this.backups.protect(
+      'change',
+      () => this.store.update(id, next, input.expectedRevision),
+      { action: 'update', name: current.name },
     );
   }
 
@@ -108,7 +113,10 @@ export class ModelFavoriteService implements IModelFavoriteService {
     if (this.references(id).length) {
       throw new HttpError(409, ERROR_CODES.favoriteInUse, { code: ERROR_CODES.favoriteInUse });
     }
-    this.backups.protect('change', () => this.store.remove(id, revision));
+    this.backups.protect('change', () => this.store.remove(id, revision), {
+      action: 'delete',
+      name: this.store.get(id).name,
+    });
   }
 
   sourceFingerprint(harness: HarnessId, name: string): string {
@@ -142,83 +150,86 @@ export class ModelFavoriteService implements IModelFavoriteService {
       });
     }
     // All mutations are synchronous and journaled together; no native files are targets.
-    return this.backups.protect('change', () =>
-      this.liveWrite.transaction(
-        {
-          kind: 'favorite-capture',
-          harness: input.harness,
-          profile: input.name,
-          writes: [],
-          metadata: ['profiles', 'vault', 'favorites'],
-        },
-        () => {
-          const provider = source.providerId
-            ? this.vault.get(source.providerId)
-            : this.vault.create({
-                name: input.favoriteName,
-                apiKey: decrypted.apiKey,
-                endpoints: [{ key: 'api', baseUrl: decrypted.baseUrl }],
+    return this.backups.protect(
+      'change',
+      () =>
+        this.liveWrite.transaction(
+          {
+            kind: 'favorite-capture',
+            harness: input.harness,
+            profile: input.name,
+            writes: [],
+            metadata: ['profiles', 'vault', 'favorites'],
+          },
+          () => {
+            const provider = source.providerId
+              ? this.vault.get(source.providerId)
+              : this.vault.create({
+                  name: input.favoriteName,
+                  apiKey: decrypted.apiKey,
+                  endpoints: [{ key: 'api', baseUrl: decrypted.baseUrl }],
+                });
+            const endpointKey =
+              source.providerEndpoint ??
+              provider.endpoints.find((endpoint) => endpoint.baseUrl === decrypted.baseUrl)?.key;
+            if (!endpointKey) {
+              throw new HttpError(409, ERROR_CODES.favoriteEndpointMissing, {
+                code: ERROR_CODES.favoriteEndpointMissing,
               });
-          const endpointKey =
-            source.providerEndpoint ??
-            provider.endpoints.find((endpoint) => endpoint.baseUrl === decrypted.baseUrl)?.key;
-          if (!endpointKey) {
-            throw new HttpError(409, ERROR_CODES.favoriteEndpointMissing, {
-              code: ERROR_CODES.favoriteEndpointMissing,
+            }
+            if (!source.providerId || !source.providerEndpoint) {
+              this.profiles.upsert(
+                input.harness,
+                { name: input.name, providerId: provider.id, providerEndpoint: endpointKey },
+                false,
+              );
+            }
+            const favorite = this.create({
+              name: input.favoriteName,
+              notes: '',
+              defaults: extracted.defaults,
+              preferences: extracted.preferences,
+              connections: [
+                {
+                  id: randomUUID(),
+                  label: provider.name,
+                  providerId: provider.id,
+                  endpointKey,
+                  protocol: extracted.protocol,
+                  requestModelId: extracted.requestModelId,
+                  factOverrides: {},
+                  preferenceOverrides: {},
+                },
+              ],
             });
-          }
-          if (!source.providerId || !source.providerEndpoint) {
-            this.profiles.upsert(
-              input.harness,
-              { name: input.name, providerId: provider.id, providerEndpoint: endpointKey },
-              false,
-            );
-          }
-          const favorite = this.create({
-            name: input.favoriteName,
-            notes: '',
-            defaults: extracted.defaults,
-            preferences: extracted.preferences,
-            connections: [
-              {
-                id: randomUUID(),
-                label: provider.name,
-                providerId: provider.id,
-                endpointKey,
-                protocol: extracted.protocol,
-                requestModelId: extracted.requestModelId,
-                factOverrides: {},
-                preferenceOverrides: {},
-              },
-            ],
-          });
-          if (input.linkSource) {
-            const connection = favorite.connections[0]!;
-            const projection = adapter.projectFavorite(favorite, connection);
-            const current = this.profiles.get(input.harness, input.name)!;
-            const baseline = {
-              ...projection.projection,
-              model: current.model,
-              providerId: current.providerId ?? '',
-              providerEndpoint: current.providerEndpoint ?? '',
-              extras: Object.fromEntries(
-                Object.keys(projection.projection.extras).map((key) => [
-                  key,
-                  current.extras[key] ?? null,
-                ]),
-              ),
-            };
-            this.profiles.setFavoriteLink(input.harness, input.name, {
-              favoriteId: favorite.id,
-              connectionId: connection.id,
-              appliedRevision: favorite.revision,
-              projectionVersion: projection.projectionVersion,
-              baseline,
-            });
-          }
-          return favorite;
-        },
-      ),
+            if (input.linkSource) {
+              const connection = favorite.connections[0]!;
+              const projection = adapter.projectFavorite(favorite, connection);
+              const current = this.profiles.get(input.harness, input.name)!;
+              const baseline = {
+                ...projection.projection,
+                model: current.model,
+                providerId: current.providerId ?? '',
+                providerEndpoint: current.providerEndpoint ?? '',
+                extras: Object.fromEntries(
+                  Object.keys(projection.projection.extras).map((key) => [
+                    key,
+                    current.extras[key] ?? null,
+                  ]),
+                ),
+              };
+              this.profiles.setFavoriteLink(input.harness, input.name, {
+                favoriteId: favorite.id,
+                connectionId: connection.id,
+                appliedRevision: favorite.revision,
+                projectionVersion: projection.projectionVersion,
+                baseline,
+              });
+            }
+            return favorite;
+          },
+        ),
+      { action: 'capture', name: input.favoriteName, tools: [input.harness] },
     );
   }
 
@@ -228,7 +239,11 @@ export class ModelFavoriteService implements IModelFavoriteService {
         code: ERROR_CODES.favoritePlanStale,
       });
     }
-    this.backups.protect('change', () => this.profiles.setFavoriteLink(harness, name, undefined));
+    this.backups.protect('change', () => this.profiles.setFavoriteLink(harness, name, undefined), {
+      action: 'detach',
+      name,
+      tools: [harness],
+    });
   }
 
   private validateConnections(input: FavoriteInput): void {

@@ -719,7 +719,8 @@
     "favoriteLimitReached": "Favorite limit reached.",
     "favoriteCredentialConsentRequired": "Favorite credential consent required.",
     "favoriteBackupInvalid": "The backup is invalid, damaged or belongs to different configuration paths. Nothing was restored.",
-    "favoriteBackupRecoveryFailed": "Restore rollback is incomplete. Configuration operations are paused to protect data. Check file permissions and retry."
+    "favoriteBackupRecoveryFailed": "Restore rollback is incomplete. Configuration operations are paused to protect data. Check file permissions and retry.",
+    "favoriteBackupStale": "Configuration changed after preview. Check the restore impact again."
   },
   "warning": {
     "activation": {
@@ -1069,7 +1070,7 @@
     "backupRestored": "Restored. The previous state was also backed up, so you can revert this restore.",
     "backupEmpty": "No checkpoints yet. One will be created before the first change.",
     "restoreScope": "Restore all favorites, profiles, provider credentials, active records and native configuration for the five tools to this time, replacing later changes. The current state will be backed up first. Manager sign-in and password stay unchanged.",
-    "restore": "Restore this checkpoint",
+    "restore": "Review restore impact",
     "restoreConfirm": "Confirm restore",
     "cancel": "Cancel",
     "backupReason": {
@@ -1111,6 +1112,48 @@
       "kimi": "Kimi Code",
       "pi": "Pi",
       "dsh": "DeepSeek Harness"
+    },
+    "liveComparison": "Current tool configuration → after applying",
+    "liveComparisonHint": "Compare the current native files on disk with what will be written. Only credentials such as API keys and tokens are hidden.",
+    "previewBlocked": "Native file preview is unavailable. Resolve the blocking issues first.",
+    "savedComparison": "View saved profile changes",
+    "savedComparisonHint": "This compares the saved target profile with the profile to be saved, not the configuration currently used by the tool.",
+    "savedUnchanged": "Saved profile unchanged · View details",
+    "savedUnchangedHint": "The target profile already contains these settings. Switching to it may still change the tool's native files.",
+    "savedBefore": "Saved profile",
+    "savedAfter": "After saving",
+    "batchSummary": "{{count}} tools · Switch {{activate}} · Change {{files}} native files",
+    "confirmBatchSave": "Confirm save to {{count}} tools",
+    "confirmBatchActivate": "Confirm save and switch {{count}} tools",
+    "tabBlocked": "Needs attention",
+    "tabChanges": "{{count}} changed files",
+    "restoreReview": "Confirm global restore",
+    "restoreReviewHint": "Review the impact on the current state before restoring.",
+    "restoreChecking": "Working, please wait…",
+    "restoreRecheck": "Check impact again",
+    "restoreImpact": "{{count}} items will change",
+    "restoreNoChanges": "Current contents match this restore point. No restore is needed.",
+    "restoreUnchanged": "{{count}} unchanged items",
+    "restoreArea": {
+      "favorites": "All model favorites",
+      "profiles": "Profiles for all tools",
+      "vault": "Providers and credential vault",
+      "active": "Active configuration records",
+      "env": "Environment file"
+    },
+    "restoreAction": {
+      "create": "Restore missing file",
+      "replace": "Replace with backup contents",
+      "delete": "Delete file absent from backup"
+    },
+    "backupAction": {
+      "create": "Before adding favorite “{{name}}”",
+      "update": "Before editing favorite “{{name}}”",
+      "delete": "Before deleting favorite “{{name}}”",
+      "capture": "Before capturing “{{name}}” from {{tools}}",
+      "detach": "Before detaching “{{name}}” from {{tools}}",
+      "apply": "Before configuring “{{name}}” for {{tools}}",
+      "restore": "Before global restore to {{name}}"
     }
   },
   "favorite": {

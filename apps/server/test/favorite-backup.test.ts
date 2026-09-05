@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { join } from 'node:path';
-import { ERROR_CODES, type FavoriteBackupEntry } from '@seaveyon/harness-switch-shared';
+import {
+  ERROR_CODES,
+  type FavoriteBackupEntry,
+  type FavoriteBackupPreview,
+} from '@seaveyon/harness-switch-shared';
 import { IAdapterRegistry } from '../src/services/adapters';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFavoriteBackupService } from '../src/services/favorite-backup';
@@ -113,4 +117,55 @@ test('tampered encrypted checkpoint is rejected before current files change', as
     ERROR_CODES.favoriteBackupInvalid,
   );
   expect(files.readOptional(env.files.favorites)).toBeUndefined();
+});
+
+test('restore preview identifies file effects without contents and rejects stale confirmation', async () => {
+  const app = await createTestApp();
+  const files = app.services.get(IFileService);
+  const env = app.services.get(IEnvironmentService);
+  const target = app.services.get(IAdapterRegistry).get('claude').targets()[0]!;
+  files.writeSecure(target.path, '{"apiKey":"fake-before"}');
+  const saved = app.services.get(IFavoriteBackupService).create();
+  files.writeSecure(target.path, '{"apiKey":"fake-after"}');
+  await app.postJson('/api/model-favorites', { name: 'new-favorite' });
+  const { data: preview } = await app.json<{ data: FavoriteBackupPreview }>(
+    `/api/model-favorites/backups/${saved.id}/preview`,
+  );
+  expect(preview.files.find((file) => file.path === target.path)?.action).toBe('replace');
+  expect(preview.files.find((file) => file.key === 'store/favorites')?.action).toBe('delete');
+  expect(preview.files.some((file) => file.action === 'unchanged')).toBe(true);
+  expect(JSON.stringify(preview)).not.toContain('fake-');
+  expect(files.readText(target.path)).toContain('fake-after');
+  files.writeSecure(target.path, '{"apiKey":"fake-newer"}');
+  await expectResponseError(
+    await app.post(`/api/model-favorites/backups/${saved.id}/restore`, {
+      fingerprint: preview.fingerprint,
+    }),
+    ERROR_CODES.favoriteBackupStale,
+  );
+  expect(files.readText(target.path)).toContain('fake-newer');
+  expect(files.readText(env.files.favorites)).toContain('new-favorite');
+  const fresh = app.services.get(IFavoriteBackupService).preview(saved.id);
+  await app.postJson(`/api/model-favorites/backups/${saved.id}/restore`, {
+    fingerprint: fresh.fingerprint,
+  });
+  expect(files.readText(target.path)).toContain('fake-before');
+  expect(files.readOptional(env.files.favorites)).toBeUndefined();
+});
+
+test('backup operation context is encrypted and older backups still list', async () => {
+  const app = await createTestApp();
+  const backups = app.services.get(IFavoriteBackupService);
+  const old = backups.create();
+  await app.postJson('/api/model-favorites', { name: 'descriptive-favorite' });
+  const entry = backups.list().find((item) => item.reason === 'change')!;
+  expect(entry.context).toEqual({ action: 'create', name: 'descriptive-favorite' });
+  expect(backups.list().find((item) => item.id === old.id)?.context).toBeUndefined();
+  const raw = app.services
+    .get(IFileService)
+    .readText(
+      join(app.services.get(IEnvironmentService).dataDir, 'favorite-backups', 'history.json'),
+    );
+  expect(raw).not.toContain('descriptive-favorite');
+  expect(backups.preview(old.id).files.some((file) => file.action === 'delete')).toBe(true);
 });

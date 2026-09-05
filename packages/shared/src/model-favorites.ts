@@ -275,8 +275,27 @@ export type FavoriteItemResult = {
   code?: string;
 };
 export type FavoriteOperation = { requestId: string; items: FavoriteItemResult[] };
+export const favoriteBackupContextSchema = z.object({
+  action: z.enum(['create', 'update', 'delete', 'capture', 'detach', 'apply', 'restore']),
+  name: z.string().optional(),
+  tools: z.array(z.enum(HARNESS_IDS)).optional(),
+});
+export type FavoriteBackupContext = z.infer<typeof favoriteBackupContextSchema>;
+export const favoriteRestoreRequestSchema = z.object({
+  fingerprint: z.string().optional(),
+});
 export type FavoriteBackupEntry = {
   id: string;
   createdAt: string;
   reason: 'manual' | 'change' | 'apply' | 'restore';
+  context?: FavoriteBackupContext;
+};
+export type FavoriteBackupPreview = {
+  id: string;
+  fingerprint: string;
+  files: Array<{
+    key: string;
+    path: string;
+    action: 'create' | 'replace' | 'delete' | 'unchanged';
+  }>;
 };

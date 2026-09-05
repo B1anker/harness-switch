@@ -360,7 +360,11 @@ export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
         throw failure(prepared.public.projection.blockers[0]!.code);
       }
     }
-    this.backups.create('apply');
+    this.backups.create('apply', {
+      action: 'apply',
+      name: this.favorites.get(plan.favoriteId).name,
+      tools: plan.items.map((item) => item.public.harness),
+    });
     const result: FavoriteOperation = { requestId, items: [] };
     for (const [index, prepared] of plan.items.entries()) {
       const item = prepared.public;

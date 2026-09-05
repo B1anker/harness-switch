@@ -1,5 +1,6 @@
 import type {
   FavoriteBackupEntry,
+  FavoriteBackupPreview,
   FavoriteInput,
   FavoriteOperation,
   FavoritePlan,
@@ -13,6 +14,7 @@ import type {
 import {
   api,
   favoriteApplyPath,
+  favoriteBackupPreviewPath,
   favoriteBackupsPath,
   favoritePath,
   favoritePlansPath,
@@ -37,9 +39,11 @@ export type FavoriteListItem = ModelFavorite & {
 };
 export type FavoriteSlice = {
   favoriteBackups: FavoriteBackupEntry[];
+  favoriteBackupPreview: FavoriteBackupPreview | null;
+  previewFavoriteBackup(id: string): Promise<void>;
   loadFavoriteBackups(): Promise<void>;
   createFavoriteBackup(): Promise<void>;
-  restoreFavoriteBackup(id: string): Promise<void>;
+  restoreFavoriteBackup(id: string, fingerprint: string): Promise<void>;
   favoriteTargets: Record<
     string,
     Array<{
@@ -73,6 +77,15 @@ export type FavoriteSlice = {
 };
 export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => ({
   favoriteBackups: [],
+  favoriteBackupPreview: null,
+  previewFavoriteBackup: async (id) => {
+    const user = get().currentUser;
+    set({ favoriteBackupPreview: null });
+    const result = await api<{ data: FavoriteBackupPreview }>(favoriteBackupPreviewPath(id));
+    if (user === get().currentUser) {
+      set({ favoriteBackupPreview: result.data });
+    }
+  },
   loadFavoriteBackups: async () => {
     const user = get().currentUser;
     const result = await api<{ data: FavoriteBackupEntry[] }>(favoriteBackupsPath());
@@ -84,14 +97,15 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => ({
     await api(favoriteBackupsPath(), { method: 'POST' });
     await get().loadFavoriteBackups();
   },
-  restoreFavoriteBackup: async (id) => {
+  restoreFavoriteBackup: async (id, fingerprint) => {
     const user = get().currentUser;
-    await api(favoriteBackupsPath(id), { method: 'POST' });
+    await api(favoriteBackupsPath(id), { method: 'POST', body: JSON.stringify({ fingerprint }) });
     if (user !== get().currentUser) {
       return;
     }
     set({
       favoritePlan: null,
+      favoriteBackupPreview: null,
       favoriteOperation: null,
       favoriteOperationHistory: [],
       favoriteTargets: {},
