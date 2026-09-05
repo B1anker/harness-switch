@@ -1,7 +1,16 @@
-import type { ErrorCode, HarnessId } from '@seaveyon/harness-switch-shared';
+import type {
+  CompletionProtocol,
+  ErrorCode,
+  FavoriteConnection,
+  FavoriteInput,
+  FavoriteProjection,
+  FieldSpec,
+  HarnessId,
+} from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES, HARNESS_LABELS } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { IEnvironmentService } from '../environment';
+import { extractFavorite, FAVORITE_SUPPORT, projectFavorite } from './favorites';
 import type { AdapterProfile } from './types';
 
 /** A profile value a harness cannot render without. */
@@ -27,11 +36,31 @@ const REQUIRED_PROSE: Record<RequiredValue, string> = {
  */
 export abstract class BaseAdapter {
   abstract readonly id: HarnessId;
+  abstract readonly fields: FieldSpec[];
+  completionProtocol(_profile: AdapterProfile): CompletionProtocol | undefined {
+    return undefined;
+  }
 
   /** Values this harness refuses to render without. Empty means nothing is mandatory. */
   protected readonly requires: readonly RequiredValue[] = [];
 
   constructor(protected readonly environment: IEnvironmentService) {}
+
+  get favoriteSupport() {
+    return FAVORITE_SUPPORT[this.id];
+  }
+
+  projectFavorite(
+    favorite: FavoriteInput,
+    connection: FavoriteConnection,
+    previous?: FavoriteProjection,
+  ) {
+    return projectFavorite(this, favorite, connection, previous);
+  }
+
+  extractFavorite(profile: AdapterProfile) {
+    return extractFavorite(this, profile);
+  }
 
   validate(profile: AdapterProfile): void {
     const harness = HARNESS_LABELS[this.id];

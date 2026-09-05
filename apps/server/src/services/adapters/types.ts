@@ -6,10 +6,12 @@ import type {
   ProfilePublic,
   TargetSpec,
 } from '@seaveyon/harness-switch-shared';
+import type { BaseAdapter } from './base';
 import type { DetectedProfile } from './detect';
 
 /** The profile values an adapter renders from. */
 export type AdapterProfile = {
+  favoriteManaged?: boolean;
   name: string;
   baseUrl: string;
   apiKey: string;
@@ -40,6 +42,9 @@ export type OfficialCapability = {
 };
 
 export interface HarnessAdapter {
+  readonly favoriteSupport: BaseAdapter['favoriteSupport'];
+  projectFavorite: BaseAdapter['projectFavorite'];
+  extractFavorite: BaseAdapter['extractFavorite'];
   readonly id: HarnessId;
   readonly mode: HarnessMode;
   /** Harness-specific form fields; core fields are handled by the caller. */

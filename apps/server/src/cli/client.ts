@@ -16,6 +16,12 @@ export type ApiErrorPayload = {
  */
 export class CliClient {
   private cookie = '';
+  session(): string {
+    return this.cookie;
+  }
+  useSession(cookie: string): void {
+    this.cookie = cookie;
+  }
 
   constructor(
     private readonly baseUrl: string,

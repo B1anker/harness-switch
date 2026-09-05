@@ -1,5 +1,6 @@
 import type { ErrorCode, LocalizedMessage, MessageParams } from './errors';
 import type { HarnessId } from './harnesses';
+import type { ModelFavoriteLink } from './model-favorites';
 
 /**
  * Response shapes live here. Request shapes live in `schemas.ts`, where the runtime
@@ -66,6 +67,7 @@ export type TargetSpec = {
 };
 
 export type ProfilePublic = {
+  modelFavorite?: ModelFavoriteLink;
   harness: HarnessId;
   name: string;
   baseUrl: string;
@@ -278,6 +280,9 @@ export type TransferExportPreview = {
 export type CodexAuthJsonEffect = 'none' | 'openai-api-key' | 'auth-override' | 'official-cleanup';
 
 export type TransferPreview = {
+  payloadVersion?: 1 | 2;
+  favoriteCount?: number;
+  unusedFavorites?: string[];
   exportedAt: string;
   profileCount: number;
   /** Number of Provider Vault entries bundled with the encrypted export. */
@@ -560,6 +565,8 @@ export type OperationState =
   | 'degraded';
 
 export type OperationKind =
+  | 'favorite-capture'
+  | 'favorite-apply'
   | 'activate'
   | 'activate-official'
   | 'revoke'
@@ -568,7 +575,7 @@ export type OperationKind =
   | 'sync';
 
 /** Store files an operation changed alongside the native config files. */
-export type OperationMetadataKey = 'profiles' | 'active' | 'vault';
+export type OperationMetadataKey = 'profiles' | 'active' | 'vault' | 'favorites';
 
 export type OperationFile = {
   key: string;
@@ -579,6 +586,16 @@ export type OperationFile = {
 
 /** The audit record and undo point for one complete business operation. */
 export type OperationReceipt = {
+  metadataGuardVersion?: 1;
+  favoriteResult?: { status: 'applied' | 'unchanged' | 'failed' | 'skipped'; code?: string };
+  favoriteRequest?: {
+    version: 1;
+    requestId: string;
+    planId: string;
+    item: number;
+    approvalHash: string;
+    targets?: Array<{ harness: HarnessId; profile: string }>;
+  };
   id: string;
   state: OperationState;
   kind: OperationKind;

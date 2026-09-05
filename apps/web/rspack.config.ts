@@ -19,10 +19,11 @@ export default defineConfig({
   lazyCompilation: false,
   devtool: isDev ? 'cheap-module-source-map' : false,
   output: {
-    path: path.resolve(rootDir, '../server/public'),
+    path: path.resolve(rootDir, isDev ? '../server/.dev-public' : '../server/public'),
     filename: 'assets/[name].[contenthash:8].js',
     cssFilename: 'assets/[name].[contenthash:8].css',
-    clean: true,
+    // Open tabs can still request an older lazy chunk after an incremental rebuild.
+    clean: !isDev,
     publicPath: '/',
   },
   resolve: {
@@ -78,7 +79,7 @@ export default defineConfig({
       patterns: [
         {
           from: path.resolve(rootDir, 'public'),
-          to: path.resolve(rootDir, '../server/public'),
+          to: '.',
         },
       ],
     }),
@@ -88,7 +89,7 @@ export default defineConfig({
     port: 5173,
     historyApiFallback: true,
     // `bun run dev` serves the UI from :8787 (the port people actually open / tunnel).
-    // Write compiled assets to apps/server/public so that process sees each rebuild.
+    // Keep development chunks separate from production builds, which clean their output.
     devMiddleware: {
       writeToDisk: true,
     },

@@ -70,7 +70,8 @@ describe('operation journal', () => {
     expect(receipt.kind).toBe('activate');
     expect(receipt.harness).toBe('claude');
     expect(receipt.profile).toBe('first');
-    expect(receipt.metadata).toEqual(['active']);
+    expect(receipt.metadata).toEqual(['active', 'profiles']);
+    expect(receipt.metadataGuardVersion).toBe(1);
     expect(receipt.files.map((file) => file.key)).toEqual(['settings']);
     expect(receipt.finishedAt).toBeTruthy();
   });

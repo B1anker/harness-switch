@@ -1,4 +1,5 @@
 import type { FieldSpec } from '@seaveyon/harness-switch-shared';
+import type { ReactNode } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { controlProps, FieldError, FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
@@ -46,7 +47,9 @@ export function ClaudeModelMappingFields({
   errors,
   modelOptions,
   onChange,
+  fetchAction,
 }: {
+  fetchAction?: ReactNode;
   fields: FieldSpec[];
   values: Record<string, string>;
   errors: ProfileFieldErrors;
@@ -69,12 +72,15 @@ export function ClaudeModelMappingFields({
       </div>
 
       <div
-        className={`hidden gap-3 px-1 text-xs font-medium text-muted-foreground md:grid ${CLAUDE_MAPPING_COLUMNS}`}
+        className={`grid items-center gap-3 px-1 text-xs font-medium text-muted-foreground ${CLAUDE_MAPPING_COLUMNS}`}
       >
-        <span>{t('profile.mapping.role')}</span>
-        <span>{t('profile.mapping.displayName')}</span>
-        <span>{t('profile.mapping.actualModel')}</span>
-        <span>{t('profile.mapping.oneM')}</span>
+        <span className="hidden md:block">{t('profile.mapping.role')}</span>
+        <span className="hidden md:block">{t('profile.mapping.displayName')}</span>
+        <span className="flex items-center justify-between gap-2">
+          {t('profile.mapping.actualModel')}
+          {fetchAction}
+        </span>
+        <span className="hidden md:block">{t('profile.mapping.oneM')}</span>
       </div>
 
       <div className="space-y-3">
@@ -180,7 +186,7 @@ function MappingCell({
       className="space-y-1.5"
     >
       {(control) =>
-        options.length > 0 ? (
+        modelOptions.length > 0 ? (
           <Select value={value} onValueChange={onChange}>
             <SelectTrigger {...control} aria-label={label}>
               <SelectValue placeholder={placeholder ?? placeholderText(t, field)} />

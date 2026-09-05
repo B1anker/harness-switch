@@ -3,11 +3,65 @@ import type {
   DoctorReport,
   DriftFileState,
   DriftSummary,
+  FavoritePlan,
+  FavoriteProjectionResult,
   FieldSpec,
   HarnessSummary,
   ProfilePublic,
   ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
+
+export function favoriteTargetFixture(favorite: FavoriteListItem) {
+  const connection = favorite.connections[0]!;
+  const projection: FavoriteProjectionResult = {
+    projectionVersion: 1,
+    projection: {
+      harness: 'pi',
+      model: connection.requestModelId,
+      providerId: connection.providerId,
+      providerEndpoint: connection.endpointKey,
+      extras: {},
+    },
+    ownedFields: [],
+    set: {},
+    remove: [],
+    notRepresented: [],
+    rendererDefaults: {},
+    warnings: [],
+    blockers: [],
+  };
+  return { harness: 'pi' as const, connections: [{ id: connection.id, projection }] };
+}
+
+import { createFavoriteRequestSchema, resolveFavorite } from '@seaveyon/harness-switch-shared';
+import type { FavoriteListItem } from '@/stores/slices/model-favorites';
+
+export function favoritePlanFixture(favorite: FavoriteListItem): FavoritePlan {
+  const connection = favorite.connections[0]!;
+  return {
+    id: '00000000-0000-4000-8000-000000000010',
+    expiresAt: '2026-09-05T00:10:00Z',
+    favoriteRevision: favorite.revision,
+    items: [
+      {
+        harness: 'pi',
+        connectionId: connection.id,
+        profile: favorite.name,
+        existing: false,
+        mode: 'save',
+        ignorePreference: false,
+        overwriteDiverged: false,
+        preservedFields: [],
+        liveState: 'inactive',
+        authMode: 'apiKey',
+        projection: favoriteTargetFixture(favorite).connections[0]!.projection,
+        resolved: resolveFavorite(favorite, connection),
+        diff: [{ field: 'model', before: null, after: connection.requestModelId }],
+        nativeFiles: [],
+      },
+    ],
+  };
+}
 
 /**
  * Mirrors the 1M flag spec the Claude adapter emits per model tier, including the catalog
@@ -170,5 +224,28 @@ export function doctorReportFixture(overrides: Partial<DoctorReport> = {}): Doct
       }),
     ],
     ...overrides,
+  };
+}
+
+export function favoriteFixture(name: string, model: string): FavoriteListItem {
+  return {
+    ...createFavoriteRequestSchema.parse({
+      name,
+      connections: [
+        {
+          id: '00000000-0000-4000-8000-000000000002',
+          label: 'route',
+          providerId: 'vault',
+          endpointKey: 'api',
+          protocol: 'openai-responses',
+          requestModelId: model,
+        },
+      ],
+    }),
+    id: '00000000-0000-4000-8000-000000000001',
+    revision: 1,
+    createdAt: '2026-09-05T00:00:00Z',
+    updatedAt: '2026-09-05T00:00:00Z',
+    references: [],
   };
 }

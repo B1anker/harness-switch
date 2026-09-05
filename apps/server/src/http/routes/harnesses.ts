@@ -1,6 +1,8 @@
 import type { ProbeResponse } from '@seaveyon/harness-switch-shared';
 import {
   createProfileRequestSchema,
+  FAVORITE_CODES,
+  favoriteDetachRequestSchema,
   probeStoredRequestSchema,
   updateProfileRequestSchema,
 } from '@seaveyon/harness-switch-shared';
@@ -8,6 +10,7 @@ import { Hono } from 'hono';
 import type { InstantiationService } from '../../di';
 import { IActivationService } from '../../services/activation';
 import { IHarnessService } from '../../services/harness';
+import { IModelFavoriteService } from '../../services/model-favorite';
 import { IProbeProfileService } from '../../services/probe-profile';
 import { IProfileService } from '../../services/profiles';
 import { IHarnessRegistry } from '../../services/registry';
@@ -21,6 +24,13 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   const profiles = services.get(IProfileService);
   const activation = services.get(IActivationService);
   const profileProbe = services.get(IProbeProfileService);
+  app.post('/:harnessId/profiles/:name/detach-favorite', async (c) => {
+    const body = await readJsonBody(c, favoriteDetachRequestSchema);
+    services
+      .get(IModelFavoriteService)
+      .detach(registry.require(param(c, 'harnessId')), param(c, 'name'), body.sourceFingerprint);
+    return c.json({ code: FAVORITE_CODES.result, data: { ok: true } });
+  });
 
   app.get('/', (c) => c.json(harnesses.overview()));
 

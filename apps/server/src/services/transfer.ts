@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
 import {
   type CodexAuthJsonEffect,
   ERROR_CODES,
   type ErrorCode,
+  favoriteStoreSchema,
   HARNESS_IDS,
   type HarnessId,
   type LocalizedMessage,
+  type ModelFavorite,
   portablePayloadSchema,
   type TransferConflictPolicy,
   type TransferEnvelope,
@@ -24,6 +27,7 @@ import { ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { ILiveWriteService, type PlannedWrite } from './live-write';
+import { IModelFavoriteStore } from './model-favorite-store';
 import type { ProfileStore, StoredProfile } from './profiles';
 import type { VaultStore } from './vault';
 import { IVaultService } from './vault';
@@ -44,6 +48,7 @@ type PortableProfile = PortablePayload['profiles'][number];
 type PortableActive = PortablePayload['active'][number];
 
 type ImportPlan = {
+  favorites: ModelFavorite[];
   store: ProfileStore;
   vault: VaultStore;
   imported: number;
@@ -56,7 +61,11 @@ type ImportPlan = {
 export interface ITransferService {
   readonly _serviceBrand: undefined;
   exportPreview(): TransferExportPreview;
-  exportAll(passphrase: string, includeCodexLoginCache?: boolean): TransferEnvelope;
+  exportAll(
+    passphrase: string,
+    includeCodexLoginCache?: boolean,
+    legacy?: boolean,
+  ): TransferEnvelope;
   preview(
     envelope: TransferEnvelope,
     passphrase: string,
@@ -83,6 +92,7 @@ export const ITransferService = createDecorator<ITransferService>('transferServi
   IAdapterRegistry,
   IActivationService,
   IVaultService,
+  IModelFavoriteStore,
 )
 export class TransferService implements ITransferService {
   declare readonly _serviceBrand: undefined;
@@ -96,13 +106,14 @@ export class TransferService implements ITransferService {
     private readonly adapters: IAdapterRegistry,
     private readonly activation: IActivationService,
     private readonly vault: IVaultService,
+    private readonly favorites: IModelFavoriteStore,
   ) {}
 
   exportPreview(): TransferExportPreview {
     return { codexLoginCacheAvailable: this.codexLoginCache.exists() };
   }
 
-  exportAll(passphrase: string, includeCodexLoginCache = true): TransferEnvelope {
+  exportAll(passphrase: string, includeCodexLoginCache = true, legacy = false): TransferEnvelope {
     this.assertPassphrase(passphrase);
     const codexLoginCache = includeCodexLoginCache
       ? this.codexLoginCache.readOptional()
@@ -120,6 +131,7 @@ export class TransferService implements ITransferService {
     for (const harness of HARNESS_IDS) {
       for (const [name, stored] of Object.entries(store[harness] ?? {})) {
         profiles.push({
+          ...(!legacy && stored.model_favorite ? { modelFavorite: stored.model_favorite } : {}),
           harness,
           name,
           baseUrl: stored.base_url || '',
@@ -152,7 +164,8 @@ export class TransferService implements ITransferService {
     return this.seal(
       {
         format: 'harness-switch-portable-config',
-        version: VERSION,
+        version: legacy ? 1 : 2,
+        ...(!legacy ? { favorites: this.favorites.list() } : {}),
         exportedAt: new Date().toISOString(),
         profiles,
         providers,
@@ -182,6 +195,18 @@ export class TransferService implements ITransferService {
     const targetCodexLoginCacheExists = this.codexLoginCache.exists();
     return {
       exportedAt: payload.exportedAt,
+      payloadVersion: payload.version,
+      favoriteCount: payload.favorites?.length ?? 0,
+      unusedFavorites: (payload.favorites ?? [])
+        .filter(
+          (favorite) =>
+            !payload.profiles.some(
+              (profile) =>
+                profile.modelFavorite?.favoriteId === favorite.id &&
+                !(conflictPolicy === 'skip' && existing[profile.harness]?.[profile.name]),
+            ),
+        )
+        .map((favorite) => favorite.name),
       profileCount: payload.profiles.length,
       providerCount: payload.providers?.length ?? 0,
       harnesses: HARNESS_IDS.map((harness) => ({
@@ -244,12 +269,16 @@ export class TransferService implements ITransferService {
         harness: 'codex',
         profile: '导入登录缓存',
         writes: cacheWrite,
-        metadata: ['profiles', 'vault'],
+        metadata: ['profiles', 'vault', 'favorites'],
       },
       () => {
         try {
           this.files.writeJson(vaultPath, plan.vault);
           this.files.writeJson(profilesPath, plan.store);
+          this.files.writeJson(
+            this.environment.files.favorites,
+            favoriteStoreSchema.parse({ schemaVersion: 1, favorites: plan.favorites }),
+          );
         } catch (error) {
           this.restore(vaultPath, vaultSnapshot);
           this.restore(profilesPath, profileSnapshot);
@@ -318,6 +347,54 @@ export class TransferService implements ITransferService {
   }
 
   private validatePayload(payload: PortablePayload): void {
+    if (
+      payload.version === 1 &&
+      (payload.favorites?.length || payload.profiles.some((profile) => profile.modelFavorite))
+    ) {
+      throw new HttpError(400, ERROR_CODES.favoriteStoreInvalid, {
+        code: ERROR_CODES.favoriteStoreInvalid,
+      });
+    }
+    const favorites = payload.favorites ?? [];
+    if (new Set(favorites.map((favorite) => favorite.id)).size !== favorites.length) {
+      throw new HttpError(400, ERROR_CODES.favoriteStoreInvalid, {
+        code: ERROR_CODES.favoriteStoreInvalid,
+      });
+    }
+    for (const favorite of favorites) {
+      for (const connection of favorite.connections) {
+        if (
+          !payload.providers?.some(
+            (provider) =>
+              provider.id === connection.providerId &&
+              provider.endpoints.some((endpoint) => endpoint.key === connection.endpointKey),
+          )
+        ) {
+          throw new HttpError(400, ERROR_CODES.favoriteEndpointMissing, {
+            code: ERROR_CODES.favoriteEndpointMissing,
+          });
+        }
+      }
+    }
+    for (const profile of payload.profiles) {
+      const link = profile.modelFavorite;
+      if (!link) {
+        continue;
+      }
+      const favorite = favorites.find((item) => item.id === link.favoriteId);
+      const connection = favorite?.connections.find((item) => item.id === link.connectionId);
+      if (
+        !connection ||
+        !payload.providers?.some((provider) => provider.id === link.baseline.providerId) ||
+        link.baseline.harness !== profile.harness ||
+        !profile.providerId ||
+        !payload.providers?.some((provider) => provider.id === profile.providerId)
+      ) {
+        throw new HttpError(400, ERROR_CODES.favoriteStoreInvalid, {
+          code: ERROR_CODES.favoriteStoreInvalid,
+        });
+      }
+    }
     const profileIds = new Set<string>();
     const providerIds = new Set<string>();
     for (const provider of payload.providers ?? []) {
@@ -408,6 +485,27 @@ export class TransferService implements ITransferService {
       providerMap.set(provider.id, targetId);
     }
 
+    const favorites = this.favorites.list();
+    const favoriteMap = new Map<string, string>();
+    const connectionMap = new Map<string, string>();
+    for (const favorite of payload.favorites ?? []) {
+      const id = randomUUID();
+      favoriteMap.set(favorite.id, id);
+      favorites.push({
+        ...favorite,
+        id,
+        connections: favorite.connections.map((connection) => {
+          const connectionId = randomUUID();
+          connectionMap.set(`${favorite.id}/${connection.id}`, connectionId);
+          return {
+            ...connection,
+            id: connectionId,
+            providerId: providerMap.get(connection.providerId)!,
+          };
+        }),
+      });
+    }
+    favoriteStoreSchema.parse({ schemaVersion: 1, favorites });
     for (const profile of selected) {
       store[profile.harness] ||= {};
       const exists = store[profile.harness]![profile.name] !== undefined;
@@ -416,6 +514,15 @@ export class TransferService implements ITransferService {
       if (mappedProvider) {
         store[profile.harness]![profile.name]!.provider_id = mappedProvider;
         store[profile.harness]![profile.name]!.provider_endpoint = profile.providerEndpoint;
+      }
+      if (profile.modelFavorite) {
+        const link = profile.modelFavorite;
+        store[profile.harness]![profile.name]!.model_favorite = {
+          ...link,
+          favoriteId: favoriteMap.get(link.favoriteId)!,
+          connectionId: connectionMap.get(`${link.favoriteId}/${link.connectionId}`)!,
+          baseline: { ...link.baseline, providerId: providerMap.get(link.baseline.providerId)! },
+        };
       }
       if (exists) {
         overwritten++;
@@ -427,6 +534,7 @@ export class TransferService implements ITransferService {
     return {
       store,
       vault,
+      favorites,
       imported,
       overwritten,
       skipped,

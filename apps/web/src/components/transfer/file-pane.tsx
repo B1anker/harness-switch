@@ -3,6 +3,7 @@ import { Download, FileLock2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { buildImportNotice, ImportReview } from '@/components/import-review';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, transferPath } from '@/lib/api';
@@ -30,6 +31,7 @@ export function FilePane({ onDone }: { onDone: () => void }) {
   const [exportPassphrase, setExportPassphrase] = useState('');
   const [exportConfirmation, setExportConfirmation] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [legacy, setLegacy] = useState(false);
   const [exportError, setExportError] = useState<MessageLine | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -68,7 +70,11 @@ export function FilePane({ onDone }: { onDone: () => void }) {
     try {
       const result = await api<TransferEnvelope>(transferPath.export, {
         method: 'POST',
-        body: JSON.stringify({ passphrase: exportPassphrase, includeCodexLoginCache: true }),
+        body: JSON.stringify({
+          passphrase: exportPassphrase,
+          includeCodexLoginCache: true,
+          ...(legacy ? { legacy: true } : {}),
+        }),
       });
       downloadEnvelope(result);
       setMessage(t('transfer.exported'));
@@ -139,6 +145,15 @@ export function FilePane({ onDone }: { onDone: () => void }) {
           <p className="text-sm leading-relaxed text-muted-foreground">
             {t('transfer.exportIntro')}
           </p>
+          <p className="text-sm text-muted-foreground">{t('favorites.exportVersion')}</p>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="legacy-export"
+              checked={legacy}
+              onCheckedChange={(value) => setLegacy(value === true)}
+            />
+            <Label htmlFor="legacy-export">{t('favorites.legacyExport')}</Label>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="export-passphrase">{t('transfer.passphrase')}</Label>

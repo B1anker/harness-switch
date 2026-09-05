@@ -31,12 +31,12 @@ function languageOf(path: string): BundledLanguageId | 'text' {
   return LANGUAGE_BY_EXTENSION[extension] ?? 'text';
 }
 
-function diffOptions(pageTheme: 'dark' | 'light') {
+function diffOptions(pageTheme: 'dark' | 'light', collapseUnchanged: boolean) {
   return {
     // Single column with per-line markers so each change reads top to bottom.
     diffStyle: 'unified' as const,
     overflow: 'wrap' as const,
-    expandUnchanged: true,
+    expandUnchanged: !collapseUnchanged,
     stickyHeader: true,
     // Match whatever mode the surrounding page is currently rendered in.
     themeType: pageTheme,
@@ -44,7 +44,13 @@ function diffOptions(pageTheme: 'dark' | 'light') {
   };
 }
 
-export function PierreFileDiff({ file }: { file: BackupFileDetail }) {
+export function PierreFileDiff({
+  file,
+  collapseUnchanged = false,
+}: {
+  file: BackupFileDetail;
+  collapseUnchanged?: boolean;
+}) {
   const { t } = useTranslation();
   const pageTheme = usePageTheme();
 
@@ -60,7 +66,7 @@ export function PierreFileDiff({ file }: { file: BackupFileDetail }) {
         disableWorkerPool
         oldFile={oldFile}
         newFile={newFile}
-        options={diffOptions(pageTheme)}
+        options={diffOptions(pageTheme, collapseUnchanged)}
       />
     );
   }
@@ -70,7 +76,7 @@ export function PierreFileDiff({ file }: { file: BackupFileDetail }) {
         disableWorkerPool
         oldFile={oldFile}
         newFile={null}
-        options={diffOptions(pageTheme)}
+        options={diffOptions(pageTheme, collapseUnchanged)}
       />
     );
   }
@@ -80,7 +86,7 @@ export function PierreFileDiff({ file }: { file: BackupFileDetail }) {
         disableWorkerPool
         oldFile={null}
         newFile={newFile}
-        options={diffOptions(pageTheme)}
+        options={diffOptions(pageTheme, collapseUnchanged)}
       />
     );
   }

@@ -7,6 +7,30 @@
  * know yet. Renaming a code is a breaking change; add a new one instead.
  */
 export const ERROR_CODES = {
+  favoriteNotFound: 'favoriteNotFound',
+  favoriteRevisionRequired: 'favoriteRevisionRequired',
+  favoriteRevisionConflict: 'favoriteRevisionConflict',
+  favoriteInUse: 'favoriteInUse',
+  favoriteConnectionInUse: 'favoriteConnectionInUse',
+  favoriteEndpointMissing: 'favoriteEndpointMissing',
+  favoriteProtocolUnsupported: 'favoriteProtocolUnsupported',
+  favoriteProjectionUnsupported: 'favoriteProjectionUnsupported',
+  favoriteProfileDiverged: 'favoriteProfileDiverged',
+  favoriteRawOverrideConflict: 'favoriteRawOverrideConflict',
+  favoriteActiveUpdateRequiresApply: 'favoriteActiveUpdateRequiresApply',
+  favoritePlanStale: 'favoritePlanStale',
+  favoritePlanExpired: 'favoritePlanExpired',
+  favoriteIdempotencyConflict: 'favoriteIdempotencyConflict',
+  favoriteUndoConflict: 'favoriteUndoConflict',
+  favoritePreferenceNotRepresented: 'favoritePreferenceNotRepresented',
+  favoriteEffortUnverified: 'favoriteEffortUnverified',
+  favoriteStoreInvalid: 'favoriteStoreInvalid',
+  favoriteBackupInvalid: 'favoriteBackupInvalid',
+  favoriteBackupStale: 'favoriteBackupStale',
+  favoriteBackupRecoveryFailed: 'favoriteBackupRecoveryFailed',
+  favoriteLimitReached: 'favoriteLimitReached',
+  favoriteCredentialConsentRequired: 'favoriteCredentialConsentRequired',
+
   /* Transport and session */
   requestFailed: 'http.requestFailed',
   invalidRequest: 'http.invalidRequest',
@@ -288,7 +312,8 @@ export function catalogKey(code: string): string {
   return DIRECT_NAMESPACES.some((namespace) => code.startsWith(namespace)) ? code : `error.${code}`;
 }
 
-const DIRECT_NAMESPACES = ['warning.', 'doctor.check.', 'scan.note.'] as const;
+export const FAVORITE_CODES = { result: 'favorite.result' } as const;
+const DIRECT_NAMESPACES = ['warning.', 'doctor.check.', 'scan.note.', 'favorite.'] as const;
 
 /**
  * Whether a string is one of the codes this contract defines.
@@ -304,6 +329,7 @@ export function isMessageCode(value: unknown): value is string {
 const MESSAGE_CODES: ReadonlySet<string> = new Set(
   [
     ERROR_CODES,
+    FAVORITE_CODES,
     WARNING_CODES,
     DOCTOR_CODES,
     SCAN_NOTE_CODES,

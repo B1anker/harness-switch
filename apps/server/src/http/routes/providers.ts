@@ -61,7 +61,7 @@ export function createProviderRoutes(services: InstantiationService): Hono {
   });
 
   app.delete('/:id', (c) => {
-    vault.remove(param(c, 'id'));
+    providers.remove(param(c, 'id'));
     return c.json({ ok: true });
   });
 
