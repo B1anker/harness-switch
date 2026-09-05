@@ -1,24 +1,28 @@
 import type { HarnessId } from '@seaveyon/harness-switch-shared';
 import { ArrowRight, History, Plus, Settings2, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { HarnessIcon } from '@/components/harness-icon';
+import { HarnessTabs } from '@/components/harness-tabs';
 import { CaptureFavorite } from '@/components/model-favorites/capture';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CreatableCombobox } from '@/components/ui/creatable-combobox';
 import { FormField } from '@/components/ui/form-field';
-import { TabList, TabPanel } from '@/components/ui/tabs';
+import { TabPanel } from '@/components/ui/tabs';
 import { useI18n, useTranslation } from '@/lib/i18n';
 import { lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 import { SwitchPanel } from './switch-panel';
 
 export function Workspace({
+  selectedHarnessId,
+  onSelectHarness,
   onConfigure,
   onFavorites,
   onHistory,
 }: {
+  selectedHarnessId: HarnessId;
+  onSelectHarness(id: HarnessId): void;
   onConfigure(id: HarnessId): void;
   onFavorites(): void;
   onHistory(): void;
@@ -33,7 +37,6 @@ export function Workspace({
   const loadProviders = useAppStore((state) => state.loadProviders);
   const loadHistory = useAppStore((state) => state.loadFavoriteBackups);
   const backups = useAppStore((state) => state.favoriteBackups);
-  const [selected, setSelected] = useState<HarnessId>('claude');
   const [choices, setChoices] = useState<Partial<Record<HarnessId, string>>>({});
   const [editing, setEditing] = useState(false);
   const [capturing, setCapturing] = useState<{ harness: HarnessId; name: string } | null>(null);
@@ -42,7 +45,7 @@ export function Workspace({
     void loadProviders();
     void loadHistory().catch(() => {});
   }, [load, loadProviders, loadHistory]);
-  const harness = harnesses.find((entry) => entry.id === selected) ?? harnesses[0];
+  const harness = harnesses.find((entry) => entry.id === selectedHarnessId) ?? harnesses[0];
   const linked = harness?.profiles.find(
     (profile) => !harness.active?.official && profile.name === harness.active?.name,
   )?.modelFavorite?.favoriteId;
@@ -59,51 +62,26 @@ export function Workspace({
       profile.name !== harness.official?.linkedProfileName,
   );
   return (
-    <main className="workspace-page space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="workspace-eyebrow">{t('workspace.eyebrow')}</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-            {t('workspace.title')}
-          </h2>
-          <p className="mt-3 text-sm text-muted-foreground">{t('workspace.subtitle')}</p>
+    <main className="grid xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <HarnessTabs harnesses={harnesses} value={harness?.id} onChange={onSelectHarness} />
+      <div className="min-w-0 space-y-6 p-4 sm:p-6 xl:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="workspace-eyebrow">{t('workspace.eyebrow')}</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+              {t('workspace.title')}
+            </h2>
+            <p className="mt-3 text-sm text-muted-foreground">{t('workspace.subtitle')}</p>
+          </div>
+          <Button variant="outline" onClick={onFavorites}>
+            <Star />
+            {t('workspace.manageFavorites')}
+          </Button>
         </div>
-        <Button variant="outline" onClick={onFavorites}>
-          <Star />
-          {t('workspace.manageFavorites')}
-        </Button>
-      </div>
-      {error ? <Alert>{lineText(t, error)}</Alert> : null}
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(240px,0.8fr)_minmax(0,1.7fr)]">
-        <TabList
-          label={t('nav.switchHarness')}
-          idPrefix="workspace-tool"
-          orientation="vertical"
-          items={harnesses}
-          value={harness?.id}
-          onChange={setSelected}
-          className="flex flex-col gap-2"
-          tabClassName="workspace-tool gap-4 px-5 py-5"
-        >
-          {(entry) => (
-            <>
-              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl border bg-card">
-                <HarnessIcon id={entry.id} className="size-7" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-base font-semibold">{entry.label}</span>
-                <span className="mt-1 block truncate font-mono text-xs text-muted-foreground">
-                  {entry.active?.model ||
-                    t(entry.active?.official ? 'harness.official' : 'harness.currentInactive')}
-                </span>
-              </span>
-              <ArrowRight className="size-4 shrink-0" />
-            </>
-          )}
-        </TabList>
+        {error ? <Alert>{lineText(t, error)}</Alert> : null}
         {harness ? (
           <TabPanel
-            idPrefix="workspace-tool"
+            idPrefix="harness"
             value={harness.id}
             className="workspace-surface min-w-0 space-y-6 p-5 sm:p-7"
           >
@@ -192,30 +170,30 @@ export function Workspace({
         ) : (
           <p>{t('workspace.noTools')}</p>
         )}
-      </div>
-      <button
-        type="button"
-        onClick={onHistory}
-        className="workspace-history-link group flex w-full flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card/60 p-5 text-left focus-visible:outline-2 focus-visible:outline-ring"
-      >
-        <span className="flex items-center gap-4">
-          <History className="size-6 shrink-0 text-primary" />
-          <span>
-            <span className="block text-sm font-semibold">{t('timeline.title')}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">
-              {backups[0]
-                ? t('workspace.lastBackup', {
-                    time: new Date(backups[0].createdAt).toLocaleString(locale),
-                  })
-                : t('workspace.historyHint')}
+        <button
+          type="button"
+          onClick={onHistory}
+          className="workspace-history-link group flex w-full flex-wrap items-center justify-between gap-4 rounded-2xl border bg-card/60 p-5 text-left focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          <span className="flex items-center gap-4">
+            <History className="size-6 shrink-0 text-primary" />
+            <span>
+              <span className="block text-sm font-semibold">{t('timeline.title')}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {backups[0]
+                  ? t('workspace.lastBackup', {
+                      time: new Date(backups[0].createdAt).toLocaleString(locale),
+                    })
+                  : t('workspace.historyHint')}
+              </span>
             </span>
           </span>
-        </span>
-        <span className="flex items-center gap-2 text-sm font-medium text-primary">
-          {t('workspace.openHistory')}
-          <ArrowRight className="size-4 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />
-        </span>
-      </button>
+          <span className="flex items-center gap-2 text-sm font-medium text-primary">
+            {t('workspace.openHistory')}
+            <ArrowRight className="size-4 transition-transform group-hover:translate-x-1 motion-reduce:transform-none" />
+          </span>
+        </button>
+      </div>
       {editing ? <FavoriteEditor onClose={() => setEditing(false)} /> : null}
       {capturing ? (
         <CaptureFavorite initialSource={capturing} onClose={() => setCapturing(null)} />

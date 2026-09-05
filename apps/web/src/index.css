@@ -119,16 +119,6 @@
   background: var(--card);
   box-shadow: 0 14px 48px -36px color-mix(in srgb, var(--primary) 45%, transparent);
 }
-.workspace-tool {
-  border: 1px solid transparent;
-  background-color: color-mix(in srgb, var(--card) 65%, transparent);
-}
-.workspace-tool[aria-selected="true"] {
-  border-color: color-mix(in srgb, var(--primary) 55%, transparent);
-  box-shadow:
-    inset 3px 0 var(--primary),
-    0 0 24px -16px var(--primary);
-}
 .configuration-path {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.3fr) 24px minmax(0, 1fr);
@@ -291,7 +281,6 @@
   .snapshot-front {
     animation: none;
   }
-  .workspace-tool,
   .timeline-point {
     transition: none;
   }

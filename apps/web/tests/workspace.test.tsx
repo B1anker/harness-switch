@@ -35,7 +35,15 @@ test('first-use capture starts from the selected tool and preserves explicit cre
     'loadFavoriteBackups',
     'captureFavorite',
   ]);
-  renderWithI18n(<Workspace onConfigure={() => {}} onFavorites={() => {}} onHistory={() => {}} />);
+  renderWithI18n(
+    <Workspace
+      selectedHarnessId="pi"
+      onSelectHarness={() => {}}
+      onConfigure={() => {}}
+      onFavorites={() => {}}
+      onHistory={() => {}}
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: '从已有配置收藏' }));
   expect(screen.getByLabelText('收藏名称')).toHaveValue('current-profile');
   expect(screen.getByRole('combobox', { name: '从已有配置收藏' })).toHaveTextContent(
@@ -66,7 +74,15 @@ test('workspace previews one selected tool directly and applies only after confi
     'loadFavoriteTargets',
     'applyFavorite',
   ]);
-  renderWithI18n(<Workspace onConfigure={() => {}} onFavorites={() => {}} onHistory={() => {}} />);
+  renderWithI18n(
+    <Workspace
+      selectedHarnessId="pi"
+      onSelectHarness={() => {}}
+      onConfigure={() => {}}
+      onFavorites={() => {}}
+      onHistory={() => {}}
+    />,
+  );
   await waitFor(() => expect(screen.getByRole('button', { name: '预览切换' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '预览切换' }));
   await waitFor(() =>
@@ -100,7 +116,15 @@ test('ambiguous channels require an explicit choice instead of silently switchin
     'loadFavoriteTargets',
     'planFavorite',
   ]);
-  renderWithI18n(<Workspace onConfigure={() => {}} onFavorites={() => {}} onHistory={() => {}} />);
+  renderWithI18n(
+    <Workspace
+      selectedHarnessId="pi"
+      onSelectHarness={() => {}}
+      onConfigure={() => {}}
+      onFavorites={() => {}}
+      onHistory={() => {}}
+    />,
+  );
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: '选择渠道' })).toBeInTheDocument(),
   );

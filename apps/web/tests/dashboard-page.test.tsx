@@ -91,6 +91,13 @@ test('switches the visible harness with the app tabs', () => {
   expect(
     within(screen.getByRole('tabpanel', { name: /Codex/ })).queryByText('claude-main'),
   ).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: '返回工作台' }));
+  expect(screen.getByRole('tab', { name: /Codex/ })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: /Claude Code/ })).toHaveAttribute(
+    'aria-selected',
+    'false',
+  );
 });
 
 test('the header opens the vault dialog', () => {
