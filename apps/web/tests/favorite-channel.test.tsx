@@ -24,7 +24,7 @@ test('one model picker searches the catalog and saves the exact selected ID', as
   });
   fireEvent.click(await screen.findByRole('option', { name: 'Vendor/Model:Exact' }));
   expect(screen.getByRole('combobox', { name: '模型' })).toHaveTextContent('Vendor/Model:Exact');
-  fireEvent.click(screen.getByRole('button', { name: '保存收藏' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
   await waitFor(() => expect(actions.saveFavorite).toHaveLength(1));
   expect(actions.saveFavorite[0]![0]).toMatchObject({
     connections: [{ requestModelId: 'Vendor/Model:Exact' }],
@@ -47,7 +47,7 @@ test('a custom ID can be entered without a catalog using the keyboard', async ()
   );
   fireEvent.keyDown(search, { key: 'Enter', code: 'Enter', keyCode: 13 });
   expect(screen.getByRole('combobox', { name: '模型' })).toHaveTextContent('Private/Custom:V2');
-  fireEvent.click(screen.getByRole('button', { name: '保存收藏' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
   await waitFor(() => expect(actions.saveFavorite).toHaveLength(1));
   expect(actions.saveFavorite[0]![0]).toMatchObject({
     connections: [{ requestModelId: 'Private/Custom:V2' }],

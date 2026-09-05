@@ -85,16 +85,14 @@ test('unified configuration workspace previews a selected favorite as an uncommi
   );
   fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));
   expect(screen.queryByRole('button', { name: '预览切换' })).toBeNull();
-  fireEvent.click(screen.getByRole('combobox', { name: '选择模板' }));
   fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: '预览切换' })).toBeEnabled());
-  expect(screen.getByText('当前与新链路')).toBeInTheDocument();
+  await screen.findByRole('dialog');
+  expect(screen.getByRole('tab', { name: '当前与新链路' })).toBeInTheDocument();
   expect(screen.getByText('新链路')).toBeInTheDocument();
   expect(
     screen.getByText('这是 Pi 的预览目标，尚未写入；其他工具保持各自当前配置。'),
   ).toBeInTheDocument();
   expect(screen.getByText('gpt-5.6-terra')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '预览切换' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: '确认保存并切换 1 个工具' })).toBeEnabled(),
   );
@@ -134,15 +132,13 @@ test('ambiguous channels require an explicit choice instead of silently switchin
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));
-  fireEvent.click(screen.getByRole('combobox', { name: '选择模板' }));
   fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: '选择渠道' })).toBeInTheDocument(),
   );
-  expect(screen.getByRole('button', { name: '预览切换' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '确认保存并切换 0 个工具' })).toBeDisabled();
   fireEvent.click(screen.getByRole('combobox', { name: '选择渠道' }));
   fireEvent.click(screen.getByRole('option', { name: 'alternate · model' }));
-  fireEvent.click(screen.getByRole('button', { name: '预览切换' }));
   await waitFor(() => expect(actions.planFavorite).toHaveLength(1));
   expect(actions.planFavorite[0]![0]).toMatchObject({
     items: [{ harness: 'pi', connectionId: favorite.connections[1]!.id, mode: 'activate' }],

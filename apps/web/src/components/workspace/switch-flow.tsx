@@ -34,9 +34,16 @@ export function SwitchFlow({
     if (!canvas) {
       return;
     }
-    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    let frame = 0;
+    const observer = new ResizeObserver(([entry]) => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setWidth(entry.contentRect.width));
+    });
     observer.observe(canvas);
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, []);
   const zoom = Math.min(1, width / 820);
   const offsetX = 0;
@@ -68,7 +75,7 @@ export function SwitchFlow({
       type: 'route',
       position: { x: 24, y: 154 },
       data: {
-        label: t('templates.tag'),
+        label: candidate.sourceLabel ?? t('templates.tag'),
         value: candidate.provider,
         kind: 'source',
         lane: 'next',
@@ -125,9 +132,11 @@ export function SwitchFlow({
           </span>
         </div>
         <ReactFlow
+          width={width}
+          height={250 * zoom}
           viewport={{ x: offsetX, y: 0, zoom }}
           minZoom={0.1}
-          nodes={nodes}
+          nodes={nodes.map((node) => ({ ...node, width: 190, height: 66 }))}
           edges={edges}
           nodeTypes={nodeTypes}
           nodesDraggable={false}

@@ -2,14 +2,13 @@ import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-sha
 import { Check, Plus, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ActivateDialog } from '@/components/activate-dialog';
+import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CreatableCombobox } from '@/components/ui/creatable-combobox';
-import { FormField } from '@/components/ui/form-field';
 import { useTranslation } from '@/lib/i18n';
 import { lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
-import { SwitchPanel } from './switch-panel';
 
 export function ConfigurationSwitcher({
   harness,
@@ -27,7 +26,6 @@ export function ConfigurationSwitcher({
   const load = useAppStore((state) => state.loadFavorites);
   const loadProviders = useAppStore((state) => state.loadProviders);
   const [templateId, setTemplateId] = useState('');
-  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [activating, setActivating] = useState<ProfilePublic | null>(null);
   useEffect(() => {
     void load();
@@ -54,10 +52,24 @@ export function ConfigurationSwitcher({
             <Plus />
             {t('workspace.newConfiguration')}
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setTemplatePickerOpen(true)}>
-            <Sparkles />
-            {t('workspace.newFromTemplate')}
-          </Button>
+          <CreatableCombobox
+            id="switcher-template"
+            aria-invalid={undefined}
+            aria-describedby={undefined}
+            value=""
+            options={(favorites ?? []).map((entry) => entry.id)}
+            getLabel={(id) => favorites?.find((entry) => entry.id === id)?.name ?? id}
+            onChange={setTemplateId}
+            placeholder={t('workspace.chooseTemplate')}
+            searchLabel={t('favorites.search')}
+            emptyHint={t(loading ? 'favorites.loading' : 'workspace.noTemplates')}
+            trigger={
+              <Button variant="outline" size="sm">
+                <Sparkles />
+                {t('workspace.newFromTemplate')}
+              </Button>
+            }
+          />
         </div>
       </div>
       {error ? <Alert>{lineText(t, error)}</Alert> : null}
@@ -108,48 +120,15 @@ export function ConfigurationSwitcher({
           </div>
         )}
       </div>
-      {templatePickerOpen && loading && !favorites ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          {t('favorites.loading')}
-        </p>
-      ) : templatePickerOpen && favorites?.length ? (
-        <div className="space-y-6">
-          <FormField id="switcher-template" label={t('workspace.chooseTemplate')}>
-            {(control) => (
-              <CreatableCombobox
-                {...control}
-                value={template?.id ?? ''}
-                options={favorites.map((entry) => entry.id)}
-                getLabel={(id) => favorites.find((entry) => entry.id === id)?.name ?? id}
-                onChange={setTemplateId}
-                placeholder={t('workspace.pickTemplate')}
-                searchLabel={t('favorites.search')}
-                emptyHint={t('workspace.noMatches')}
-              />
-            )}
-          </FormField>
-          {template ? (
-            <SwitchPanel
-              key={template.id + '/' + template.revision}
-              favorite={template}
-              harness={harness}
-              onApplied={() => {
-                setTemplateId('');
-                setTemplatePickerOpen(false);
-              }}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">{t('workspace.pickTemplateHint')}</p>
-          )}
-        </div>
-      ) : templatePickerOpen ? (
-        <div className="rounded-xl border border-dashed p-6">
-          <p className="text-sm text-muted-foreground">{t('workspace.noTemplates')}</p>
-          <Button variant="link" className="mt-2 px-0" onClick={() => onOpenTemplate('')}>
-            <Sparkles />
-            {t('workspace.manageTemplates')}
-          </Button>
-        </div>
+      {template ? (
+        <ModelFavoriteApplyDialog
+          key={template.id}
+          favorite={template}
+          quickHarness={harness}
+          initialMode="activate"
+          initialPreview
+          onClose={() => setTemplateId('')}
+        />
       ) : null}
       {activating ? (
         <ActivateDialog

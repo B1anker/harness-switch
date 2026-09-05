@@ -1,6 +1,7 @@
 import {
   type FavoritePlanRequest,
   type HarnessId,
+  type HarnessSummary,
   type ModelFavorite,
 } from '@seaveyon/harness-switch-shared';
 import { ArrowLeft, ArrowRight, Check, Loader2, ShieldCheck } from 'lucide-react';
@@ -15,11 +16,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { compatibleConnections, favoriteSelection } from '@/lib/favorite-selection';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { PreviewTabs } from './preview-tabs';
+import { QuickPreview } from './quick-preview';
 import { ToolSelection } from './tool-selection';
 
 export function ModelFavoriteApplyDialog({
@@ -29,6 +32,7 @@ export function ModelFavoriteApplyDialog({
   initialMode = 'save',
   initialPreview = false,
   onApplied,
+  quickHarness,
 }: {
   favorite: ModelFavorite;
   onClose(): void;
@@ -36,6 +40,7 @@ export function ModelFavoriteApplyDialog({
   initialMode?: 'save' | 'activate';
   initialPreview?: boolean;
   onApplied?(): void;
+  quickHarness?: HarnessSummary;
 }) {
   const { t } = useTranslation();
   const plan = useAppStore((state) => state.favoritePlan);
@@ -52,14 +57,61 @@ export function ModelFavoriteApplyDialog({
   const [step, setStep] = useState<0 | 1>(initialPreview ? 1 : 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [reviewTab, setReviewTab] = useState('route');
+  const [channel, setChannel] = useState('');
+  const [quickReady, setQuickReady] = useState(false);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const connections = quickHarness ? compatibleConnections(favorite, quickHarness.id, targets) : [];
+  const selectedChannel =
+    channel ||
+    (quickHarness
+      ? favoriteSelection(favorite, quickHarness, targets, 'activate').connectionId
+      : '');
+  const connection = connections.find((entry) => entry.id === selectedChannel);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const title = useRef<HTMLHeadingElement>(null);
+  const applying = useRef(false);
   useEffect(() => {
     void loadTargets(favorite.id).catch((cause) => setError(lineText(t, errorLine(cause))));
   }, [favorite.id, loadTargets, t]);
   useEffect(() => {
     title.current?.focus({ preventScroll: true });
   }, [step]);
+  useEffect(() => {
+    if (!quickHarness || !selectedChannel || applying.current) {
+      return;
+    }
+    let active = true;
+    clear();
+    setQuickReady(false);
+    setError('');
+    const selection = [
+      {
+        ...favoriteSelection(favorite, quickHarness, targets, 'activate'),
+        connectionId: selectedChannel,
+      },
+    ];
+    setItems(selection);
+    setRequestId(crypto.randomUUID());
+    void makePlan({
+      favoriteId: favorite.id,
+      expectedRevision: favorite.revision,
+      items: selection,
+    })
+      .then(() => {
+        if (active) {
+          setQuickReady(true);
+        }
+      })
+      .catch((cause) => {
+        if (active) {
+          setError(lineText(t, errorLine(cause)));
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [quickHarness, selectedChannel, favorite, targets, clear, makePlan, t, previewAttempt]);
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -74,11 +126,14 @@ export function ModelFavoriteApplyDialog({
     }
   };
   const applyAndClose = async () => {
+    applying.current = true;
     const succeeded = await run(() => apply(requestId));
     if (succeeded) {
       clear();
       onApplied?.();
       onClose();
+    } else {
+      applying.current = false;
     }
   };
   const change = (harness: HarnessId, patch: Partial<FavoritePlanRequest['items'][number]>) => {
@@ -108,34 +163,36 @@ export function ModelFavoriteApplyDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && close()}>
       <DialogContent
-        className="flex h-[min(820px,92dvh)] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+        className="flex h-[min(720px,90dvh)] max-w-4xl flex-col gap-0 overflow-hidden p-0 data-[state=open]:animate-none data-[state=closed]:animate-none"
         onEscapeKeyDown={(event) => busy && event.preventDefault()}
       >
         <DialogHeader className="shrink-0 border-b px-6 pb-5 pt-6 text-left sm:px-8">
-          <div
-            className="mb-4 flex items-center gap-2 pr-8 text-xs font-medium text-muted-foreground"
-            aria-label={t('favorites.workflow')}
-          >
-            <span
-              className={cn('flex items-center gap-2', step === 0 && 'text-primary')}
-              aria-current={step === 0 ? 'step' : undefined}
+          {!quickHarness ? (
+            <div
+              className="mb-4 flex items-center gap-2 pr-8 text-xs font-medium text-muted-foreground"
+              aria-label={t('favorites.workflow')}
             >
-              <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary">
-                {step === 1 ? <Check className="size-3.5" /> : '1'}
+              <span
+                className={cn('flex items-center gap-2', step === 0 && 'text-primary')}
+                aria-current={step === 0 ? 'step' : undefined}
+              >
+                <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  {step === 1 ? <Check className="size-3.5" /> : '1'}
+                </span>
+                {t('favorites.chooseTools')}
               </span>
-              {t('favorites.chooseTools')}
-            </span>
-            <span className="h-px w-8 bg-border" />
-            <span
-              className={cn('flex items-center gap-2', step === 1 && 'text-primary')}
-              aria-current={step === 1 ? 'step' : undefined}
-            >
-              <span className="flex size-6 items-center justify-center rounded-full bg-muted">
-                2
+              <span className="h-px w-8 bg-border" />
+              <span
+                className={cn('flex items-center gap-2', step === 1 && 'text-primary')}
+                aria-current={step === 1 ? 'step' : undefined}
+              >
+                <span className="flex size-6 items-center justify-center rounded-full bg-muted">
+                  2
+                </span>
+                {t('favorites.reviewChanges')}
               </span>
-              {t('favorites.reviewChanges')}
-            </span>
-          </div>
+            </div>
+          ) : null}
           <DialogTitle ref={title} tabIndex={-1} className="text-xl outline-none">
             {t(step === 0 ? 'favorites.configure' : 'favorites.reviewChanges')}
           </DialogTitle>
@@ -193,10 +250,24 @@ export function ModelFavoriteApplyDialog({
             <section
               aria-label={t('favorites.reviewChanges')}
               aria-hidden={step !== 1}
-              inert={step !== 1}
+              inert={step !== 1 || busy}
               className="flex h-full w-1/2 shrink-0 flex-col gap-4 overflow-hidden bg-muted/20 p-6 sm:px-8"
             >
-              {plan ? (
+              {quickHarness ? (
+                <QuickPreview
+                  connections={connections}
+                  connection={connection}
+                  selectedChannel={selectedChannel}
+                  setChannel={setChannel}
+                  targetsLoaded={!!targets}
+                  reviewTab={reviewTab}
+                  setReviewTab={setReviewTab}
+                  quickHarness={quickHarness}
+                  templateName={favorite.name}
+                  quickReady={quickReady}
+                  plan={plan}
+                />
+              ) : plan ? (
                 <>
                   <p className="shrink-0 text-sm font-medium">
                     {t('favorites.batchSummary', {
@@ -223,12 +294,25 @@ export function ModelFavoriteApplyDialog({
           </div>
         </div>
         <div className="shrink-0 space-y-3 border-t bg-card px-6 py-4 sm:px-8">
-          {error ? <Alert>{error}</Alert> : null}
+          {error ? (
+            <Alert>
+              {error}
+              {quickHarness && !quickReady ? (
+                <Button variant="link" onClick={() => setPreviewAttempt((value) => value + 1)}>
+                  {t('activate.retryPreview')}
+                </Button>
+              ) : null}
+            </Alert>
+          ) : null}
           {step === 1 && blocked ? (
             <Alert variant="warning">{t('favorites.resolveBeforeApply')}</Alert>
           ) : null}
           <div className="flex items-center justify-between gap-3">
-            {step === 0 ? (
+            {quickHarness ? (
+              <Button variant="outline" disabled={busy} onClick={close}>
+                {t('common.cancel')}
+              </Button>
+            ) : step === 0 ? (
               <p className="text-xs text-muted-foreground">
                 {t('favorites.selectedCount', { count: items.length })}
               </p>
@@ -280,7 +364,9 @@ export function ModelFavoriteApplyDialog({
               </Button>
             ) : (
               <Button
-                disabled={busy || !plan || !!operation || blocked}
+                disabled={
+                  busy || !plan || !!operation || blocked || (!!quickHarness && !quickReady)
+                }
                 onClick={() => void applyAndClose()}
               >
                 {busy ? <Loader2 className="animate-spin" /> : <Check />}

@@ -1180,6 +1180,7 @@
     "tag": "Template"
   },
   "workspace": {
+    "fileDiffTab": "File changes",
     "navigation": "Main navigation",
     "breadcrumb": "Breadcrumb",
     "nav": {

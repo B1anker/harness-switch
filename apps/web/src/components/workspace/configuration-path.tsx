@@ -154,7 +154,7 @@ function PathNode({
   );
 }
 
-function currentPath(
+export function currentPath(
   harness: HarnessSummary,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): Path {

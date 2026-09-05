@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover';
 import { Command } from 'cmdk';
 import { Check, ChevronsUpDown, Plus, Search } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { FieldControlProps } from '@/components/ui/form-field';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ export function CreatableCombobox({
   customLabel,
   getLabel = (item: string) => item,
   disabled,
+  trigger,
   ...control
 }: FieldControlProps & {
   value: string;
@@ -27,6 +28,7 @@ export function CreatableCombobox({
   customLabel?(value: string): string;
   getLabel?(value: string): string;
   disabled?: boolean;
+  trigger?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -48,25 +50,27 @@ export function CreatableCombobox({
       }}
     >
       <Popover.Trigger asChild>
-        <Button
-          {...control}
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="h-auto min-h-11 w-full justify-between gap-3 px-3 py-2 text-left font-normal"
-        >
-          <span className={cn('min-w-0 truncate', value ? 'font-mono' : 'text-muted-foreground')}>
-            {value ? getLabel(value) : placeholder}
-          </span>
-          <ChevronsUpDown className="shrink-0 text-muted-foreground" />
-        </Button>
+        {trigger ?? (
+          <Button
+            {...control}
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className="h-auto min-h-11 w-full justify-between gap-3 px-3 py-2 text-left font-normal"
+          >
+            <span className={cn('min-w-0 truncate', value ? 'font-mono' : 'text-muted-foreground')}>
+              {value ? getLabel(value) : placeholder}
+            </span>
+            <ChevronsUpDown className="shrink-0 text-muted-foreground" />
+          </Button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
           align="start"
           sideOffset={6}
-          className="z-[60] w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl"
+          className="z-[60] min-w-64 w-[var(--radix-popover-trigger-width)] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-xl"
           onEscapeKeyDown={(event) => event.stopPropagation()}
         >
           <Command label={searchLabel} shouldFilter={false} loop className="w-full">

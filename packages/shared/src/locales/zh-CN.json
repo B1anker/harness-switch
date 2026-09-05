@@ -1180,6 +1180,7 @@
     "tag": "模板"
   },
   "workspace": {
+    "fileDiffTab": "文件差异",
     "navigation": "主导航",
     "breadcrumb": "路径导航",
     "nav": {
