@@ -2,32 +2,36 @@ import type { FavoriteConnection, HarnessSummary } from '@seaveyon/harness-switc
 import { ArrowRight, Box, Network } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { HarnessIcon } from '@/components/harness-icon';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTranslation } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
+import { SwitchFlow } from './switch-flow';
 
 type Path = { provider: string; model: string };
 
 export function CurrentConfigurationPath({ harness }: { harness: HarnessSummary }) {
   const { t } = useTranslation();
   return (
-    <section aria-label={t('workspace.currentChain')} className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-          {t('workspace.currentChain')}
+    <TooltipProvider delayDuration={250}>
+      <section aria-label={t('workspace.currentChain')} className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            {t('workspace.currentChain')}
+          </p>
+          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+            {t('workspace.activeNow')}
+          </span>
+        </div>
+        <PathLane
+          path={currentPath(harness, t)}
+          harness={harness}
+          sourceLabel={t('workspace.configuration')}
+        />
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {t('workspace.currentChainHint')}
         </p>
-        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-          {t('workspace.activeNow')}
-        </span>
-      </div>
-      <PathLane
-        path={currentPath(harness, t)}
-        harness={harness}
-        sourceLabel={t('workspace.configuration')}
-      />
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {t('workspace.currentChainHint')}
-      </p>
-    </section>
+      </section>
+    </TooltipProvider>
   );
 }
 
@@ -59,32 +63,7 @@ export function SwitchMap({
           {t('workspace.notWritten')}
         </span>
       </div>
-      <div className="switch-tree">
-        <div className="switch-tree-branches">
-          <PathBranch
-            label={t('workspace.currentChain')}
-            path={currentPath(harness, t)}
-            sourceLabel={t('workspace.configuration')}
-          />
-          <PathBranch
-            label={t('workspace.candidateChain', { name: harness.label })}
-            path={candidate}
-            candidate
-          />
-        </div>
-        <div aria-hidden className="switch-tree-merge">
-          <span className="switch-tree-current-flow" />
-          <span className="switch-tree-new-flow" />
-          <span className="switch-tree-output-flow" />
-        </div>
-        <ol className="switch-tree-tool">
-          <PathNode
-            icon={<HarnessIcon id={harness.id} />}
-            label={t('workspace.tool')}
-            value={harness.label}
-          />
-        </ol>
-      </div>
+      <SwitchFlow current={currentPath(harness, t)} candidate={candidate} harness={harness} />
       <p className="text-xs leading-relaxed text-muted-foreground">
         {t('workspace.switchTargetHint', { name: harness.label })}
       </p>
@@ -104,40 +83,6 @@ function PathLane({
   return (
     <div className="configuration-path-frame">
       <PathSteps path={path} harness={harness} sourceLabel={sourceLabel} />
-    </div>
-  );
-}
-
-function PathBranch({
-  path,
-  candidate = false,
-  label,
-  sourceLabel,
-}: {
-  path: Path;
-  candidate?: boolean;
-  label: string;
-  sourceLabel?: string;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className={candidate ? 'switch-branch switch-branch-candidate' : 'switch-branch'}>
-      <p className="switch-branch-label">{label}</p>
-      <ol className="switch-branch-path">
-        <PathNode
-          icon={<Network className="text-primary" />}
-          label={sourceLabel ?? t('workspace.provider')}
-          value={path.provider}
-        />
-        <li aria-hidden className="path-connector" />
-        <PathNode
-          icon={<Box className="text-primary" />}
-          label={t('favorites.modelPicker')}
-          value={path.model}
-          mono
-        />
-        <li aria-hidden className="path-connector branch-to-tool" />
-      </ol>
     </div>
   );
 }
@@ -196,11 +141,16 @@ function PathNode({
       {icon}
       <span className="min-w-0">
         <span className="block text-xs text-muted-foreground">{label}</span>
-        <strong
-          className={mono ? 'block break-all font-mono text-xs' : 'block break-words text-sm'}
-        >
-          {value}
-        </strong>
+        {mono ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <strong className="block truncate font-mono text-xs">{value}</strong>
+            </TooltipTrigger>
+            <TooltipContent className="font-mono">{value}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <strong className="block break-words text-sm">{value}</strong>
+        )}
       </span>
     </li>
   );

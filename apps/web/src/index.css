@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@xyflow/react/dist/style.css";
 @import "@fontsource-variable/ibm-plex-sans";
 @import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
@@ -152,123 +153,59 @@
   align-items: center;
   color: var(--primary);
 }
-.switch-tree {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 54px minmax(10rem, 0.32fr);
-  gap: 0;
-  align-items: stretch;
-}
-.switch-tree-branches {
-  display: grid;
-  gap: 12px;
-}
-.switch-branch {
-  display: grid;
-  grid-template-columns: minmax(8rem, 0.26fr) minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-  padding: 12px;
+.switch-flow-canvas {
+  position: relative;
+  height: 292px;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: color-mix(in srgb, var(--card) 70%, var(--background));
 }
-.switch-branch-candidate {
-  position: relative;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--primary) 56%, var(--border));
-  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+.switch-flow-canvas .react-flow__pane {
+  cursor: default;
 }
-.switch-branch .path-connector {
-  position: relative;
+.switch-flow-canvas .react-flow__edge-path {
+  stroke-linecap: round;
 }
-.switch-branch .path-connector::before {
+.switch-flow-canvas .react-flow__edge.animated .react-flow__edge-path {
+  stroke-dasharray: 6 6;
+}
+.switch-flow-node {
+  display: flex;
+  width: 190px;
+  min-height: 86px;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: 0 8px 28px -22px color-mix(in srgb, var(--primary) 45%, transparent);
+}
+.switch-flow-node > svg {
+  flex: none;
+}
+.switch-flow-handle {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--card);
+  background: var(--primary);
+}
+.switch-flow-label {
   position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 2px;
-  background: color-mix(in srgb, var(--primary) 62%, var(--border));
-  content: "";
-}
-.switch-branch-candidate .path-connector::before {
-  background: repeating-linear-gradient(90deg, var(--primary) 0 7px, transparent 7px 14px);
-  background-size: 28px 2px;
-  animation: candidate-flow 0.85s linear infinite;
-}
-.switch-branch .branch-to-tool::before {
-  right: -13px;
-}
-.switch-branch-label {
+  z-index: 2;
+  left: 22px;
   font-size: 12px;
   font-weight: 600;
-  line-height: 1.45;
   color: var(--muted-foreground);
+  pointer-events: none;
 }
-.switch-branch-path {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1.2fr) 24px;
-  gap: 8px;
-  align-items: stretch;
+.switch-flow-label-current {
+  top: 59px;
 }
-.switch-tree-merge {
-  position: relative;
-  min-height: 100%;
-}
-.switch-tree-current-flow {
-  position: absolute;
-  top: 25%;
-  left: 0;
-  width: 20px;
-  height: 50%;
-  border-top: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
-  border-right: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
-  border-radius: 0 10px 0 0;
-}
-.switch-tree-new-flow {
-  position: absolute;
-  top: calc(75% - 1px);
-  left: 0;
-  width: 20px;
-  height: 2px;
-  background: repeating-linear-gradient(90deg, var(--primary) 0 7px, transparent 7px 14px);
-  background-size: 28px 2px;
-  content: "";
-  animation: candidate-flow 0.85s linear infinite;
-}
-.switch-tree-output-flow {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 20px;
-  height: 2px;
-  background: color-mix(in srgb, var(--primary) 58%, var(--border));
-}
-.switch-tree-merge::after {
-  position: absolute;
-  top: calc(50% - 6px);
-  right: -1px;
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
-  border-right: 2px solid color-mix(in srgb, var(--primary) 58%, var(--border));
-  transform: rotate(45deg);
-  content: "";
-}
-@keyframes candidate-flow {
-  to {
-    background-position: 28px 28px;
-    stroke-dashoffset: -28;
-  }
-}
-.switch-tree-tool {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-.switch-tree-tool .path-node {
-  width: 100%;
-  min-height: 6.5rem;
-  background: color-mix(in srgb, var(--primary) 5%, var(--card));
+.switch-flow-label-new {
+  top: 205px;
+  color: var(--primary);
 }
 .favorite-graph {
   display: grid;
@@ -399,21 +336,6 @@
   .favorite-graph {
     min-height: auto;
   }
-  .switch-tree {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .switch-branch {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .switch-branch-path {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .switch-tree-merge {
-    display: none;
-  }
-  .switch-tree-tool .path-node {
-    min-height: auto;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .workspace-page,
@@ -423,8 +345,7 @@
   .timeline-point {
     transition: none;
   }
-  .switch-branch-candidate .path-connector::before,
-  .switch-tree-new-flow {
+  .switch-flow-canvas .react-flow__edge.animated .react-flow__edge-path {
     animation: none;
   }
 }
