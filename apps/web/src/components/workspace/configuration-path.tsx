@@ -18,9 +18,9 @@ export function ConfigurationPath({
     state.providers?.find((entry) => entry.id === connection.providerId),
   );
   return (
-    <section aria-label={t('workspace.relationship')} className="space-y-4">
+    <section aria-label={t('workspace.switchTarget', { name })} className="space-y-4">
       <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-        {t('workspace.relationship')}
+        {t('workspace.switchTarget', { name })}
       </p>
       <ol className="configuration-path">
         <li className="path-node">
@@ -58,7 +58,7 @@ export function ConfigurationPath({
         </li>
       </ol>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        {t('workspace.relationshipHint')}
+        {t('workspace.switchTargetHint', { name })}
       </p>
     </section>
   );

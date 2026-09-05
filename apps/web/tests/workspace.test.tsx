@@ -59,7 +59,13 @@ test('workspace previews one selected tool directly and applies only after confi
   setStoreState({
     favorites: [favorite],
     providers: [],
-    harnesses: [harnessFixture({ id: 'pi', label: 'Pi' })],
+    harnesses: [
+      harnessFixture({
+        id: 'pi',
+        label: 'Pi',
+        active: { name: 'pi-current', model: 'gpt-5.6-terra', baseUrl: 'https://example.test' },
+      }),
+    ],
     favoriteTargets: { [favorite.id]: [favoriteTargetFixture(favorite)] },
     planFavorite: async () => {
       setStoreState({
@@ -84,6 +90,13 @@ test('workspace previews one selected tool directly and applies only after confi
     />,
   );
   await waitFor(() => expect(screen.getByRole('button', { name: '预览切换' })).toBeEnabled());
+  expect(screen.getByText('本次将切换到 Pi')).toBeInTheDocument();
+  expect(
+    screen.getByText('这是 Pi 的预览目标，尚未写入；其他工具保持各自当前配置。'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('Pi 当前')).toBeInTheDocument();
+  expect(screen.getByText('Pi 将切换为')).toBeInTheDocument();
+  expect(screen.getByText('gpt-5.6-terra')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '预览切换' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: '确认保存并切换 1 个工具' })).toBeEnabled(),

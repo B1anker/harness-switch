@@ -81,12 +81,17 @@ export function SwitchPanel({
         <ConfigurationPath connection={connection} harness={harness.id} name={harness.label} />
       ) : null}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-5 text-sm">
-        <span className="text-muted-foreground">{t('workspace.current')}</span>
+        <span className="text-muted-foreground">
+          {t('workspace.currentToolModel', { name: harness.label })}
+        </span>
         <span className="max-w-full break-all font-mono">
           {harness.active?.model ||
             t(harness.active?.official ? 'harness.official' : 'harness.currentInactive')}
         </span>
         <ArrowRight className="size-4 shrink-0 text-primary" />
+        <span className="text-muted-foreground">
+          {t('workspace.targetToolModel', { name: harness.label })}
+        </span>
         <span className="max-w-full break-all font-medium">
           {connection?.requestModelId ?? favorite.name}
         </span>
