@@ -940,7 +940,10 @@
   },
   "probe": {
     "action": "测试连接",
+    "fetchModels": "拉取模型",
+    "fetchingModels": "正在拉取…",
     "completionAction": "测试补全",
+    "testingCompletion": "正在测试补全…",
     "completionHint": "真实发送一条最小请求，验证模型确实能作答（会消耗一两个 token）。",
     "probing": "正在测试…",
     "ok": "连接正常 · {{latencyMs}}ms · {{count}} 个模型",
@@ -948,7 +951,7 @@
     "completionOk": "模型 {{model}} 可作答 · {{latencyMs}}ms",
     "completionCached": "模型 {{model}} 可作答 · 缓存于 {{at}}",
     "completionFailedCached": "缓存于 {{at}}",
-    "catalogHint": "已获取 {{count}} 个模型，点击“模型”输入框可从列表选择。",
+    "catalogHint": "已获取 {{count}} 个模型，模型字段现可从下拉列表选择。",
     "missingBaseUrl": "请先填写至少一个 endpoint URL 再测试。"
   }
 }

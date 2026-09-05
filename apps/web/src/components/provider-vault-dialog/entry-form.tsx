@@ -57,8 +57,7 @@ export function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
   const [probeError, setProbeError] = useState<MessageLine | null>(null);
   /** Which drafted endpoint the probe section targets; defaults to the first. */
   const [probeTarget, setProbeTarget] = useState(0);
-  /** Opt-in: a completion costs the user a token, so it is never sent unasked. */
-  const [testCompletion, setTestCompletion] = useState(false);
+  const [probeAction, setProbeAction] = useState<'models' | 'completion' | null>(null);
 
   const endpointsSignature = JSON.stringify(endpoints);
   const probe = useProbe(JSON.stringify([apiKey, endpointsSignature]));
@@ -94,7 +93,7 @@ export function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
    * A typed key is tested as a draft; editing without retyping tests the stored
    * credential by referencing this entry's vault id.
    */
-  async function runProbe() {
+  async function runProbe(completion = false) {
     // Mirror VaultProbeRow's selection: candidates keep their original endpoint
     // index, so the selector's reported index resolves to the same URL here.
     const candidates = endpoints
@@ -111,6 +110,7 @@ export function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
       return;
     }
     setProbeError(null);
+    setProbeAction(completion ? 'completion' : 'models');
     try {
       await probe.run(() =>
         probeDraft({
@@ -118,11 +118,13 @@ export function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
           ...(apiKey.trim() ? { apiKey } : { providerId: entry?.id ?? '' }),
           // No model is named: a vault entry owns a credential, not a model, so the
           // completion goes to whatever the catalog listed first.
-          ...(testCompletion ? { completion: true } : {}),
+          ...(completion ? { completion: true } : {}),
         }),
       );
     } catch (err) {
       setProbeError(errorLineWith(err, 'vault.probeFailed'));
+    } finally {
+      setProbeAction(null);
     }
   }
 
@@ -328,10 +330,9 @@ export function EntryForm({ entry, onCancel, onSaved }: EntryFormProps) {
             }))
           }
           probing={probe.pending}
+          probeAction={probeAction}
           result={probe.result}
           probeError={probeError}
-          completion={testCompletion}
-          onCompletionChange={setTestCompletion}
           onProbe={runProbe}
         />
       </div>

@@ -11,7 +11,6 @@ import { ProbeResultLine } from '@/components/probe-result-line';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -84,17 +83,18 @@ export function ProfileDialog({
   const [error, setError] = useState<MessageLine | null>(null);
   const [pending, setPending] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<ProfileFieldErrors>({});
-  /** Opt-in: a completion costs the user a token, so it is never sent unasked. */
-  const [testCompletion, setTestCompletion] = useState(false);
+  const [probeAction, setProbeAction] = useState<'models' | 'completion' | null>(null);
 
   const providerEntries = providers ?? [];
   const selectedProvider = providerEntries.find((entry) => entry.id === providerId) ?? null;
   const selectedEndpoint = selectedProvider?.endpoints.find(
     (endpoint) => endpoint.key === providerEndpoint,
   );
-  /** Model ids from the last successful probe; feeds the input's datalist. */
+  /** Model ids from the last successful catalog request. */
   const probe = useProbe(JSON.stringify([baseUrl, apiKey, providerId, providerEndpoint]));
   const catalogModels = probe.result?.ok ? (probe.result.models ?? []) : [];
+  const selectableModels =
+    model && !catalogModels.includes(model) ? [model, ...catalogModels] : catalogModels;
   const providerMissing = providers !== null && providerId !== '' && selectedProvider === null;
   const endpointMissing =
     selectedProvider !== null && providerEndpoint !== '' && selectedEndpoint === undefined;
@@ -171,7 +171,7 @@ export function ProfileDialog({
    * a draft; with a vault entry selected the key resolves server-side; an edit with
    * no new key tests the stored credential.
    */
-  async function onProbe() {
+  async function onProbe(completion = false) {
     const url = effectiveBaseUrl().trim();
     if (!url) {
       setFieldErrors((current) => ({
@@ -189,21 +189,22 @@ export function ProfileDialog({
       return;
     }
     setError(null);
+    setProbeAction(completion ? 'completion' : 'models');
     try {
       await probe.run(() =>
         selectedProvider || apiKey.trim()
           ? probeDraft({
               baseUrl: url,
               ...(selectedProvider ? { providerId } : { apiKey }),
-              ...(testCompletion ? { completion: true } : {}),
-              ...(testCompletion && trimmedModel ? { model: trimmedModel } : {}),
+              ...(completion ? { completion: true } : {}),
+              ...(completion && trimmedModel ? { model: trimmedModel } : {}),
             })
           : // The saved-profile route caches per profile, so an explicit click here means
             // "test it now": refresh bypasses a cached verdict the user just asked to redo.
             probeProfile(
               harness.id,
               profile?.name ?? '',
-              testCompletion
+              completion
                 ? {
                     completion: true,
                     refresh: true,
@@ -214,6 +215,8 @@ export function ProfileDialog({
       );
     } catch (err) {
       setError(errorLine(err));
+    } finally {
+      setProbeAction(null);
     }
   }
 
@@ -549,12 +552,36 @@ export function ProfileDialog({
                   error={fieldErrors.model ? lineText(t, fieldErrors.model) : undefined}
                   hint={harness.id === 'claude' ? t('profile.claudeModelHint') : null}
                 >
-                  {(control) => (
-                    <>
+                  {(control) =>
+                    catalogModels.length > 0 ? (
+                      <Select
+                        value={model}
+                        onValueChange={(value) => {
+                          setModel(value);
+                          clearFieldErrors('model');
+                        }}
+                      >
+                        <SelectTrigger {...control} aria-label={t('profile.model')}>
+                          <SelectValue
+                            placeholder={
+                              harness.id === 'claude'
+                                ? t('profile.fallbackModelPlaceholder')
+                                : t('profile.modelPlaceholder')
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {selectableModels.map((id) => (
+                            <SelectItem key={id} value={id}>
+                              {id}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
                       <Input
                         {...control}
                         value={model}
-                        list={catalogModels.length > 0 ? 'profile-model-options' : undefined}
                         onChange={(event) => {
                           setModel(event.target.value);
                           clearFieldErrors('model');
@@ -565,15 +592,8 @@ export function ProfileDialog({
                             : t('profile.modelPlaceholder')
                         }
                       />
-                      {catalogModels.length > 0 ? (
-                        <datalist id="profile-model-options">
-                          {catalogModels.map((id) => (
-                            <option key={id} value={id} />
-                          ))}
-                        </datalist>
-                      ) : null}
-                    </>
-                  )}
+                    )
+                  }
                 </FormField>
               ) : null}
 
@@ -584,30 +604,35 @@ export function ProfileDialog({
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={onProbe}
+                      onClick={() => void onProbe()}
                       disabled={probe.pending}
                     >
-                      {probe.pending ? <Loader2 className="animate-spin" /> : null}
-                      {probe.pending ? t('probe.probing') : t('probe.action')}
+                      {probe.pending && probeAction === 'models' ? (
+                        <Loader2 className="animate-spin" />
+                      ) : null}
+                      {probe.pending && probeAction === 'models'
+                        ? t('probe.fetchingModels')
+                        : t('probe.fetchModels')}
                     </Button>
-                    <label
-                      htmlFor="probe-completion"
-                      className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void onProbe(true)}
+                      disabled={probe.pending}
                     >
-                      <Checkbox
-                        id="probe-completion"
-                        checked={testCompletion}
-                        onCheckedChange={(checked) => setTestCompletion(checked === true)}
-                      />
-                      {t('probe.completionAction')}
-                    </label>
+                      {probe.pending && probeAction === 'completion' ? (
+                        <Loader2 className="animate-spin" />
+                      ) : null}
+                      {probe.pending && probeAction === 'completion'
+                        ? t('probe.testingCompletion')
+                        : t('probe.completionAction')}
+                    </Button>
                     {probe.result ? <ProbeResultLine result={probe.result} /> : null}
                   </div>
-                  {testCompletion ? (
-                    <Alert variant="muted" size="sm">
-                      {t('probe.completionHint')}
-                    </Alert>
-                  ) : null}
+                  <Alert variant="muted" size="sm">
+                    {t('probe.completionHint')}
+                  </Alert>
                   {probe.result?.ok && catalogModels.length > 0 ? (
                     <Alert variant="muted" size="sm">
                       {t('probe.catalogHint')}
@@ -634,6 +659,7 @@ export function ProfileDialog({
                   fields={harness.fields}
                   values={extras}
                   errors={fieldErrors}
+                  modelOptions={catalogModels}
                   onChange={(key, value) => {
                     setExtras((current) => ({ ...current, [key]: value }));
                     clearFieldErrors(`extra:${key}`);

@@ -59,7 +59,7 @@ test('the profile dialog probes a typed key without saving it first', async () =
   fill('配置名称', 'p-main');
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   await waitFor(() => expect(calls.draft).toHaveLength(1));
   expect(calls.saved).toEqual([]);
@@ -75,32 +75,44 @@ test('a successful probe reports latency and model count', async () => {
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   expect(await screen.findByText('连接正常 · 42ms · 2 个模型')).toBeInTheDocument();
 });
 
-test('a successful probe feeds the model field a datalist to pick from', async () => {
+test('a successful catalog request turns the model input into a shadcn select', async () => {
   setupProfileDialog();
   renderCreateDialog();
 
   const model = screen.getByLabelText('回退模型（ANTHROPIC_MODEL）') as HTMLInputElement;
-  // No catalog yet, so the input carries no list binding.
-  expect(model.getAttribute('list')).toBeNull();
+  expect(model).toBeInTheDocument();
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   await screen.findByText(/连接正常/);
-  expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）').getAttribute('list')).toBe(
-    'profile-model-options',
-  );
-  const options = document.querySelectorAll('#profile-model-options option');
-  expect(Array.from(options).map((option) => option.getAttribute('value'))).toEqual([
-    'model-a',
-    'model-b',
-  ]);
+  const select = screen.getByLabelText('模型');
+  expect(select).toHaveAttribute('data-slot', 'select-trigger');
+  fireEvent.click(select);
+  expect(await screen.findByRole('option', { name: 'model-a' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: 'model-b' })).toBeInTheDocument();
+});
+
+test('a successful catalog request also turns Claude model mappings into selects', async () => {
+  setupProfileDialog();
+  renderCreateDialog();
+
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-typed');
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
+
+  await screen.findByText(/连接正常/);
+  const sonnet = screen.getByRole('combobox', { name: 'Sonnet 模型映射' });
+  expect(sonnet).toHaveAttribute('data-slot', 'select-trigger');
+  fireEvent.click(sonnet);
+  fireEvent.click(await screen.findByRole('option', { name: 'model-b' }));
+  expect(sonnet).toHaveTextContent('model-b');
 });
 
 test('a failed probe renders the translated reason instead of throwing', async () => {
@@ -115,13 +127,13 @@ test('a failed probe renders the translated reason instead of throwing', async (
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-wrong');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   expect(
     await screen.findByText('端点可达但拒绝了凭据（HTTP 401），请检查 API Key'),
   ).toBeInTheDocument();
   // The failure must not leave a stale catalog bound to the input.
-  expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）').getAttribute('list')).toBeNull();
+  expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）')).toBeInstanceOf(HTMLInputElement);
 });
 
 test('editing a saved profile without retyping the key probes stored credentials', async () => {
@@ -130,7 +142,7 @@ test('editing a saved profile without retyping the key probes stored credentials
     <ProfileDialog harness={harnessFixture()} profile={profileFixture()} onOpenChange={() => {}} />,
   );
 
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   await waitFor(() => expect(calls.saved).toHaveLength(1));
   // No options at all, so the server's own defaults apply and no completion is sent.
@@ -149,7 +161,7 @@ test('a vault-referenced profile resolves its key through providerId, not inline
     />,
   );
 
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   await waitFor(() => expect(calls.draft).toHaveLength(1));
   // The base URL comes from the named endpoint; the key stays in the vault.
@@ -164,7 +176,7 @@ test('creating without any key points at the API Key field instead of firing a r
   renderCreateDialog();
 
   fill('API Base URL', 'https://api.example.com/v1');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   expect(calls.draft).toEqual([]);
   expect(calls.saved).toEqual([]);
@@ -176,7 +188,7 @@ test('a missing base URL marks that field instead of probing', async () => {
   renderCreateDialog();
 
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   expect(calls.draft).toEqual([]);
   expect(screen.getByLabelText('API Base URL')).toHaveAttribute('aria-invalid', 'true');
@@ -188,26 +200,26 @@ test('editing any relevant input invalidates a previous probe result', async () 
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
   await screen.findByText(/连接正常/);
 
   fill('API Base URL', 'https://other.example.com/v1');
   expect(screen.queryByText(/连接正常/)).toBeNull();
   // And the stale catalog no longer drives the model input.
-  expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）').getAttribute('list')).toBeNull();
+  expect(screen.getByLabelText('回退模型（ANTHROPIC_MODEL）')).toBeInstanceOf(HTMLInputElement);
 });
 
 /* ------------------------------------------------------------------ */
 /* Completion probe                                                    */
 /* ------------------------------------------------------------------ */
 
-test('the completion is opt-in: unchecked, the request carries no completion flag', async () => {
+test('the fetch-models button does not request a completion', async () => {
   const calls = setupProfileDialog();
   renderCreateDialog();
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
 
   await waitFor(() => expect(calls.draft).toHaveLength(1));
   // A token is only ever spent on an explicit ask.
@@ -217,15 +229,14 @@ test('the completion is opt-in: unchecked, the request carries no completion fla
   });
 });
 
-test('checking the box asks for a completion against the typed model', async () => {
+test('the completion button asks for a completion against the typed model', async () => {
   const calls = setupProfileDialog();
   renderCreateDialog();
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
   fill('回退模型（ANTHROPIC_MODEL）', 'model-a');
-  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
 
   await waitFor(() => expect(calls.draft).toHaveLength(1));
   expect(calls.draft[0]?.[0]).toEqual({
@@ -242,8 +253,7 @@ test('a saved-profile completion asks to bypass any cached verdict', async () =>
     <ProfileDialog harness={harnessFixture()} profile={profileFixture()} onOpenChange={() => {}} />,
   );
 
-  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
 
   await waitFor(() => expect(calls.saved).toHaveLength(1));
   // Clicking the button means "test it now", so a stored outcome must not be replayed.
@@ -267,8 +277,7 @@ test('a listed model that does not answer renders red under a green catalog line
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
 
   // Both verdicts are shown: the endpoint is reachable and the model still cannot serve.
   expect(await screen.findByText('连接正常 · 42ms · 2 个模型')).toBeInTheDocument();
@@ -288,8 +297,7 @@ test('a working model reports its own success line', async () => {
 
   fill('API Base URL', 'https://api.example.com/v1');
   fill('API Key', 'sk-typed');
-  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
 
   expect(await screen.findByText('模型 model-a 可作答 · 640ms')).toBeInTheDocument();
 });
@@ -310,11 +318,10 @@ test('a replayed outcome says when it was measured rather than claiming it is cu
     <ProfileDialog harness={harnessFixture()} profile={profileFixture()} onOpenChange={() => {}} />,
   );
 
-  fireEvent.click(screen.getByRole('checkbox', { name: '测试补全' }));
-  fireEvent.click(screen.getByRole('button', { name: '测试连接' }));
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
 
   // "answered" and "answered hours ago" are different claims; the line must not blur them.
-  expect(await screen.findByText(/model-a/)).toHaveTextContent(/缓存/);
+  expect(await screen.findByText(/模型 model-a 可作答/)).toHaveTextContent(/缓存/);
 });
 
 /* ------------------------------------------------------------------ */
@@ -359,6 +366,20 @@ test('the vault editor probes the stored credential against the entry endpoint',
     providerId: 'openrouter',
   });
   expect(await screen.findByText(/连接正常/)).toBeInTheDocument();
+});
+
+test('the vault completion button asks for a completion against the entry endpoint', async () => {
+  const calls = setupVaultDialog();
+  openEditForm();
+
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
+
+  await waitFor(() => expect(calls.drafts).toHaveLength(1));
+  expect(calls.drafts[0]?.[0]).toEqual({
+    baseUrl: 'https://openrouter.ai/api/v1',
+    providerId: 'openrouter',
+    completion: true,
+  });
 });
 
 test('a freshly typed key is tested as a draft instead of the stored one', async () => {

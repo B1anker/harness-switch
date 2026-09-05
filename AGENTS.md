@@ -122,6 +122,11 @@ every path — never write an API path as a literal at a call site.
 `tabs` (`TabList`/`TabPanel` for panels, `SegmentedControl` for a mode switch),
 `dropdown-menu`, plus the Radix-backed dialog/select/checkbox family.
 
+**UI components.** Use shadcn/ui components (the repository's shadcn-compatible
+primitives in `components/ui/`) before custom controls or browser-native widgets. Add or
+extend a shadcn primitive when the needed component is absent; do not introduce a separate
+UI library or hand-roll a parallel control for a standard interaction.
+
 A component over ~300 lines becomes a directory with an `index.tsx` and the parts it was
 already made of — see `profile-dialog/`, `provider-vault-dialog/`, `transfer/gist-pane/`.
 Stateful behaviour worth a second reader goes in a hook (`lib/use-probe.ts`,
@@ -152,3 +157,6 @@ the store after every test, so no file does that itself.
 - Comments explain **why**, not what. Match the surrounding density; don't narrate the diff.
 - Keep the four baselines green — server tests, web tests, typecheck, lint — and commit
   once they are, rather than at the end of a long branch.
+- **Never commit directly to `main`.** Create a feature branch for every change, push it,
+  and merge it only through a pull request. This applies even to documentation, formatting,
+  and one-line fixes.

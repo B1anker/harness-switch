@@ -2,7 +2,6 @@ import type { ProbeResult } from '@seaveyon/harness-switch-shared';
 import { Loader2, XCircle } from 'lucide-react';
 import { ProbeResultLine } from '@/components/probe-result-line';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -33,10 +32,9 @@ export function VaultProbeRow({
   hasTypedKey,
   onMissingKey,
   probing,
+  probeAction,
   result,
   probeError,
-  completion,
-  onCompletionChange,
   onProbe,
 }: {
   options: VaultProbeOption[];
@@ -46,17 +44,24 @@ export function VaultProbeRow({
   hasTypedKey: boolean;
   onMissingKey: () => void;
   probing: boolean;
+  probeAction: 'models' | 'completion' | null;
   result: ProbeResult | null;
   probeError?: MessageLine | null;
-  completion: boolean;
-  onCompletionChange: (value: boolean) => void;
-  onProbe: () => void | Promise<void>;
+  onProbe: (completion: boolean) => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   if (options.length === 0 && !hasStoredKey) {
     return null;
   }
   const selected = options.find((option) => option.index === targetIndex) ?? options[0];
+  function triggerProbe(completion: boolean) {
+    if (!hasTypedKey && !hasStoredKey) {
+      onMissingKey();
+      return;
+    }
+    void onProbe(completion);
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-t pt-3">
       <Button
@@ -64,16 +69,22 @@ export function VaultProbeRow({
         variant="outline"
         size="sm"
         disabled={probing || (options.length === 0 && !hasTypedKey)}
-        onClick={() => {
-          if (!hasTypedKey && !hasStoredKey) {
-            onMissingKey();
-            return;
-          }
-          void onProbe();
-        }}
+        onClick={() => triggerProbe(false)}
       >
-        {probing ? <Loader2 className="animate-spin" /> : null}
-        {probing ? t('probe.probing') : t('probe.action')}
+        {probing && probeAction === 'models' ? <Loader2 className="animate-spin" /> : null}
+        {probing && probeAction === 'models' ? t('probe.probing') : t('probe.action')}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={probing || (options.length === 0 && !hasTypedKey)}
+        onClick={() => triggerProbe(true)}
+      >
+        {probing && probeAction === 'completion' ? <Loader2 className="animate-spin" /> : null}
+        {probing && probeAction === 'completion'
+          ? t('probe.testingCompletion')
+          : t('probe.completionAction')}
       </Button>
       {options.length > 1 ? (
         <Select
@@ -92,17 +103,6 @@ export function VaultProbeRow({
           </SelectContent>
         </Select>
       ) : null}
-      <label
-        htmlFor="vault-probe-completion"
-        className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground"
-      >
-        <Checkbox
-          id="vault-probe-completion"
-          checked={completion}
-          onCheckedChange={(checked) => onCompletionChange(checked === true)}
-        />
-        {t('probe.completionAction')}
-      </label>
       {probeError ? (
         <span className="flex items-center gap-1.5 text-sm text-destructive">
           <XCircle className="size-4 shrink-0" aria-hidden />

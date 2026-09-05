@@ -940,7 +940,10 @@
   },
   "probe": {
     "action": "Test connection",
+    "fetchModels": "Fetch models",
+    "fetchingModels": "Fetching…",
     "completionAction": "Test completion",
+    "testingCompletion": "Testing completion…",
     "completionHint": "Sends one real minimal request to prove the model actually answers (costs a token or two).",
     "probing": "Testing…",
     "ok": "Reachable · {{latencyMs}}ms · {{count}} models",
@@ -948,7 +951,7 @@
     "completionOk": "Model {{model}} answers · {{latencyMs}}ms",
     "completionCached": "Model {{model}} answers · cached {{at}}",
     "completionFailedCached": "cached {{at}}",
-    "catalogHint": "Fetched {{count}} models; click the model field to pick one from the list.",
+    "catalogHint": "Fetched {{count}} models; model fields can now use the dropdown.",
     "missingBaseUrl": "Add an endpoint URL before testing."
   }
 }
