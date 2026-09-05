@@ -1205,7 +1205,7 @@
     "noProfiles": "还没有可用于切换的本地配置。",
     "noTemplates": "还没有模板。",
     "manageConfigurations": "管理配置条目",
-    "mappedModels": "按角色映射：{{models}}",
+    "mappedModels": "按角色映射",
     "toolDefaultModel": "由工具选择默认模型",
     "currentConfigurationManagement": "当前配置与高级管理",
     "chooseTemplate": "选择模板",

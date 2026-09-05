@@ -18,7 +18,5 @@ export function configuredModel(
           ),
         ]
       : [];
-  return models.length
-    ? t('workspace.mappedModels', { models: models.join(' / ') })
-    : t('workspace.toolDefaultModel');
+  return models.length ? t('workspace.mappedModels') : t('workspace.toolDefaultModel');
 }

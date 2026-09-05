@@ -1,5 +1,6 @@
 import { expect, test } from '@rstest/core';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { ConfigurationFlow, flowEdge, flowNode } from '@/components/configuration-flow';
 import { RecoveryTimeline } from '@/components/recovery-timeline';
 import { Workspace } from '@/components/workspace';
 import { ConfigurationSwitcher } from '@/components/workspace/configuration-switcher';
@@ -248,7 +249,43 @@ test('model labels distinguish explicit defaults, role mappings and tool-selecte
     model: '',
     extras: { sonnetModel: 'glm-flash', opusModel: 'glm-flash' },
   });
-  expect(configuredModel(profile, i18n.t.bind(i18n))).toBe('按角色映射：glm-flash');
+  expect(configuredModel(profile, i18n.t.bind(i18n))).toBe('按角色映射');
   expect(configuredModel(profile, i18n.t.bind(i18n), 'explicit-model')).toBe('explicit-model');
   expect(configuredModel({ ...profile, extras: {} }, i18n.t.bind(i18n))).toBe('由工具选择默认模型');
+});
+
+test('shared graph keeps tool actions clickable and blocks unavailable tools', () => {
+  let calls = 0;
+  const view = renderWithI18n(
+    <ConfigurationFlow
+      nodes={[
+        flowNode('source', 24, 40, { kind: 'source', label: 'source', value: 'source' }),
+        flowNode('tool', 606, 40, {
+          kind: 'tool',
+          label: 'tool',
+          value: 'available',
+          action: () => {
+            calls++;
+          },
+        }),
+        flowNode('blocked', 606, 120, {
+          kind: 'tool',
+          label: 'tool',
+          value: 'blocked',
+          disabled: true,
+          action: () => {
+            calls++;
+          },
+        }),
+      ]}
+      edges={[flowEdge('source', 'tool')]}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'available' }));
+  expect(calls).toBe(1);
+  fireEvent.click(view.container.querySelector('[data-id="tool"]')!);
+  expect(calls).toBe(2);
+  fireEvent.click(view.container.querySelector('[data-id="blocked"]')!);
+  expect(calls).toBe(2);
+  expect(screen.getByRole('button', { name: 'blocked' })).toBeDisabled();
 });

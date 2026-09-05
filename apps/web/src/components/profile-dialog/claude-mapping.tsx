@@ -72,7 +72,7 @@ export function ClaudeModelMappingFields({
       </div>
 
       <div
-        className={`grid gap-3 px-1 text-xs font-medium text-muted-foreground ${CLAUDE_MAPPING_COLUMNS}`}
+        className={`grid items-center gap-3 px-1 text-xs font-medium text-muted-foreground ${CLAUDE_MAPPING_COLUMNS}`}
       >
         <span className="hidden md:block">{t('profile.mapping.role')}</span>
         <span className="hidden md:block">{t('profile.mapping.displayName')}</span>

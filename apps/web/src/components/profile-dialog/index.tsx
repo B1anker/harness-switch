@@ -231,6 +231,7 @@ export function ProfileDialog({
       type="button"
       variant="outline"
       size="sm"
+      className="h-6 px-2 text-xs"
       onClick={() => void onProbe()}
       disabled={probe.pending}
     >
@@ -740,7 +741,6 @@ export function ProfileDialog({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 title={t('probe.completionHint')}
                 onClick={() => void onProbe(true)}
                 disabled={probe.pending}

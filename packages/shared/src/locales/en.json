@@ -1205,7 +1205,7 @@
     "noProfiles": "No local configuration is available to switch to yet.",
     "noTemplates": "No template yet.",
     "manageConfigurations": "Manage configuration entries",
-    "mappedModels": "Role mappings: {{models}}",
+    "mappedModels": "Role-based mapping",
     "toolDefaultModel": "Default model selected by the tool",
     "currentConfigurationManagement": "Current configuration and advanced management",
     "chooseTemplate": "Choose a template",

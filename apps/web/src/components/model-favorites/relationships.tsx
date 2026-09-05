@@ -1,13 +1,10 @@
 import type { FavoritePlanRequest, HarnessSummary } from '@seaveyon/harness-switch-shared';
-import { ArrowRight, Box, Network } from 'lucide-react';
 import { useState } from 'react';
-import { HarnessIcon } from '@/components/harness-icon';
+import { ConfigurationFlow, flowEdge, flowNode } from '@/components/configuration-flow';
 import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { compatibleConnections, favoriteSelection } from '@/lib/favorite-selection';
 import { useTranslation } from '@/lib/i18n';
 import { useFavoriteTargets } from '@/lib/use-favorite-targets';
-import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 
@@ -46,6 +43,67 @@ export function FavoriteRelationships({
     }
     return refs.length ? 'workspace.saved' : 'workspace.available';
   };
+  const count = Math.max(favorite.connections.length, harnesses.length, 1);
+  const height = count * 88 + 48;
+  const middle = (height - 66) / 2;
+  const nodes = [
+    ...favorite.connections.map((entry, index) =>
+      flowNode(entry.id, 24, middle - ((favorite.connections.length - 1) * 88) / 2 + index * 88, {
+        kind: 'source',
+        label: entry.label,
+        value:
+          providers?.find((provider) => provider.id === entry.providerId)?.name ??
+          t('workspace.missingProvider'),
+        selected: entry.id === channel,
+        action: () => setChannel(entry.id),
+        actionLabel: entry.label + ' · ' + entry.protocol,
+      }),
+    ),
+    flowNode('model', 260, middle, {
+      kind: 'model',
+      label: t('favorites.modelPicker'),
+      value: connection?.requestModelId ?? t('favorites.pending'),
+    }),
+    ...harnesses.map((harness, index) => {
+      const compatible = compatibleConnections(favorite, harness.id, targets).some(
+        (entry) => entry.id === channel,
+      );
+      const label = t(
+        loading
+          ? 'favorites.loading'
+          : compatible
+            ? status(harness)
+            : 'favorites.noCompatibleChannel',
+      );
+      return flowNode(harness.id, 606, middle - ((harnesses.length - 1) * 88) / 2 + index * 88, {
+        kind: 'tool',
+        harnessId: harness.id,
+        label,
+        value: harness.label,
+        disabled: !compatible || loading,
+        actionLabel: harness.label + ' ' + label,
+        action: () =>
+          onApply([
+            {
+              ...favoriteSelection(favorite, harness, targets, 'activate'),
+              connectionId: channel!,
+            },
+          ]),
+      });
+    }),
+  ];
+  const edges = connection
+    ? [
+        flowEdge(connection.id, 'model'),
+        ...harnesses
+          .filter((harness) =>
+            compatibleConnections(favorite, harness.id, targets).some(
+              (entry) => entry.id === channel,
+            ),
+          )
+          .map((harness) => flowEdge('model', harness.id)),
+      ]
+    : [];
   return (
     <section className="space-y-5" aria-label={t('workspace.relationship')}>
       <div>
@@ -53,93 +111,10 @@ export function FavoriteRelationships({
         <p className="mt-2 text-sm text-muted-foreground">{t('workspace.graphHint')}</p>
       </div>
       {error ? <Alert>{error}</Alert> : null}
-      <div className="favorite-graph">
-        <div className="space-y-3">
-          <p className="workspace-eyebrow">{t('workspace.provider')}</p>
-          {favorite.connections.map((entry) => (
-            <Button
-              key={entry.id}
-              variant="outline"
-              aria-pressed={entry.id === channel}
-              onClick={() => setChannel(entry.id)}
-              className={cn(
-                'h-auto w-full justify-start whitespace-normal p-4 text-left',
-                entry.id === channel && 'border-primary/60 bg-primary/5',
-              )}
-            >
-              <Network className="text-primary" />
-              <span className="min-w-0">
-                <span className="block break-words">
-                  {providers?.find((provider) => provider.id === entry.providerId)?.name ??
-                    t('workspace.missingProvider')}
-                </span>
-                <span className="mt-1 block break-words text-xs font-normal text-muted-foreground">
-                  {entry.label} · {entry.protocol}
-                </span>
-              </span>
-            </Button>
-          ))}
-          {!favorite.connections.length ? (
-            <p className="text-sm text-muted-foreground">{t('favorites.pending')}</p>
-          ) : null}
-        </div>
-        <ArrowRight aria-hidden className="graph-arrow size-5 text-primary" />
-        <div className="space-y-3">
-          <p className="workspace-eyebrow">{t('favorites.modelPicker')}</p>
-          <div className="path-node-focus rounded-2xl border border-primary/40 p-5">
-            <Box className="mb-4 size-6 text-primary" />
-            <p className="break-words font-semibold">{favorite.name}</p>
-            <p className="mt-2 break-all font-mono text-xs leading-6 text-muted-foreground">
-              {connection?.requestModelId ?? t('favorites.pending')}
-            </p>
-          </div>
-        </div>
-        <ArrowRight aria-hidden className="graph-arrow size-5 text-primary" />
-        <div className="space-y-3">
-          <p className="workspace-eyebrow">{t('workspace.tool')}</p>
-          {harnesses.map((harness) => {
-            const compatible = compatibleConnections(favorite, harness.id, targets).some(
-              (entry) => entry.id === channel,
-            );
-            return (
-              <Button
-                key={harness.id}
-                variant="outline"
-                className="h-auto w-full justify-start gap-3 whitespace-normal p-3 text-left"
-                disabled={!compatible}
-                onClick={() =>
-                  onApply([
-                    {
-                      ...favoriteSelection(favorite, harness, targets, 'activate'),
-                      connectionId: channel!,
-                    },
-                  ])
-                }
-              >
-                <HarnessIcon id={harness.id} />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{harness.label}</span>
-                  <span
-                    className={cn(
-                      'mt-1 block text-xs font-normal',
-                      compatible ? 'text-primary' : 'text-muted-foreground',
-                    )}
-                  >
-                    {t(
-                      loading
-                        ? 'favorites.loading'
-                        : compatible
-                          ? status(harness)
-                          : 'favorites.noCompatibleChannel',
-                    )}
-                  </span>
-                </span>
-                <ArrowRight className="shrink-0" />
-              </Button>
-            );
-          })}
-        </div>
-      </div>
+      <ConfigurationFlow nodes={nodes} edges={edges} height={height} />
+      {!favorite.connections.length ? (
+        <p className="text-sm text-muted-foreground">{t('favorites.pending')}</p>
+      ) : null}
       <p className="text-xs leading-relaxed text-muted-foreground">
         {t('workspace.relationshipHint')}
       </p>
