@@ -3,6 +3,7 @@ import { ArrowRight, Box, Network } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { HarnessIcon } from '@/components/harness-icon';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { configuredModel } from '@/lib/configured-model';
 import { useTranslation } from '@/lib/i18n';
 import { SwitchFlow } from './switch-flow';
 
@@ -168,6 +169,8 @@ export function currentPath(
     provider:
       profile?.name ??
       (harness.active?.official ? t('harness.official') : t('harness.currentInactive')),
-    model: harness.active?.model ?? t('harness.currentInactive'),
+    model: harness.active
+      ? configuredModel(profile, t, harness.active.model)
+      : t('harness.currentInactive'),
   };
 }

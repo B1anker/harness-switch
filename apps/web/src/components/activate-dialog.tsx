@@ -14,6 +14,7 @@ import {
 import { TabList, TabPanel } from '@/components/ui/tabs';
 import { currentPath } from '@/components/workspace/configuration-path';
 import { SwitchFlow } from '@/components/workspace/switch-flow';
+import { configuredModel } from '@/lib/configured-model';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText, type MessageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
@@ -152,7 +153,7 @@ export function ActivateDialog({
               current={currentPath(harness, t)}
               candidate={{
                 provider: profile.name,
-                model: profile.model ?? '',
+                model: configuredModel(profile, t),
                 sourceLabel: t(
                   profile.modelFavorite?.favoriteId ? 'templates.tag' : 'workspace.configuration',
                 ),

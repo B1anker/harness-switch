@@ -412,3 +412,22 @@ test('with several endpoints drafted, the selector picks which URL gets tested',
     providerId: 'openrouter',
   });
 });
+
+test('typing mappings stays editable until an explicit catalog fetch, and completion preserves the catalog', async () => {
+  setupProfileDialog();
+  renderCreateDialog();
+  fill('API Base URL', 'https://api.example.com/v1');
+  fill('API Key', 'sk-typed');
+  fill('Sonnet 模型映射', 'manual-id');
+  expect(screen.getByRole('textbox', { name: 'Sonnet 模型映射' })).toHaveValue('manual-id');
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
+  await screen.findByText(/连接正常/);
+  expect(screen.getByRole('textbox', { name: 'Sonnet 模型映射' })).toHaveValue('manual-id');
+  fireEvent.click(screen.getByRole('button', { name: '拉取模型' }));
+  await screen.findByRole('combobox', { name: 'Sonnet 模型映射' });
+  fireEvent.click(screen.getByRole('button', { name: '测试补全' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: '测试补全' })).toBeEnabled());
+  expect(screen.getByRole('combobox', { name: 'Sonnet 模型映射' })).toHaveTextContent('manual-id');
+  fill('API Base URL', 'https://other.example.com');
+  expect(screen.getByRole('textbox', { name: 'Sonnet 模型映射' })).toHaveValue('manual-id');
+});

@@ -4,6 +4,8 @@ import { RecoveryTimeline } from '@/components/recovery-timeline';
 import { Workspace } from '@/components/workspace';
 import { ConfigurationSwitcher } from '@/components/workspace/configuration-switcher';
 import { SwitchFlow } from '@/components/workspace/switch-flow';
+import { configuredModel } from '@/lib/configured-model';
+import { i18n } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 import {
   favoriteFixture,
@@ -238,4 +240,15 @@ const response = (id: string) => ({
     fingerprint: id + '-fingerprint',
     files: [{ key: 'store/favorites', path: '/' + id + '.json', action: 'replace' }],
   },
+});
+
+test('model labels distinguish explicit defaults, role mappings and tool-selected defaults', () => {
+  const profile = profileFixture({
+    harness: 'claude',
+    model: '',
+    extras: { sonnetModel: 'glm-flash', opusModel: 'glm-flash' },
+  });
+  expect(configuredModel(profile, i18n.t.bind(i18n))).toBe('按角色映射：glm-flash');
+  expect(configuredModel(profile, i18n.t.bind(i18n), 'explicit-model')).toBe('explicit-model');
+  expect(configuredModel({ ...profile, extras: {} }, i18n.t.bind(i18n))).toBe('由工具选择默认模型');
 });

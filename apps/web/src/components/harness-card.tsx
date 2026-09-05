@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { configuredModel } from '@/lib/configured-model';
 import { harnessWords } from '@/lib/harness-words';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -196,11 +197,14 @@ export function HarnessCard({
                       <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
                         {profile.baseUrl}
                       </p>
-                      {profile.model ? (
-                        <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                          {profile.model}
+                      {
+                        <p
+                          title={configuredModel(profile, t)}
+                          className="mt-0.5 truncate font-mono text-xs text-muted-foreground"
+                        >
+                          {configuredModel(profile, t)}
                         </p>
-                      ) : null}
+                      }
                       {profile.modelFavorite ? (
                         <FavoriteLinkStatus profile={profile} onOpenTemplate={onOpenTemplate} />
                       ) : null}
