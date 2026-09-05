@@ -80,12 +80,12 @@ test('unified configuration workspace previews a selected favorite as an uncommi
     <ConfigurationSwitcher
       harness={useAppStore.getState().harnesses[0]!}
       onNewProfile={() => {}}
-      onManageFavorites={() => {}}
+      onOpenTemplate={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '收藏模型' }));
+  fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));
   expect(screen.queryByRole('button', { name: '预览切换' })).toBeNull();
-  fireEvent.click(screen.getByRole('combobox', { name: '选择收藏模型' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '选择模板' }));
   fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() => expect(screen.getByRole('button', { name: '预览切换' })).toBeEnabled());
   expect(screen.getByText('当前与候选链路')).toBeInTheDocument();
@@ -130,11 +130,11 @@ test('ambiguous channels require an explicit choice instead of silently switchin
     <ConfigurationSwitcher
       harness={useAppStore.getState().harnesses[0]!}
       onNewProfile={() => {}}
-      onManageFavorites={() => {}}
+      onOpenTemplate={() => {}}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '收藏模型' }));
-  fireEvent.click(screen.getByRole('combobox', { name: '选择收藏模型' }));
+  fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '选择模板' }));
   fireEvent.click(await screen.findByRole('option', { name: 'daily' }));
   await waitFor(() =>
     expect(screen.getByRole('combobox', { name: '选择渠道' })).toBeInTheDocument(),

@@ -15,7 +15,7 @@ import { CaptureFavorite } from './capture';
 import { FavoriteEditor } from './editor';
 import { FavoriteRelationships } from './relationships';
 
-export function ModelFavorites() {
+export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?: string }) {
   const { t } = useTranslation();
   const favorites = useAppStore((state) => state.favorites);
   const loading = useAppStore((state) => state.favoritesLoading);
@@ -26,7 +26,7 @@ export function ModelFavorites() {
   const detach = useAppStore((state) => state.detachFavorite);
   const clear = useAppStore((state) => state.clearFavoritePlan);
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [editing, setEditing] = useState<ModelFavorite | 'new' | null>(null);
   const [applying, setApplying] = useState<FavoritePlanRequest['items'] | null>(null);
   const [capturing, setCapturing] = useState(false);

@@ -1,27 +1,24 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { Check, Plus, Settings2, Star } from 'lucide-react';
+import { Check, Plus, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ActivateDialog } from '@/components/activate-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { CreatableCombobox } from '@/components/ui/creatable-combobox';
 import { FormField } from '@/components/ui/form-field';
-import { SegmentedControl } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 import { SwitchPanel } from './switch-panel';
 
-type Source = 'profiles' | 'favorites';
-
 export function ConfigurationSwitcher({
   harness,
   onNewProfile,
-  onManageFavorites,
+  onOpenTemplate,
 }: {
   harness: HarnessSummary;
   onNewProfile(): void;
-  onManageFavorites(): void;
+  onOpenTemplate(id: string): void;
 }) {
   const { t } = useTranslation();
   const favorites = useAppStore((state) => state.favorites);
@@ -29,14 +26,14 @@ export function ConfigurationSwitcher({
   const error = useAppStore((state) => state.favoritesError);
   const load = useAppStore((state) => state.loadFavorites);
   const loadProviders = useAppStore((state) => state.loadProviders);
-  const [source, setSource] = useState<Source>('profiles');
-  const [favoriteId, setFavoriteId] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [activating, setActivating] = useState<ProfilePublic | null>(null);
   useEffect(() => {
     void load();
     void loadProviders();
   }, [load, loadProviders]);
-  const favorite = favorites?.find((entry) => entry.id === favoriteId);
+  const template = favorites?.find((entry) => entry.id === templateId);
   const profiles = harness.profiles.filter(
     (profile) => profile.name !== harness.official?.linkedProfileName,
   );
@@ -53,99 +50,104 @@ export function ConfigurationSwitcher({
           </p>
         </div>
       </div>
-      <SegmentedControl
-        options={['profiles', 'favorites'] as const}
-        value={source}
-        onChange={setSource}
-        className="max-w-md"
-      >
-        {(item) => (
-          <>
-            {item === 'profiles' ? <Settings2 /> : <Star />}
-            {t(item === 'profiles' ? 'workspace.existingSource' : 'workspace.favoriteSource')}
-          </>
-        )}
-      </SegmentedControl>
       {error ? <Alert>{lineText(t, error)}</Alert> : null}
-      {source === 'profiles' ? (
-        <div className="space-y-3">
-          {profiles.length ? (
-            profiles.map((profile) => {
-              const active = !harness.active?.official && harness.active?.name === profile.name;
-              return (
-                <div
-                  key={profile.name}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
-                >
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2 font-medium">
-                      {profile.name}
-                      {active ? <Check className="size-4 text-primary" /> : null}
-                    </span>
-                    <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">
-                      {profile.model || t('harness.currentInactive')}
-                    </span>
+      <div className="space-y-3">
+        <p className="text-sm font-medium">{t('workspace.configurations')}</p>
+        {profiles.length ? (
+          profiles.map((profile) => {
+            const active = !harness.active?.official && harness.active?.name === profile.name;
+            const linkedTemplate = favorites?.find(
+              (entry) => entry.id === profile.modelFavorite?.favoriteId,
+            );
+            return (
+              <div
+                key={profile.name}
+                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
+              >
+                <span className="min-w-0">
+                  <span className="flex flex-wrap items-center gap-2 font-medium">
+                    {profile.name}
+                    {linkedTemplate ? (
+                      <button
+                        type="button"
+                        className="rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-ring"
+                        onClick={() => onOpenTemplate(linkedTemplate.id)}
+                      >
+                        {t('templates.tag')}
+                      </button>
+                    ) : null}
+                    {active ? <Check className="size-4 text-primary" /> : null}
                   </span>
-                  <Button
-                    size="sm"
-                    variant={active ? 'secondary' : 'outline'}
-                    disabled={active}
-                    onClick={() => setActivating(profile)}
-                  >
-                    {active ? t('workspace.activeNow') : t('workspace.useConfiguration')}
-                  </Button>
-                </div>
-              );
-            })
-          ) : (
-            <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
-              {t('workspace.noProfiles')}
-            </div>
-          )}
+                  <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">
+                    {profile.model || t('harness.currentInactive')}
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  variant={active ? 'secondary' : 'outline'}
+                  disabled={active}
+                  onClick={() => setActivating(profile)}
+                >
+                  {active ? t('workspace.activeNow') : t('workspace.useConfiguration')}
+                </Button>
+              </div>
+            );
+          })
+        ) : (
+          <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
+            {t('workspace.noProfiles')}
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2 pt-1">
           <Button variant="link" className="px-0" onClick={onNewProfile}>
             <Plus />
             {t('workspace.newConfiguration')}
           </Button>
+          <Button variant="link" className="px-0" onClick={() => setTemplatePickerOpen(true)}>
+            <Sparkles />
+            {t('workspace.newFromTemplate')}
+          </Button>
         </div>
-      ) : loading && !favorites ? (
+      </div>
+      {templatePickerOpen && loading && !favorites ? (
         <p role="status" className="text-sm text-muted-foreground">
           {t('favorites.loading')}
         </p>
-      ) : favorites?.length ? (
+      ) : templatePickerOpen && favorites?.length ? (
         <div className="space-y-6">
-          <FormField id="switcher-favorite" label={t('workspace.chooseFavorite')}>
+          <FormField id="switcher-template" label={t('workspace.chooseTemplate')}>
             {(control) => (
               <CreatableCombobox
                 {...control}
-                value={favorite?.id ?? ''}
+                value={template?.id ?? ''}
                 options={favorites.map((entry) => entry.id)}
                 getLabel={(id) => favorites.find((entry) => entry.id === id)?.name ?? id}
-                onChange={setFavoriteId}
-                placeholder={t('workspace.pickModel')}
+                onChange={setTemplateId}
+                placeholder={t('workspace.pickTemplate')}
                 searchLabel={t('favorites.search')}
                 emptyHint={t('workspace.noMatches')}
               />
             )}
           </FormField>
-          {favorite ? (
+          {template ? (
             <SwitchPanel
-              key={favorite.id + '/' + favorite.revision}
-              favorite={favorite}
+              key={template.id + '/' + template.revision}
+              favorite={template}
               harness={harness}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">{t('workspace.pickHint')}</p>
+            <p className="text-sm text-muted-foreground">{t('workspace.pickTemplateHint')}</p>
           )}
         </div>
-      ) : (
+      ) : templatePickerOpen ? (
         <div className="rounded-xl border border-dashed p-6">
-          <p className="text-sm text-muted-foreground">{t('workspace.noFavorites')}</p>
-          <Button variant="link" className="mt-2 px-0" onClick={onManageFavorites}>
-            <Star />
-            {t('workspace.manageFavorites')}
+          <p className="text-sm text-muted-foreground">{t('workspace.noTemplates')}</p>
+          <Button variant="link" className="mt-2 px-0" onClick={() => onOpenTemplate('')}>
+            <Sparkles />
+            {t('workspace.manageTemplates')}
           </Button>
         </div>
-      )}
+      ) : null}
       {activating ? (
         <ActivateDialog
           harness={harness}

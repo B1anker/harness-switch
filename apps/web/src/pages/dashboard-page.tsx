@@ -62,6 +62,7 @@ export function DashboardPage() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
+  const [templateToOpen, setTemplateToOpen] = useState('');
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
 
@@ -131,7 +132,10 @@ export function DashboardPage() {
             onHistory={() => setView('history')}
           />
         ) : view === 'favorites' ? (
-          <ModelFavorites key={currentUser} />
+          <ModelFavorites
+            key={`${currentUser}/${templateToOpen}`}
+            initialSelectedId={templateToOpen}
+          />
         ) : view === 'history' ? (
           <RecoveryTimeline key={currentUser} />
         ) : (
@@ -160,7 +164,10 @@ export function DashboardPage() {
                     onNewProfile={() =>
                       setEditing({ harnessId: selectedHarness.id, profile: null })
                     }
-                    onManageFavorites={() => setView('favorites')}
+                    onOpenTemplate={(id) => {
+                      setTemplateToOpen(id);
+                      setView('favorites');
+                    }}
                   />
                   <details className="group rounded-2xl border bg-card px-5 py-4 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
