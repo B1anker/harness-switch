@@ -21,8 +21,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
-import { ChannelOverrides } from './channel-overrides';
-import { FavoriteFacts, FavoriteSelect } from './fields';
+import { ConnectionCard } from './connection-card';
+import { FavoriteFacts } from './fields';
 
 export function FavoriteEditor({
   favorite,
@@ -34,8 +34,6 @@ export function FavoriteEditor({
   const { t } = useTranslation();
   const providers = useAppStore((state) => state.providers) ?? [];
   const save = useAppStore((state) => state.saveFavorite);
-  const catalogs = useAppStore((state) => state.favoriteCatalogs);
-  const loadCatalog = useAppStore((state) => state.loadFavoriteCatalog);
   const [draft, setDraft] = useState<FavoriteInput>(
     favorite ?? {
       name: '',
@@ -92,7 +90,7 @@ export function FavoriteEditor({
     }
   };
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent className="flex max-h-[90dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">
           <DialogTitle>{t(favorite ? 'favorites.edit' : 'favorites.add')}</DialogTitle>
@@ -137,112 +135,26 @@ export function FavoriteEditor({
             />
           </Disclosure>
           <h3 className="font-semibold">{t('favorites.connections')}</h3>
-          {draft.connections.map((connection) => (
-            <fieldset key={connection.id} className="space-y-3 rounded-xl border p-4">
-              <legend>{connection.label || t('favorites.connection')}</legend>
-              <Disclosure title={t('favorites.channelName')}>
-                <FormField id={`${connection.id}-label`} label={t('favorites.label')}>
-                  {(control) => (
-                    <Input
-                      {...control}
-                      value={connection.label}
-                      maxLength={120}
-                      onChange={(event) => update(connection.id, { label: event.target.value })}
-                    />
-                  )}
-                </FormField>
-              </Disclosure>
-              <FavoriteSelect
-                id={`${connection.id}-provider`}
-                label={t('favorites.endpoint')}
-                value={
-                  connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''
-                }
-                options={providers.flatMap((provider) =>
-                  provider.endpoints.map((endpoint) => ({
-                    value: `${provider.id}/${endpoint.key}`,
-                    label: `${provider.name} · ${endpoint.label || endpoint.key}`,
-                  })),
-                )}
-                onChange={(value) => {
-                  const [providerId, endpointKey] = value.split('/');
-                  update(connection.id, { providerId, endpointKey });
-                }}
-              />
-              <FavoriteSelect
-                id={`${connection.id}-protocol`}
-                label={t('favorites.protocol')}
-                value={connection.protocol}
-                options={['openai-chat', 'openai-responses', 'anthropic-messages'].map((value) => ({
-                  value,
-                  label: value,
-                }))}
-                onChange={(value) =>
-                  update(connection.id, { protocol: value as FavoriteConnection['protocol'] })
-                }
-              />
-              <FormField id={`${connection.id}-model`} label={t('favorites.model')}>
-                {(control) => (
-                  <Input
-                    {...control}
-                    maxLength={120}
-                    value={connection.requestModelId}
-                    onChange={(event) =>
-                      update(connection.id, { requestModelId: event.target.value })
-                    }
-                  />
-                )}
-              </FormField>
-              <ChannelOverrides
-                favorite={draft}
-                connection={connection}
-                onChange={(patch) => update(connection.id, patch)}
-              />
-              <Button
-                variant="outline"
-                disabled={busy || !connection.providerId || !connection.endpointKey}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await loadCatalog(connection.providerId, connection.endpointKey);
-                  } catch (cause) {
-                    setError(lineText(t, errorLine(cause)));
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                {t('favorites.catalog')}
-              </Button>
-              {catalogs[`${connection.providerId}/${connection.endpointKey}`]?.models?.length ? (
-                <FavoriteSelect
-                  id={`${connection.id}-catalog`}
-                  label={t('favorites.catalogModel')}
-                  value={connection.requestModelId}
-                  options={catalogs[
-                    `${connection.providerId}/${connection.endpointKey}`
-                  ]!.models!.map((model) => ({ value: model, label: model }))}
-                  onChange={(requestModelId) => update(connection.id, { requestModelId })}
-                />
-              ) : catalogs[`${connection.providerId}/${connection.endpointKey}`] ? (
-                <p>{t('favorites.noCatalog')}</p>
-              ) : null}
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setDraft({
-                    ...draft,
-                    connections: draft.connections.filter((item) => item.id !== connection.id),
-                  })
-                }
-              >
-                {t('favorites.removeConnection')}
-              </Button>
-            </fieldset>
+          {draft.connections.map((connection, index) => (
+            <ConnectionCard
+              key={connection.id}
+              favorite={draft}
+              connection={connection}
+              index={index}
+              disabled={busy}
+              onChange={(patch) => update(connection.id, patch)}
+              onRemove={() =>
+                setDraft({
+                  ...draft,
+                  connections: draft.connections.filter((item) => item.id !== connection.id),
+                })
+              }
+            />
           ))}
           <Button
             variant="outline"
-            disabled={draft.connections.length >= 50}
+            className="w-full border-dashed text-muted-foreground"
+            disabled={busy || draft.connections.length >= 50}
             onClick={() =>
               setDraft({
                 ...draft,

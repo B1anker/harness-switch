@@ -1006,7 +1006,7 @@
     "endpoint": "Vault endpoint",
     "protocol": "Protocol",
     "model": "Exact request model ID",
-    "addConnection": "Add connection",
+    "addConnection": "+ Add channel",
     "removeConnection": "Remove connection",
     "contextWindow": "Context window",
     "maxOutputTokens": "Maximum output tokens",
@@ -1154,7 +1154,23 @@
       "detach": "Before detaching “{{name}}” from {{tools}}",
       "apply": "Before configuring “{{name}}” for {{tools}}",
       "restore": "Before global restore to {{name}}"
-    }
+    },
+    "channelNumber": "Channel {{count}}",
+    "channelHint": "Choose a provider and the model to use",
+    "channelProvider": "Provider / endpoint",
+    "chooseProvider": "Choose a provider endpoint",
+    "removeChannelNamed": "Remove channel: {{name}}",
+    "modelPicker": "Model",
+    "modelPickerHint": "Choose from the catalog or enter a custom model ID.",
+    "modelPlaceholder": "Choose or enter a model ID",
+    "modelSearch": "Search or enter a model ID",
+    "modelEmpty": "Enter a model ID to add it, or load the provider catalog first.",
+    "modelCustom": "Use “{{value}}”",
+    "catalogLoad": "Load catalog",
+    "catalogRefresh": "Refresh catalog",
+    "catalogLoading": "Loading",
+    "catalogCount": "{{count}} catalog models available to search above.",
+    "noCatalogManual": "No catalog available. You can still enter a model ID."
   },
   "favorite": {
     "result": "Operation completed"

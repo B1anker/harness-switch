@@ -1006,7 +1006,7 @@
     "endpoint": "凭据库端点",
     "protocol": "协议",
     "model": "精确请求模型 ID",
-    "addConnection": "连接供应商",
+    "addConnection": "+ 添加渠道",
     "removeConnection": "移除此渠道",
     "contextWindow": "上下文窗口",
     "maxOutputTokens": "最大输出 token",
@@ -1154,7 +1154,23 @@
       "detach": "解除 {{tools}} 配置「{{name}}」的关联前",
       "apply": "将「{{name}}」配置到 {{tools}} 前",
       "restore": "全局恢复到 {{name}} 前"
-    }
+    },
+    "channelNumber": "渠道 {{count}}",
+    "channelHint": "选择供应商，再设置要使用的模型",
+    "channelProvider": "供应商 / 入口",
+    "chooseProvider": "选择供应商入口",
+    "removeChannelNamed": "移除渠道：{{name}}",
+    "modelPicker": "模型",
+    "modelPickerHint": "从目录选择，或输入自定义模型 ID。",
+    "modelPlaceholder": "选择或输入模型 ID",
+    "modelSearch": "搜索或输入模型 ID",
+    "modelEmpty": "输入模型 ID 即可添加，也可以先加载供应商目录。",
+    "modelCustom": "使用「{{value}}」",
+    "catalogLoad": "加载目录",
+    "catalogRefresh": "刷新目录",
+    "catalogLoading": "加载中",
+    "catalogCount": "目录中有 {{count}} 个模型，可在上方搜索选择。",
+    "noCatalogManual": "暂无可用目录，仍可手动输入模型 ID。"
   },
   "favorite": {
     "result": "操作完成"

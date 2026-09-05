@@ -17,19 +17,21 @@ export function FavoriteSelect({
   value,
   options,
   onChange,
+  placeholder,
 }: {
   id: string;
   label: string;
   value: string;
   options: Array<{ value: string; label: string }>;
   onChange(value: string): void;
+  placeholder?: string;
 }) {
   return (
     <FormField id={id} label={label}>
       {(control) => (
         <Select value={value || undefined} onValueChange={onChange}>
           <SelectTrigger {...control}>
-            <SelectValue />
+            <SelectValue placeholder={placeholder} />
           </SelectTrigger>
           <SelectContent>
             {options.map((option) => (
