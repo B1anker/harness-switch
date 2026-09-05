@@ -8,6 +8,8 @@ import type {
   ProfilePublic,
   ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
+import { createFavoriteRequestSchema } from '@seaveyon/harness-switch-shared';
+import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 
 /**
  * Mirrors the 1M flag spec the Claude adapter emits per model tier, including the catalog
@@ -170,5 +172,28 @@ export function doctorReportFixture(overrides: Partial<DoctorReport> = {}): Doct
       }),
     ],
     ...overrides,
+  };
+}
+
+export function favoriteFixture(name: string, model: string): FavoriteListItem {
+  return {
+    ...createFavoriteRequestSchema.parse({
+      name,
+      connections: [
+        {
+          id: '00000000-0000-4000-8000-000000000002',
+          label: 'route',
+          providerId: 'vault',
+          endpointKey: 'api',
+          protocol: 'openai-responses',
+          requestModelId: model,
+        },
+      ],
+    }),
+    id: '00000000-0000-4000-8000-000000000001',
+    revision: 1,
+    createdAt: '2026-09-05T00:00:00Z',
+    updatedAt: '2026-09-05T00:00:00Z',
+    references: [],
   };
 }

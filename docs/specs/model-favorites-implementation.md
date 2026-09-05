@@ -1,0 +1,65 @@
+# 模型收藏夹实现与验证记录
+
+对应 [模型收藏夹 Spec](model-favorites.zh-CN.md)。实现包含收藏 CRUD、多渠道参数覆盖、从配置收藏、关联状态和解除关联、保存/激活计划、持久化结果查询、Web/CLI 入口、v2 导入导出及跨用户依赖复制。尚未通过五种 CLI 的实机发布验收，不能据此发布兼容承诺。
+
+## 服务边界
+
+```mermaid
+graph TD
+  HTTP --> FavoriteService
+  CLI --> HTTP
+  Web --> HTTP
+  HTTP --> FavoriteApplyService
+  FavoriteService --> FavoriteStore
+  FavoriteService --> ProfileService
+  FavoriteService --> VaultService
+  FavoriteService --> AdapterRegistry
+  FavoriteService --> LiveWriteService
+  FavoriteApplyService --> FavoriteStore
+  FavoriteApplyService --> ProfileService
+  FavoriteApplyService --> VaultService
+  FavoriteApplyService --> AdapterRegistry
+  FavoriteApplyService --> ActivationService
+  FavoriteApplyService --> LiveWriteService
+  FavoriteApplyService --> JournalService
+  ProviderService --> FavoriteStore
+  FavoriteStore --> EnvironmentService
+  FavoriteStore --> FileService
+  ProfileService --> VaultService
+```
+
+ProfileService 不依赖收藏服务；adapter 投影是无凭据纯函数。仅保存路径不会调用 `syncProfile`，计划中的原生写入集合为空。激活继续使用现有 adapter renderer，原配置回读及 active 更新进入 LiveWrite 的 metadata 回滚边界。
+
+计划有效期十分钟，绑定会话和当前用户目录。收藏修订、完整目标 profile、Vault、active 和原生文件变化都会使未提交计划失效。服务中的检查和本地写入同步执行，依靠单进程 JavaScript 的执行到完成语义串行化，事务内没有网络 await；没有新增跨进程文件锁。外部 CLI 修改仍由提交前指纹核对发现，无法保证对外部并发写入的绝对隔离。
+
+每工具独立 journal 事务持久化 request/plan 身份及结果。普通失败回滚后继续，恢复降级或无法写入收据时停止。重复请求读取原收据，不重放写入；重启后未执行项需重新预览。新 metadata 收据记录提交后指纹，撤销遇到后续改动会拒绝覆盖。
+
+迁移 payload 默认 v2，导出 v1 必须显式选择且剥离收藏关系；加密 envelope 仍为 v1。导入及跨用户复制重映射收藏、渠道和 Vault 身份；跳过的同名 profile 保留原关联。
+
+## 自动化和隔离验证
+
+日期：2026-09-05。测试沿用仓库 support，凭据均为测试数据。
+
+最终完整运行：服务端 385 项通过，Web 176 项通过；typecheck、lint、Biome 和 Web build 退出码均为 0。
+
+- 服务端完整测试覆盖存储拒绝损坏输入、参数投影与清除、PATCH 保留省略字段、仅保存不写原生配置、受控字段保护、引用约束、计划失效、事务故障回滚、批次部分成功、重启查询、幂等重试、撤销冲突及 v1/v2 迁移。
+- Web 完整测试包含收藏搜索不探测上游、断开渠道仍可见、关联状态和删除保护。
+- 类型检查、lint、格式检查及 Web 构建。lint 存在原有 i18next 导入警告；构建存在既有包体积警告。
+- Chrome 在临时 HOME/dataDir 的本地服务验证：新增收藏、选择渠道、Pi 保存预览、确认并显示成功；没有改动日常工具配置。
+- 实际运行项目 CLI 的 favorites、plan、apply、同 request-id 重试、capture/link-source；确认 DSH 仅保存未创建原生 settings 文件。
+
+这不是 A01–A24 每个故障组合的完整证明；尤其 kill/recovery 和五种外部 CLI 的读取行为仍须按 spec 发布验收。
+
+## 实机发布门槛
+
+本机仅核实以下版本可执行，不等同于已完成生成配置读取、模型切换或上游请求：
+
+| CLI | 版本 | 新建收藏配置的实机验收 |
+| --- | --- | --- |
+| Claude Code | 2.1.260 | 待验证 |
+| Codex CLI | 0.153.1 | 待验证 |
+| Kimi | 0.39.1 | 待验证 |
+| Pi | 未安装 | 待准备环境并验证 |
+| DSH | 0.1.2-rc.1 | 待验证 |
+
+评审后应使用隔离 HOME、测试账号和对应 endpoint，对五种 CLI 完成全新 profile 激活、原生 provider ID 冲突、真实读取及必要的显式 completion 检查，并记录版本、命令、结果与无凭据泄露的证据。未完成前 PR 保持草稿，不合并或发布。

@@ -15,7 +15,13 @@ export function createTransferRoutes(services: InstantiationService): Hono {
 
   app.post('/export', async (c) => {
     const body = await readJsonBody(c, transferExportRequestSchema);
-    return c.json(transfer.exportAll(body.passphrase, body.includeCodexLoginCache !== false));
+    return c.json(
+      transfer.exportAll(
+        body.passphrase,
+        body.includeCodexLoginCache !== false,
+        body.legacy === true,
+      ),
+    );
   });
 
   app.post('/preview', async (c) => {

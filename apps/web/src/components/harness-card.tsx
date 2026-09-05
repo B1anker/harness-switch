@@ -2,6 +2,7 @@ import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-sha
 import { CircleUserRound, Copy, Pencil, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { ActivateDialog } from '@/components/activate-dialog';
+import { FavoriteLinkStatus } from '@/components/model-favorites/link-status';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -190,6 +191,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                           {profile.model}
                         </p>
                       ) : null}
+                      {profile.modelFavorite ? <FavoriteLinkStatus profile={profile} /> : null}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">

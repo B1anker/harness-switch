@@ -6,10 +6,12 @@ import type {
   ProviderPublic,
   UpdateProviderRequest,
 } from '@seaveyon/harness-switch-shared';
-import { PROBE_CODES, WARNING_CODES } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, PROBE_CODES, WARNING_CODES } from '@seaveyon/harness-switch-shared';
+import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IActivationService } from './activation';
 import { ILogService } from './log';
+import { IModelFavoriteStore } from './model-favorite-store';
 import { IProbeService } from './probe';
 import { IProfileService } from './profiles';
 import { IHarnessRegistry } from './registry';
@@ -26,6 +28,7 @@ export interface IProviderService {
   readonly _serviceBrand: undefined;
   /** Rewrites the entry, then re-syncs every profile and live file that mirrors it. */
   update(id: string, input: UpdateProviderRequest): ProviderMutationResponse;
+  remove(id: string): void;
   probe(id: string, options: ProviderProbeOptions): Promise<ProbeResult>;
 }
 
@@ -45,6 +48,7 @@ export const IProviderService = createDecorator<IProviderService>('providerServi
   IProbeService,
   IHarnessRegistry,
   ILogService,
+  IModelFavoriteStore,
 )
 export class ProviderService implements IProviderService {
   declare readonly _serviceBrand: undefined;
@@ -56,9 +60,26 @@ export class ProviderService implements IProviderService {
     private readonly probes: IProbeService,
     private readonly harnesses: IHarnessRegistry,
     private readonly log: ILogService,
+    private readonly favorites: IModelFavoriteStore,
   ) {}
 
   update(id: string, input: UpdateProviderRequest): ProviderMutationResponse {
+    const references = this.favorites
+      .list()
+      .flatMap((favorite) =>
+        favorite.connections.filter((connection) => connection.providerId === id),
+      );
+    if (
+      input.endpoints &&
+      references.some(
+        (connection) =>
+          !input.endpoints!.some((endpoint) => endpoint.key === connection.endpointKey),
+      )
+    ) {
+      throw new HttpError(409, ERROR_CODES.favoriteEndpointMissing, {
+        code: ERROR_CODES.favoriteEndpointMissing,
+      });
+    }
     const { provider, affected } = this.vault.update(id, input);
 
     // Refresh the cached credential/base URL of every referencing profile so the
@@ -101,6 +122,17 @@ export class ProviderService implements IProviderService {
       }
     }
     return { provider, warnings };
+  }
+
+  remove(id: string): void {
+    if (
+      this.favorites
+        .list()
+        .some((favorite) => favorite.connections.some((connection) => connection.providerId === id))
+    ) {
+      throw new HttpError(409, ERROR_CODES.favoriteInUse, { code: ERROR_CODES.favoriteInUse });
+    }
+    this.vault.remove(id);
   }
 
   async probe(id: string, options: ProviderProbeOptions): Promise<ProbeResult> {

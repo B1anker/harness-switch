@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { HARNESS_IDS } from './harnesses';
+import { modelFavoriteLinkSchema, modelFavoriteSchema } from './model-favorites';
 
 /**
  * Request shapes, validated at the HTTP boundary before anything reaches the store.
@@ -155,6 +156,7 @@ export const transferEnvelopeSchema = z.object({
  * keys are stripped here too, so nothing unrecognised reaches disk.
  */
 const portableProfileSchema = z.object({
+  modelFavorite: modelFavoriteLinkSchema.optional(),
   harness: harnessIdSchema,
   name: entityName,
   baseUrl: optionalText(MAX_URL),
@@ -200,7 +202,8 @@ const MAX_PORTABLE_ITEMS = 10_000;
 
 export const portablePayloadSchema = z.object({
   format: z.literal('harness-switch-portable-config'),
-  version: z.literal(1),
+  version: z.union([z.literal(1), z.literal(2)]),
+  favorites: z.array(modelFavoriteSchema).max(1000).optional(),
   exportedAt: z.string(),
   profiles: z.array(portableProfileSchema).max(MAX_PORTABLE_ITEMS),
   /** Optional so exports made before vault support remain importable. */
@@ -211,6 +214,7 @@ export const portablePayloadSchema = z.object({
 });
 
 export const transferExportRequestSchema = z.object({
+  legacy: z.boolean().optional(),
   passphrase: optionalText(MAX_KEY),
   includeCodexLoginCache: z.boolean().optional(),
 });

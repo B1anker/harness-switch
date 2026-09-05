@@ -18,6 +18,7 @@ import { DoctorPanel } from '@/components/doctor-panel';
 import { HarnessCard } from '@/components/harness-card';
 import { HarnessIcon } from '@/components/harness-icon';
 import { LanguageToggle } from '@/components/language-toggle';
+import { ModelFavorites } from '@/components/model-favorites';
 import { NoticeToast } from '@/components/notice-toast';
 import { OperationsPanel } from '@/components/operations-panel';
 import { ProfileDialog } from '@/components/profile-dialog';
@@ -46,6 +47,8 @@ type Editing = {
 };
 
 export function DashboardPage() {
+  const currentUser = useAppStore((state) => state.currentUser);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
   const { locale } = useI18n();
   const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
@@ -85,67 +88,74 @@ export function DashboardPage() {
               <KeyRound />
               <span className="hidden sm:inline">{t('nav.vault')}</span>
             </Button>
+            <Button variant="outline" size="sm" onClick={() => setFavoritesOpen(!favoritesOpen)}>
+              {t(favoritesOpen ? 'favorites.harnesses' : 'favorites.title')}
+            </Button>
             <LanguageToggle />
             <ThemeToggle />
             <UserMenu />
           </div>
         </div>
       </header>
-      <div className="grid xl:grid-cols-[17rem_minmax(0,1fr)_18rem]">
-        <HarnessTabs
-          harnesses={harnesses}
-          value={selectedHarness?.id}
-          onChange={setSelectedHarnessId}
-        />
-        {selectedHarness ? (
-          <TabPanel
-            as="main"
-            idPrefix="harness"
-            value={selectedHarness.id}
-            className="min-w-0 space-y-6 p-4 sm:p-6 xl:p-8"
-          >
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold tracking-tight">{selectedHarness.label}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{t('harness.subtitle')}</p>
-              </div>
-              <Button
-                className="self-start sm:self-auto"
-                onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
-              >
-                <Plus />
-                {t(harnessWords(selectedHarness.id).add)}
-              </Button>
-            </div>
-            <HarnessCard
-              harness={selectedHarness}
-              onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
-              onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
-              onCopy={(copySource) =>
-                setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
-              }
-            />
-            <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
-                <span className="font-mono text-[13px]">{t('env.title')}</span>
-                <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
-              </summary>
-              <p className="mt-4 leading-relaxed text-muted-foreground">{t('env.intro')}</p>
-              <code className="mt-3 block rounded-xl bg-muted/70 px-4 py-3 font-mono text-[13px]">
-                source {envFile || '~/.harness-switch/env.sh'}
-              </code>
-              <p className="mt-3 leading-relaxed text-muted-foreground">{t('env.note')}</p>
-            </details>
-          </TabPanel>
-        ) : null}
-        {selectedHarness ? (
-          <ContextPanel
-            harness={selectedHarness}
-            latestBackup={backups.find((backup) => backup.harness === selectedHarness.id)}
-            locale={locale}
+      {favoritesOpen ? (
+        <ModelFavorites key={currentUser} />
+      ) : (
+        <div className="grid xl:grid-cols-[17rem_minmax(0,1fr)_18rem]">
+          <HarnessTabs
+            harnesses={harnesses}
+            value={selectedHarness?.id}
+            onChange={setSelectedHarnessId}
           />
-        ) : null}
-      </div>
+          {selectedHarness ? (
+            <TabPanel
+              as="main"
+              idPrefix="harness"
+              value={selectedHarness.id}
+              className="min-w-0 space-y-6 p-4 sm:p-6 xl:p-8"
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold tracking-tight">{selectedHarness.label}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{t('harness.subtitle')}</p>
+                </div>
+                <Button
+                  className="self-start sm:self-auto"
+                  onClick={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
+                >
+                  <Plus />
+                  {t(harnessWords(selectedHarness.id).add)}
+                </Button>
+              </div>
+              <HarnessCard
+                harness={selectedHarness}
+                onAdd={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
+                onEdit={(profile) => setEditing({ harnessId: selectedHarness.id, profile })}
+                onCopy={(copySource) =>
+                  setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
+                }
+              />
+              <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
+                  <span className="font-mono text-[13px]">{t('env.title')}</span>
+                  <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </summary>
+                <p className="mt-4 leading-relaxed text-muted-foreground">{t('env.intro')}</p>
+                <code className="mt-3 block rounded-xl bg-muted/70 px-4 py-3 font-mono text-[13px]">
+                  source {envFile || '~/.harness-switch/env.sh'}
+                </code>
+                <p className="mt-3 leading-relaxed text-muted-foreground">{t('env.note')}</p>
+              </details>
+            </TabPanel>
+          ) : null}
+          {selectedHarness ? (
+            <ContextPanel
+              harness={selectedHarness}
+              latestBackup={backups.find((backup) => backup.harness === selectedHarness.id)}
+              locale={locale}
+            />
+          ) : null}
+        </div>
+      )}
       {editing && editingHarness ? (
         <ProfileDialog
           key={`${editing.harnessId}-${editing.profile?.name ?? editing.copySource?.name ?? 'new'}`}

@@ -1,6 +1,9 @@
+import { createHash } from 'node:crypto';
 import {
   ERROR_CODES,
   type HarnessId,
+  type ModelFavoriteLink,
+  modelFavoriteLinkSchema,
   type ProfilePublic,
   type ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
@@ -16,6 +19,7 @@ import { IHarnessRegistry } from './registry';
 import { IVaultService, type ProviderEndpoint } from './vault';
 
 export type StoredProfile = {
+  model_favorite?: ModelFavoriteLink;
   base_url: string;
   api_key: EncryptedValue;
   model: string;
@@ -65,11 +69,13 @@ export type DecryptedProfile = AdapterProfile & {
 };
 
 export interface IProfileService {
+  fingerprint(harness: HarnessId, name: string): string;
   readonly _serviceBrand: undefined;
   list(harness: HarnessId): ProfilePublic[];
   get(harness: HarnessId, name: string): ProfilePublic | undefined;
   upsert(harness: HarnessId, input: ProfileInput, isCreate: boolean): ProfilePublic;
   remove(harness: HarnessId, name: string): void;
+  setFavoriteLink(harness: HarnessId, name: string, link: ModelFavoriteLink | undefined): void;
   decrypt(harness: HarnessId, name: string): DecryptedProfile;
   /** Used by the pre-switch backfill to persist values recovered from a live file. */
   applyBackfill(harness: HarnessId, name: string, values: Partial<AdapterProfile>): void;
@@ -112,6 +118,13 @@ export class ProfileService implements IProfileService {
     return Object.entries(store[harness] ?? {}).map(([name, profile]) =>
       this.toPublic(harness, name, profile),
     );
+  }
+
+  fingerprint(harness: HarnessId, name: string): string {
+    return createHash('sha256')
+      .update(this.environment.dataDir)
+      .update(JSON.stringify(this.read()[harness]?.[name] ?? null))
+      .digest('hex');
   }
 
   get(harness: HarnessId, name: string): ProfilePublic | undefined {
@@ -203,6 +216,7 @@ export class ProfileService implements IProfileService {
     );
 
     const next: StoredProfile = {
+      model_favorite: prior?.model_favorite,
       base_url: baseUrl,
       api_key: this.crypto.encrypt(apiKey),
       model: (input.model ?? inherited?.model ?? '').trim(),
@@ -216,7 +230,27 @@ export class ProfileService implements IProfileService {
       updated_at: new Date().toISOString(),
     };
 
+    if (prior?.model_favorite) {
+      const link = modelFavoriteLinkSchema.safeParse(prior.model_favorite);
+      const changed =
+        !link.success ||
+        next.model !== prior.model ||
+        next.provider_id !== prior.provider_id ||
+        next.provider_endpoint !== prior.provider_endpoint ||
+        next.base_url !== prior.base_url ||
+        Object.keys(next.overrides ?? {}).length > 0 ||
+        Object.keys(link.data.baseline.extras).some(
+          (key) => next.extras?.[key] !== prior.extras?.[key],
+        );
+      if (changed) {
+        throw new HttpError(409, ERROR_CODES.favoriteProfileDiverged, {
+          code: ERROR_CODES.favoriteProfileDiverged,
+        });
+      }
+    }
+
     this.adapters.get(harness).validate?.({
+      favoriteManaged: next.model_favorite !== undefined,
       name,
       baseUrl: next.base_url,
       apiKey,
@@ -230,6 +264,20 @@ export class ProfileService implements IProfileService {
     }
     this.files.writeJson(this.environment.files.profiles, store);
     return this.toPublic(harness, name, next);
+  }
+
+  setFavoriteLink(harness: HarnessId, name: string, link: ModelFavoriteLink | undefined): void {
+    const store = this.read();
+    const profile = store[harness]?.[name];
+    if (!profile) {
+      throw new HttpError(404, ERROR_CODES.profileNotFound, { code: ERROR_CODES.profileNotFound });
+    }
+    if (link) {
+      profile.model_favorite = modelFavoriteLinkSchema.parse(link);
+    } else {
+      delete profile.model_favorite;
+    }
+    this.files.writeJson(this.environment.files.profiles, store);
   }
 
   remove(harness: HarnessId, name: string): void {
@@ -246,8 +294,22 @@ export class ProfileService implements IProfileService {
     if (!stored) {
       throw new HttpError(404, 'profile not found', { code: ERROR_CODES.profileNotFound });
     }
+    if (stored.model_favorite) {
+      if (
+        !stored.provider_id ||
+        !stored.provider_endpoint ||
+        !this.vault
+          .get(stored.provider_id)
+          .endpoints.some((endpoint) => endpoint.key === stored.provider_endpoint)
+      ) {
+        throw new HttpError(409, ERROR_CODES.favoriteEndpointMissing, {
+          code: ERROR_CODES.favoriteEndpointMissing,
+        });
+      }
+    }
     return {
       name,
+      favoriteManaged: stored.model_favorite !== undefined,
       baseUrl: this.resolveBaseUrl(
         stored.base_url || '',
         stored.provider_id,
@@ -299,7 +361,11 @@ export class ProfileService implements IProfileService {
             : undefined;
         if (endpoint) {
           stored.base_url = endpoint.baseUrl;
-        } else if (stored.provider_endpoint !== undefined && endpoints.length > 0) {
+        } else if (
+          !stored.model_favorite &&
+          stored.provider_endpoint !== undefined &&
+          endpoints.length > 0
+        ) {
           stored.provider_endpoint = endpoints[0]!.key;
           stored.base_url = endpoints[0]!.baseUrl;
         }
@@ -321,6 +387,9 @@ export class ProfileService implements IProfileService {
   private repairEndpointReferences(store: ProfileStore, harness: HarnessId): boolean {
     let changed = false;
     for (const stored of Object.values(store[harness] ?? {})) {
+      if (stored.model_favorite) {
+        continue;
+      }
       if (!stored.provider_id || !stored.provider_endpoint) {
         continue;
       }
@@ -347,6 +416,7 @@ export class ProfileService implements IProfileService {
     return {
       harness,
       name,
+      modelFavorite: modelFavoriteLinkSchema.safeParse(profile.model_favorite).data,
       baseUrl: profile.base_url || '',
       model: profile.model || '',
       notes: profile.notes || '',
@@ -364,6 +434,9 @@ export class ProfileService implements IProfileService {
    * reader, but the degradation is logged so the drift is visible.
    */
   private resolveKey(stored: StoredProfile): string {
+    if (stored.model_favorite && stored.provider_id) {
+      return this.vault.decrypt(stored.provider_id);
+    }
     if (!stored.provider_id) {
       return this.crypto.decrypt(stored.api_key);
     }

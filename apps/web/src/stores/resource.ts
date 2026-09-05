@@ -3,7 +3,14 @@ import { errorLine, type MessageLine } from '@/lib/messages';
 import type { AppState, SetState } from './types';
 
 /** The collections that carry their own `{ x, xLoading, xError }` triple. */
-type ResourceName = 'providers' | 'doctor' | 'drift' | 'scan' | 'operations' | 'githubStatus';
+type ResourceName =
+  | 'favorites'
+  | 'providers'
+  | 'doctor'
+  | 'drift'
+  | 'scan'
+  | 'operations'
+  | 'githubStatus';
 
 /**
  * Runs one load into a `{ x, xLoading, xError }` triple.

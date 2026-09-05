@@ -15,6 +15,12 @@ import { HttpClient, IHttpClient } from './services/http-client';
 import { IJournalService, JournalService } from './services/journal';
 import { ILiveWriteService, LiveWriteService } from './services/live-write';
 import { ILogService, LogService } from './services/log';
+import { IModelFavoriteService, ModelFavoriteService } from './services/model-favorite';
+import {
+  IModelFavoriteApplyService,
+  ModelFavoriteApplyService,
+} from './services/model-favorite-apply';
+import { IModelFavoriteStore, ModelFavoriteStore } from './services/model-favorite-store';
 import { IProbeService, ProbeService } from './services/probe';
 import { IProbeCacheService, ProbeCacheService } from './services/probe-cache';
 import { IProbeProfileService, ProbeProfileService } from './services/probe-profile';
@@ -67,6 +73,13 @@ export function createServices(): InstantiationService {
   collection.set(IProbeCacheService, new SyncDescriptor(ProbeCacheService, [], DELAYED));
   collection.set(IProbeProfileService, new SyncDescriptor(ProbeProfileService, [], DELAYED));
   collection.set(IDriftService, new SyncDescriptor(DriftService, [], DELAYED));
+
+  collection.set(IModelFavoriteService, new SyncDescriptor(ModelFavoriteService, [], DELAYED));
+  collection.set(
+    IModelFavoriteApplyService,
+    new SyncDescriptor(ModelFavoriteApplyService, [], DELAYED),
+  );
+  collection.set(IModelFavoriteStore, new SyncDescriptor(ModelFavoriteStore, [], DELAYED));
 
   // Orchestration: multi-service workflows, each behind a single route family.
   collection.set(IActivationService, new SyncDescriptor(ActivationService));

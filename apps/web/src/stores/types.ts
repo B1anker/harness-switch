@@ -3,6 +3,7 @@ import type { BackupSlice } from './slices/backups';
 import type { GithubSlice } from './slices/github';
 import type { HarnessSlice } from './slices/harnesses';
 import type { InsightSlice } from './slices/insights';
+import type { FavoriteSlice } from './slices/model-favorites';
 import type { NoticeSlice } from './slices/notice';
 import type { OperationSlice } from './slices/operations';
 import type { ProbeSlice } from './slices/probe';
@@ -15,7 +16,8 @@ import type { SessionSlice } from './slices/session';
  * not a boundary: each one is written against the full state, because loading harnesses
  * refreshes drift, adopting drift reloads harnesses, and so on.
  */
-export type AppState = SessionSlice &
+export type AppState = FavoriteSlice &
+  SessionSlice &
   HarnessSlice &
   BackupSlice &
   ProviderSlice &

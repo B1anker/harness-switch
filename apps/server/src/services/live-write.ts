@@ -4,9 +4,12 @@ import type {
   OperationKind,
   OperationMetadataKey,
 } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES, type OperationReceipt } from '@seaveyon/harness-switch-shared';
+import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { assertParsable } from './adapters/serialize';
 import { type FileSnapshot, IBackupService } from './backup';
+import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { IJournalService } from './journal';
 import { ILogService } from './log';
@@ -23,6 +26,7 @@ export type PlannedWrite = {
 
 /** One complete business operation: the native files plus the store files it commits. */
 export type OperationPlan = {
+  favoriteResult?: OperationReceipt['favoriteResult'];
   kind: OperationKind;
   harness: HarnessId;
   profile: string;
@@ -33,6 +37,15 @@ export type OperationPlan = {
    * leaving the config on disk and the record of it disagreeing.
    */
   metadata?: OperationMetadataKey[];
+  beforeWrites?: () => void;
+  favoriteRequest?: {
+    version: 1;
+    requestId: string;
+    planId: string;
+    item: number;
+    approvalHash: string;
+    targets?: Array<{ harness: HarnessId; profile: string }>;
+  };
 };
 
 export interface ILiveWriteService {
@@ -47,7 +60,7 @@ export interface ILiveWriteService {
 
 export const ILiveWriteService = createDecorator<ILiveWriteService>('liveWriteService');
 
-@inject(IFileService, IBackupService, IJournalService, ILogService)
+@inject(IFileService, IBackupService, IJournalService, ILogService, IEnvironmentService)
 export class LiveWriteService implements ILiveWriteService {
   declare readonly _serviceBrand: undefined;
 
@@ -56,6 +69,7 @@ export class LiveWriteService implements ILiveWriteService {
     private readonly backups: IBackupService,
     private readonly journal: IJournalService,
     private readonly log: ILogService,
+    private readonly environment: IEnvironmentService,
   ) {}
 
   /**
@@ -74,6 +88,10 @@ export class LiveWriteService implements ILiveWriteService {
       assertParsable(write.format, write.path, write.content);
     }
 
+    const metadata = (plan.metadata ?? []).map((key) => ({
+      path: this.environment.files[key],
+      content: this.files.readOptional(this.environment.files[key]),
+    }));
     const snapshots: FileSnapshot[] = writes.map((write) => ({
       key: write.key,
       path: write.path,
@@ -98,11 +116,14 @@ export class LiveWriteService implements ILiveWriteService {
         existed: snapshot.content !== undefined,
       })),
       metadata: plan.metadata ?? [],
+      favoriteRequest: plan.favoriteRequest,
+      favoriteResult: plan.favoriteResult,
     });
 
     const written: Array<{ snapshot: FileSnapshot; secret: boolean }> = [];
     try {
       entry.applying();
+      plan.beforeWrites?.();
       for (const [index, write] of writes.entries()) {
         this.write(write);
         written.push({ snapshot: snapshots[index]!, secret: write.secret === true });
@@ -112,9 +133,17 @@ export class LiveWriteService implements ILiveWriteService {
       entry.committed();
       return result;
     } catch (error) {
-      const restored = this.rollback(written);
+      let restored = this.rollback(written);
+      for (const snapshot of metadata.toReversed()) {
+        try {
+          this.files.restore(snapshot.path, snapshot.content);
+        } catch (restoreError) {
+          restored = false;
+          this.log.error('metadata rollback failed', restoreError);
+        }
+      }
       if (restored) {
-        entry.rolledBack();
+        entry.rolledBack(error instanceof HttpError ? error.code : ERROR_CODES.requestFailed);
       } else {
         entry.degraded('回滚过程中有文件未能恢复，请从备份手动恢复');
       }

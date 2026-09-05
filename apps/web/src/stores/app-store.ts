@@ -3,6 +3,7 @@ import { createBackupSlice } from './slices/backups';
 import { createGithubSlice } from './slices/github';
 import { createHarnessSlice } from './slices/harnesses';
 import { createInsightSlice } from './slices/insights';
+import { createFavoriteSlice } from './slices/model-favorites';
 import { createNoticeSlice } from './slices/notice';
 import { createOperationSlice } from './slices/operations';
 import { createProbeSlice } from './slices/probe';
@@ -15,6 +16,7 @@ export type { AppState };
 
 export const useAppStore = create<AppState>()((...args) => ({
   ...createSessionSlice(...args),
+  ...createFavoriteSlice(...args),
   ...createHarnessSlice(...args),
   ...createBackupSlice(...args),
   ...createProviderSlice(...args),
