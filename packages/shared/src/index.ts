@@ -1,3 +1,5 @@
+export type { ReasoningEffort } from './effort-mapping';
+export { HARNESS_EFFORT_RULES, mapReasoningEffort } from './effort-mapping';
 export {
   catalogKey,
   DOCTOR_CODES,
@@ -17,7 +19,6 @@ export {
   WARNING_CODES,
   type WarningCode,
 } from './errors';
-
 export {
   HARNESS_IDS,
   HARNESS_LABELS,
@@ -32,6 +33,8 @@ export {
   type Language,
 } from './locales';
 export * from './model-favorites';
+export type { ProviderPreset } from './provider-presets';
+export { PROVIDER_PRESETS, providerPresetById, providerPresetSchema } from './provider-presets';
 export type {
   CompletionProtocol,
   CreateProfileRequest,

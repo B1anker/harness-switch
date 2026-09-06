@@ -24,6 +24,7 @@ function setup(providers: ProviderPublic[]): Recorded {
     },
     createProvider: async (...args: unknown[]) => {
       recorded.created.push(args);
+      return providers[0] ?? providerFixture();
     },
     updateProvider: async (...args: unknown[]) => {
       recorded.updated.push(args);

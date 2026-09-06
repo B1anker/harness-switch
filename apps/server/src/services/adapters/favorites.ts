@@ -6,6 +6,7 @@ import {
   type FavoriteProjectionResult,
   favoriteEffortSchema,
   type HarnessId,
+  mapReasoningEffort,
   modelFactsSchema,
   resolveFavorite,
 } from '@seaveyon/harness-switch-shared';
@@ -90,22 +91,33 @@ export function projectFavorite(
       }
     }
   }
-  if (id === 'codex') {
-    if (preferences.reasoningEffort) {
-      const supported = adapter.fields
-        .find((field) => field.key === 'reasoningEffort')
-        ?.options?.some((option) => option.value === preferences.reasoningEffort);
-      if (!supported) {
-        result.blockers.push({ code: ERROR_CODES.favoriteProjectionUnsupported });
-      } else {
-        extras.reasoningEffort = preferences.reasoningEffort;
+  // The canonical preference lands through the per-harness mapping table: claude writes
+  // `effortLevel`, codex `model_reasoning_effort`, dsh `agent-default-model.reasoningEffort`.
+  // kimi and pi expose no config-file effort key, so the preference stays not represented.
+  const effort = preferences.reasoningEffort;
+  const effortKey = id === 'claude' ? 'effortLevel' : 'reasoningEffort';
+  const effortWritable = id === 'claude' || id === 'codex' || id === 'dsh';
+  if (effort && effortWritable) {
+    const mapped = mapReasoningEffort(id, effort, facts.supportedReasoningEfforts);
+    if (mapped.native) {
+      extras[effortKey] = mapped.native;
+      if (mapped.clamped) {
+        result.warnings.push({
+          code: ERROR_CODES.favoriteEffortMapped,
+          data: { from: effort, to: mapped.native },
+        });
       }
-    } else if (previous?.extras.reasoningEffort !== undefined) {
-      extras.reasoningEffort = null;
+    } else {
+      if (previous?.extras[effortKey] !== undefined) {
+        extras[effortKey] = null;
+      }
+      result.warnings.push({ code: ERROR_CODES.favoriteEffortUnset, data: { from: effort } });
     }
-  } else if (preferences.reasoningEffort) {
+  } else if (effort) {
     result.notRepresented.push('reasoningEffort');
     result.warnings.push({ code: ERROR_CODES.favoritePreferenceNotRepresented });
+  } else if (effortWritable && previous?.extras[effortKey] !== undefined) {
+    extras[effortKey] = null;
   }
   if (preferences.reasoningEffort && facts.supportedReasoningEfforts === undefined) {
     result.warnings.push({ code: ERROR_CODES.favoriteEffortUnverified });

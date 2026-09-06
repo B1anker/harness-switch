@@ -180,6 +180,7 @@ const ownedExtraSchema = z.enum([
   'reasoning',
   'reasoningEfforts',
   'reasoningEffort',
+  'effortLevel',
 ]);
 export const favoriteProjectionSchema = z.object({
   harness: z.enum(HARNESS_IDS),
@@ -206,7 +207,7 @@ export type FavoriteProjectionResult = {
   notRepresented: string[];
   rendererDefaults: Record<string, string>;
   warnings: Array<{ code: string; data?: Record<string, string> }>;
-  blockers: Array<{ code: string }>;
+  blockers: Array<{ code: string; data?: Record<string, string> }>;
 };
 
 export const favoriteCaptureRequestSchema = z.object({

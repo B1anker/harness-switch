@@ -57,7 +57,7 @@ export function CreatableCombobox({
             role="combobox"
             aria-expanded={open}
             disabled={disabled}
-            className="h-auto min-h-11 w-full justify-between gap-3 px-3 py-2 text-left font-normal"
+            className="h-10 w-full justify-between gap-3 px-3 py-2 text-left font-normal"
           >
             <span className={cn('min-w-0 truncate', value ? 'font-mono' : 'text-muted-foreground')}>
               {value ? getLabel(value) : placeholder}
@@ -88,6 +88,9 @@ export function CreatableCombobox({
             <Command.List
               label={searchLabel}
               className="max-h-64 overflow-y-auto overscroll-contain p-1.5"
+              // A portaled popover lives outside a modal dialog's RemoveScroll shard, whose
+              // document-level wheel listener would otherwise preventDefault list scrolling.
+              onWheel={(event) => event.stopPropagation()}
             >
               {!filtered.length && (!custom || !customLabel) ? (
                 <p className="px-3 py-4 text-xs text-muted-foreground">{emptyHint}</p>

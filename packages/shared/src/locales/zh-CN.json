@@ -715,6 +715,8 @@
     "favoriteUndoConflict": "后续修改阻止撤销，请重新规划",
     "favoritePreferenceNotRepresented": "此工具无法设置默认思考偏好，需要确认忽略",
     "favoriteEffortUnverified": "渠道的可选思考档位未经验证",
+    "favoriteEffortMapped": "思考档位 {{from}} 超出此工具的可表达范围，已就近映射为 {{to}}",
+    "favoriteEffortUnset": "思考档位 {{from}} 在此工具的配置层没有对应值，将不设置",
     "favoriteStoreInvalid": "收藏文件损坏或版本不受支持",
     "favoriteLimitReached": "收藏数量已达上限",
     "favoriteCredentialConsentRequired": "需要明确同意将内联密钥存入凭据库",
@@ -742,6 +744,9 @@
       "profileGone": "配置已不在磁盘上，已跳过",
       "profileExists": "同名配置已存在，已跳过",
       "importFailed": "导入失败：{{reason}}"
+    },
+    "favorite": {
+      "probeFailed": "{{count}} 个渠道连通性探测失败；模板已保存。"
     }
   },
   "update": {
@@ -1014,7 +1019,7 @@
     "reasoningEffort": "默认思考偏好",
     "supportedReasoningEfforts": "支持的思考档位",
     "effortsHint": "逗号分隔：none,minimal,low,medium,high,xhigh,max,ultra",
-    "unknown": "未知 / 未设置",
+    "unknown": "未设置",
     "true": "是",
     "false": "否",
     "declared": "填写值：由你声明，不代表实测能力。",
@@ -1022,6 +1027,18 @@
     "overridden": "此渠道覆写；留空表示清除继承",
     "inherit": "恢复继承",
     "invalid": "请检查名称、渠道和能力声明是否完整且一致。",
+    "validation": {
+      "required": "请填写此项。",
+      "invalidValue": "此项的值无效。",
+      "invalidFacts": "思考能力声明与已声明档位或偏好档位冲突。",
+      "duplicateConnection": "已有渠道使用相同的供应商、入口、协议和模型。"
+    },
+    "nextStep": {
+      "saved": "模板「{{name}}」已保存。",
+      "reviewAffected": "查看受影响配置"
+    },
+    "catalogAutoFailed": "模型目录加载失败，仍可手动输入模型 ID。",
+    "catalogRetry": "重试",
     "configure": "配置到工具",
     "saveOnlyHint": "仅保存不会修改原生文件。选择同时激活后才会应用到工具。",
     "target": "目标配置",
@@ -1055,24 +1072,44 @@
     "detach": "解除关联，保留配置",
     "harnesses": "工具配置",
     "autoName": "留空使用模型名称",
-    "modelAdvanced": "高级设置：能力、思考与备注",
-    "channelName": "自定义渠道名称",
-    "channelAdvanced": "此渠道的特殊设置（可选）",
-    "channelFollowing": "当前跟随模板，无需重复填写。",
-    "channelCustomized": "此渠道有单独设置，仅影响通过此渠道创建的配置。",
-    "channelSettingsHint": "只有渠道的限制或能力与模板不同，才需要单独设置。不清楚可以保持默认；填写参数不会提升模型本身的能力。",
-    "channelCustomize": "为此渠道单独设置",
-    "channelResetHint": "未修改的项目继续跟随模板。关闭上方开关会清除本渠道的单独设置，全部恢复跟随模板。",
-    "channelFollow": "跟随模板",
-    "channelUnset": "此渠道不设置（不使用模板值）",
-    "channelDefault": "跟随模板：{{value}}",
-    "channelUnspecified": "未填写",
-    "channelChooseEfforts": "选择此渠道支持的档位",
-    "contextWindowHelp": "单次请求可容纳的总内容量，包含历史对话，单位为 token。清空表示此渠道不设置；点击「跟随模板」可撤销覆盖。",
-    "maxOutputTokensHelp": "一次回答最多生成的 token 数。清空表示此渠道不设置；点击「跟随模板」可撤销覆盖。",
-    "reasoningSupportedHelp": "此渠道是否支持模型的思考能力。模板值：{{value}}。",
-    "reasoningEffortHelp": "创建工具配置时优先采用的思考强度；具体是否写入取决于工具支持情况。模板值：{{value}}。",
-    "supportedReasoningEffortsHelp": "此渠道实际接受的思考强度，不确定时无需填写。模板值：{{value}}。",
+    "modelAdvanced": "能力与备注（已有默认值，通常无需修改）",
+    "protocolOptions": {
+      "openaiChat": "OpenAI 兼容（Chat Completions）",
+      "openaiResponses": "OpenAI Responses",
+      "anthropicMessages": "Anthropic Messages"
+    },
+    "connectionsEmpty": "还没有渠道。添加一个供应商渠道，或先保存为待连接模板。",
+    "addProvider": "添加供应商",
+    "advancedSummary": "默认：{{value}} · 可修改",
+    "suggestedValue": "建议 {{value}}",
+    "createChoice": {
+      "title": "新建模板",
+      "preset": "从预设创建",
+      "presetHint": "选择供应商，端点、协议与能力自动带入",
+      "captureHint": "把已调好的配置固化成模板",
+      "blank": "空白创建",
+      "blankHint": "手动填写所有字段"
+    },
+    "presets": {
+      "title": "选择供应商预设",
+      "back": "返回",
+      "providerHint": "凭据库中还没有该供应商。填入名称和 Key 创建，Base URL 已由预设带入。",
+      "createProvider": "在凭据库中创建",
+      "baseUrl": "Base URL",
+      "deepseek": "DeepSeek",
+      "zhipu": "智谱 GLM",
+      "kimi": "Kimi（月之暗面）",
+      "minimax": "MiniMax",
+      "qwen": "通义千问（百炼）",
+      "siliconflow": "SiliconFlow（硅基流动）",
+      "openrouter": "OpenRouter",
+      "openai": "OpenAI",
+      "anthropic": "Anthropic"
+    },
+    "clone": {
+      "action": "克隆",
+      "name": "{{name}} 副本"
+    },
     "targetAdvanced": "更改目标配置或名称",
     "changeDetails": "查看参数差异",
     "fileDetails": "查看原生文件差异",

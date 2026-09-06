@@ -299,6 +299,14 @@ export class ClaudeAdapter extends BaseAdapter implements HarnessAdapter {
       delete env[MODEL_VAR];
     }
 
+    // The thinking preference is a top-level settings key, not an env var.
+    const effortLevel = profile.extras.effortLevel?.trim();
+    if (effortLevel) {
+      settings.effortLevel = effortLevel;
+    } else {
+      delete settings.effortLevel;
+    }
+
     for (const { field, envVar, nameField, nameEnvVar, oneMField: flagField } of MODEL_MAPPINGS) {
       const value = profile.extras[field]?.trim();
       if (value) {
@@ -337,6 +345,7 @@ export class ClaudeAdapter extends BaseAdapter implements HarnessAdapter {
         delete env[nameEnvVar];
       }
     }
+    delete settings.effortLevel;
     for (const [key] of parseEnvLines(profile?.extras.extraEnv)) {
       delete env[key];
     }
