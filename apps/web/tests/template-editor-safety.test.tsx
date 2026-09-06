@@ -202,7 +202,7 @@ test('unsaved template edits survive an accidental close until discard is confir
   expect(closed).toBe(1);
 });
 
-test('a custom model is saved without generic context or output limits', async () => {
+test('a copied custom model draft fills missing template defaults', async () => {
   const favorite = favoriteFixture('custom', 'custom-model');
   const saves: FavoriteInput[] = [];
   setStoreState({
@@ -216,5 +216,9 @@ test('a custom model is saved without generic context or output limits', async (
   renderWithI18n(<FavoriteEditor initialDraft={favorite} onClose={() => undefined} />);
   fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
   await waitFor(() => expect(saves).toHaveLength(1));
-  expect(resolveFavorite(saves[0]!, saves[0]!.connections[0]!).facts).toEqual({});
+  expect(resolveFavorite(saves[0]!, saves[0]!.connections[0]!).facts).toEqual({
+    contextWindow: 262144,
+    maxOutputTokens: 65536,
+    reasoningSupported: true,
+  });
 });

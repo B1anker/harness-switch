@@ -229,7 +229,6 @@ export function ConnectionCard({
           connection={connection}
           endpoint={provider?.endpoints.find((endpoint) => endpoint.key === connection.endpointKey)}
           fieldErrors={fieldErrors}
-          hasConflict={!!error}
           onChange={onChange}
         />
       </fieldset>

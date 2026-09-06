@@ -2,6 +2,7 @@ import { expect, test } from '@rstest/core';
 import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ConnectionCard } from '@/components/model-favorites/connection-card';
+import { ConnectionSettings } from '@/components/model-favorites/connection-settings';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
 import {
   favoriteFixture,
@@ -10,6 +11,48 @@ import {
   setStoreState,
   stubStoreActions,
 } from './support';
+
+test('custom service details open and close on every click even with unrelated capability errors', () => {
+  const connection = favoriteFixture('custom', 'model').connections[0]!;
+  renderWithI18n(
+    <ConnectionSettings
+      connection={connection}
+      endpoint={{ baseUrl: 'https://custom.example/v1' }}
+      fieldErrors={{ [connection.id + '-contextWindow']: 'invalid' }}
+      onChange={() => undefined}
+    />,
+  );
+  const toggle = screen.getByRole('button', { name: /服务地址与接口协议/ });
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByText('https://custom.example/v1')).toBeVisible();
+  expect(screen.getByRole('combobox', { name: '协议' })).toBeVisible();
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
+  fireEvent.click(toggle);
+  expect(screen.getByRole('combobox', { name: '协议' })).toBeVisible();
+});
+
+test('opening an existing template preserves explicit capacities, false reasoning and per-connection unknowns', () => {
+  const favorite = favoriteFixture('existing', 'model');
+  favorite.defaults = { contextWindow: 128000, reasoningSupported: false };
+  favorite.connections[0]!.factOverrides = { maxOutputTokens: null };
+  setStoreState({ providers: [] });
+  const actions = stubStoreActions(['saveFavorite']);
+  renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
+  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(128000);
+  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(65536);
+  expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('否');
+  fireEvent.click(screen.getByRole('button', { name: /route/ }));
+  const overrides = within(screen.getByRole('region', { name: '按连接单独设置' }));
+  expect(overrides.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(null);
+  expect(actions.saveFavorite).toHaveLength(0);
+  expect(favorite.defaults).toEqual({ contextWindow: 128000, reasoningSupported: false });
+});
 
 test('an existing account still offers adding a provider without losing the template draft', async () => {
   const favorite = favoriteFixture('existing draft', 'model');

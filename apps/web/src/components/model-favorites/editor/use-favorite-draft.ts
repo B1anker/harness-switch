@@ -28,15 +28,25 @@ export function useFavoriteDraft(
 ) {
   const providerList = useAppStore((state) => state.providers);
   const providers = providerList ?? [];
-  const [draft, setDraft] = useState<FavoriteInput>(
-    initialDraft ?? {
+  const [draft, setDraft] = useState<FavoriteInput>(() => {
+    const source = initialDraft ?? {
       name: '',
       notes: '',
-      defaults: { ...NEW_TEMPLATE_FACTS },
+      defaults: {},
       preferences: {},
       connections: [],
-    },
-  );
+    };
+    return {
+      ...source,
+      defaults: {
+        ...source.defaults,
+        contextWindow: source.defaults.contextWindow ?? NEW_TEMPLATE_FACTS.contextWindow,
+        maxOutputTokens: source.defaults.maxOutputTokens ?? NEW_TEMPLATE_FACTS.maxOutputTokens,
+        reasoningSupported:
+          source.defaults.reasoningSupported ?? NEW_TEMPLATE_FACTS.reasoningSupported,
+      },
+    };
+  });
   const baseline = useRef(JSON.stringify(draft));
   const inferred = useRef<InferredFacts>({});
   /**

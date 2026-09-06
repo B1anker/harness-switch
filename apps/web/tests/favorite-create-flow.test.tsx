@@ -51,7 +51,7 @@ test('blank create starts with the requested editable template defaults', async 
   expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(null);
 });
 
-test('editing an unknown model offers unknown placeholders without guessing a capability', async () => {
+test('editing an existing template fills missing defaults but permits clearing them before save', async () => {
   const favorite = favoriteFixture('facts-less', 'model');
   const saves: unknown[][] = [];
   setStoreState({
@@ -70,9 +70,9 @@ test('editing an unknown model offers unknown placeholders without guessing a ca
   fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   const context = screen.getByRole('spinbutton', { name: '上下文窗口' });
   const output = screen.getByRole('spinbutton', { name: '最大输出 token' });
-  expect(context).toHaveValue(null);
-  expect(context).toHaveAttribute('placeholder', '未设置');
-  expect(output).toHaveAttribute('placeholder', '未设置');
+  expect(context).toHaveValue(262144);
+  expect(output).toHaveValue(65536);
+  expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('是');
   // A typed value replaces the hint instead of mixing with it.
   fireEvent.change(context, { target: { value: '128000' } });
   expect(context).toHaveValue(128000);
@@ -81,7 +81,7 @@ test('editing an unknown model offers unknown placeholders without guessing a ca
   fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
   await waitFor(() => expect(saves).toHaveLength(1));
   const payload = saves[0]![0] as { defaults: Record<string, unknown> };
-  expect(payload.defaults).toEqual({});
+  expect(payload.defaults).toEqual({ maxOutputTokens: 65536, reasoningSupported: true });
 });
 
 test('capture links the source profile by default and opting out is explicit', async () => {
@@ -121,7 +121,7 @@ test('a preset with a matching vault entry pre-fills the channel without any set
   expect(await screen.findByRole('combobox', { name: '服务商账号' })).toHaveTextContent(
     'OpenRouter · 主入口',
   );
-  expect(screen.getByRole('button', { name: /连接详情/ })).toHaveTextContent(
+  expect(screen.getByRole('button', { name: /服务地址与接口协议/ })).toHaveTextContent(
     'OpenAI 兼容（Chat Completions）',
   );
   expect(screen.queryByLabelText('API Key')).toBeNull();
