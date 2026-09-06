@@ -18,6 +18,7 @@ export function FavoriteSelect({
   options,
   onChange,
   placeholder,
+  hint,
 }: {
   id: string;
   label: string;
@@ -25,9 +26,10 @@ export function FavoriteSelect({
   options: Array<{ value: string; label: string }>;
   onChange(value: string): void;
   placeholder?: string;
+  hint?: string;
 }) {
   return (
-    <FormField id={id} label={label}>
+    <FormField id={id} label={label} hint={hint}>
       {(control) => (
         <Select value={value || undefined} onValueChange={onChange}>
           <SelectTrigger {...control}>

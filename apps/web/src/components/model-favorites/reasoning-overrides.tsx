@@ -23,14 +23,20 @@ export function ReasoningOverrides({
   const overrides = connection.factOverrides;
   const efforts = overrides.supportedReasoningEfforts;
   const options = [
-    { value: 'inherit', label: t('favorites.inherit') },
-    { value: 'unknown', label: t('favorites.unknown') },
+    { value: 'inherit', label: t('favorites.channelFollow') },
+    { value: 'unknown', label: t('favorites.channelUnset') },
   ];
   return (
     <div className="space-y-3">
       <FavoriteSelect
         id={`${connection.id}-reasoning-override`}
-        label={`${t('favorites.reasoningSupported')} (${t('favorites.inherited')}: ${favorite.defaults.reasoningSupported === undefined ? t('favorites.unknown') : t(`favorites.${favorite.defaults.reasoningSupported}`)})`}
+        label={t('favorites.reasoningSupported')}
+        hint={t('favorites.reasoningSupportedHelp', {
+          value:
+            favorite.defaults.reasoningSupported === undefined
+              ? t('favorites.channelUnspecified')
+              : t(`favorites.${favorite.defaults.reasoningSupported}`),
+        })}
         value={overrideMode(overrides.reasoningSupported)}
         options={[
           ...options,
@@ -48,7 +54,10 @@ export function ReasoningOverrides({
       />
       <FavoriteSelect
         id={`${connection.id}-preference-override`}
-        label={`${t('favorites.reasoningEffort')} (${t('favorites.inherited')}: ${favorite.preferences.reasoningEffort ?? t('favorites.unknown')})`}
+        label={t('favorites.reasoningEffort')}
+        hint={t('favorites.reasoningEffortHelp', {
+          value: favorite.preferences.reasoningEffort ?? t('favorites.channelUnspecified'),
+        })}
         value={overrideMode(connection.preferenceOverrides.reasoningEffort)}
         options={[
           ...options,
@@ -69,9 +78,14 @@ export function ReasoningOverrides({
       />
       <FavoriteSelect
         id={`${connection.id}-efforts-mode`}
-        label={`${t('favorites.supportedReasoningEfforts')} (${t('favorites.inherited')}: ${favorite.defaults.supportedReasoningEfforts?.join(', ') ?? t('favorites.unknown')})`}
+        label={t('favorites.supportedReasoningEfforts')}
+        hint={t('favorites.supportedReasoningEffortsHelp', {
+          value:
+            favorite.defaults.supportedReasoningEfforts?.join(', ') ??
+            t('favorites.channelUnspecified'),
+        })}
         value={efforts === undefined ? 'inherit' : efforts === null ? 'unknown' : 'override'}
-        options={[...options, { value: 'override', label: t('favorites.overridden') }]}
+        options={[...options, { value: 'override', label: t('favorites.channelChooseEfforts') }]}
         onChange={(entry) =>
           onChange({
             factOverrides: {
