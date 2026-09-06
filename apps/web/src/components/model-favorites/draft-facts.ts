@@ -5,6 +5,12 @@ import {
   resolveFavorite,
 } from '@seaveyon/harness-switch-shared';
 
+export const NEW_TEMPLATE_FACTS: ModelFacts = {
+  contextWindow: 262144,
+  maxOutputTokens: 65536,
+  reasoningSupported: true,
+};
+
 export type InferredFacts = Record<string, ModelFacts>;
 const factKeys: Array<keyof ModelFacts> = [
   'contextWindow',
@@ -47,6 +53,9 @@ export function updateConnectionFacts(
       patch[key as keyof FavoriteConnection] !== previous[key as keyof FavoriteConnection],
   );
   if (identityChanged) {
+    // Effort controls belong to this exact model route, including after reopening a saved template.
+    delete next.factOverrides.supportedReasoningEfforts;
+    next.preferenceOverrides = { ...next.preferenceOverrides, reasoningEffort: null };
     for (const key of factKeys) {
       if (tracked[key] !== undefined && equalValue(previous.factOverrides[key], tracked[key])) {
         delete next.factOverrides[key];
@@ -55,14 +64,33 @@ export function updateConnectionFacts(
       if (
         hint?.[key] !== undefined &&
         next.factOverrides[key] === undefined &&
-        draft.defaults[key] === undefined
+        (key === 'supportedReasoningEfforts' ||
+          draft.defaults[key] === undefined ||
+          equalValue(draft.defaults[key], NEW_TEMPLATE_FACTS[key]))
       ) {
         Object.assign(next.factOverrides, { [key]: hint[key] });
         Object.assign(tracked, { [key]: hint[key] });
       }
     }
   }
-  if (resolveFavorite(draft, next).facts.reasoningSupported === false) {
+  const resolved = resolveFavorite(draft, next);
+  const levelsChanged =
+    patch.factOverrides &&
+    'supportedReasoningEfforts' in patch.factOverrides &&
+    !equalValue(
+      previous.factOverrides.supportedReasoningEfforts,
+      next.factOverrides.supportedReasoningEfforts,
+    );
+  if (
+    resolved.preferences.reasoningEffort &&
+    !resolved.facts.supportedReasoningEfforts?.includes(resolved.preferences.reasoningEffort) &&
+    (levelsChanged ||
+      (identityChanged &&
+        (resolved.facts.supportedReasoningEfforts || inferred[id]?.supportedReasoningEfforts)))
+  ) {
+    next.preferenceOverrides = { ...next.preferenceOverrides, reasoningEffort: null };
+  }
+  if (resolved.facts.reasoningSupported === false) {
     next.factOverrides.supportedReasoningEfforts = null;
     next.preferenceOverrides = { ...next.preferenceOverrides, reasoningEffort: null };
   }
@@ -82,6 +110,13 @@ export function updateDefaultFacts(draft: FavoriteInput, facts: ModelFacts): Fav
   const preferences = { ...draft.preferences };
   if (defaults.reasoningSupported === false) {
     delete defaults.supportedReasoningEfforts;
+    delete preferences.reasoningEffort;
+  }
+  if (
+    preferences.reasoningEffort &&
+    !defaults.supportedReasoningEfforts?.includes(preferences.reasoningEffort) &&
+    !equalValue(draft.defaults.supportedReasoningEfforts, defaults.supportedReasoningEfforts)
+  ) {
     delete preferences.reasoningEffort;
   }
   const next = { ...draft, defaults, preferences };

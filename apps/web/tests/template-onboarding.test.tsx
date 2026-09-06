@@ -164,19 +164,20 @@ test('linked profile details open from the template without saving or detaching'
   expect(actions.detachFavorite).toHaveLength(0);
 });
 
-test('saving from a tool card opens the actual preview flow in save-only mode', async () => {
+test('saving from a graph tool node opens the actual preview flow in save-only mode', async () => {
   linkedSetup();
   const actions = stubStoreActions(['applyFavorite', 'planFavorite']);
   renderWithI18n(<ModelFavorites />);
-  const tool = within(screen.getByRole('article', { name: 'Pi' }));
-  await waitFor(() => expect(tool.getByRole('button', { name: '保存到工具' })).toBeEnabled());
-  fireEvent.click(tool.getByRole('button', { name: '保存到工具' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存备用' }));
+  const tool = await screen.findByRole('button', { name: 'Pi 正在使用' });
+  await waitFor(() => expect(tool).toBeEnabled());
+  fireEvent.click(tool);
   expect(within(screen.getByRole('dialog')).getByRole('radio', { name: '保存备用' })).toBeChecked();
   expect(actions.applyFavorite).toHaveLength(0);
   expect(actions.planFavorite).toHaveLength(0);
 });
 
-test('tool cards separate save and switch actions and retain exact request identity', async () => {
+test('graph mode separates save and switch actions and retain exact request identity', async () => {
   const { favorite } = linkedSetup();
   const requests: FavoritePlanRequest['items'][] = [];
   renderWithI18n(
@@ -186,10 +187,12 @@ test('tool cards separate save and switch actions and retain exact request ident
       onEditConnections={() => undefined}
     />,
   );
-  const tool = within(screen.getByRole('article', { name: 'Pi' }));
-  await waitFor(() => expect(tool.getByRole('button', { name: '保存到工具' })).toBeEnabled());
-  fireEvent.click(tool.getByRole('button', { name: '保存到工具' }));
-  fireEvent.click(tool.getByRole('button', { name: '保存并切换' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存备用' }));
+  const tool = await screen.findByRole('button', { name: 'Pi 正在使用' });
+  await waitFor(() => expect(tool).toBeEnabled());
+  fireEvent.click(tool);
+  fireEvent.click(screen.getByRole('button', { name: '保存并立即切换' }));
+  fireEvent.click(tool);
   expect(requests.map((items) => items[0]?.mode)).toEqual(['save', 'activate']);
   expect(requests[0]?.[0]).toMatchObject({
     profile: 'main',

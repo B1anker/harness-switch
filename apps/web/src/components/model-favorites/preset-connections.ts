@@ -24,3 +24,23 @@ export function matchPresetConnections(providers: ProviderPublic[], preset: Prov
     }),
   );
 }
+
+/** Only exact endpoint and model matches supply declarations; aliases may route elsewhere. */
+export function presetFactsForConnection(
+  providers: ProviderPublic[],
+  providerId: string,
+  endpointKey: string,
+  model: string,
+) {
+  const endpoint = providers
+    .find((provider) => provider.id === providerId)
+    ?.endpoints.find((entry) => entry.key === endpointKey);
+  if (!endpoint) {
+    return undefined;
+  }
+  return PROVIDER_PRESETS.find((preset) =>
+    preset.endpoints.some(
+      (entry) => normalizedUrl(entry.baseUrl) === normalizedUrl(endpoint.baseUrl),
+    ),
+  )?.modelCatalog?.find((entry) => entry.requestModelId === model)?.facts;
+}

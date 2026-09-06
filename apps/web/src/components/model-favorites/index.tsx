@@ -19,6 +19,7 @@ import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 import { CaptureFavorite } from './capture';
 import { FavoriteCreateDialog } from './create-dialog';
+import { NEW_TEMPLATE_FACTS } from './draft-facts';
 import { FavoriteEditor } from './editor';
 import { FavoriteManagement } from './management';
 import { FavoriteNextStep } from './next-step';
@@ -64,7 +65,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
       draft: {
         name: '',
         notes: '',
-        defaults: {},
+        defaults: { ...NEW_TEMPLATE_FACTS },
         preferences: {},
         connections: [
           {

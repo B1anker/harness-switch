@@ -1221,7 +1221,7 @@
     "chooseProvider": "选择供应商入口",
     "removeChannelNamed": "移除渠道：{{name}}",
     "modelPicker": "模型",
-    "modelPickerHint": "可从列表选择，也可输入服务商提供的模型 ID。",
+    "modelPickerHint": "可从列表选择，也可输入服务商提供的模型 ID。更换账号或模型后，会重新设置此连接的思考档位与偏好。",
     "modelPlaceholder": "选择或输入模型 ID",
     "modelSearch": "搜索或输入模型 ID",
     "modelEmpty": "输入模型 ID 即可添加，也可以先加载供应商目录。",
@@ -1301,10 +1301,10 @@
     },
     "connectionDetails": "连接详情",
     "connectionDetailsHint": "常见服务商会自动匹配协议。自定义地址请按服务商文档选择协议；更改后请重新预览兼容工具。",
-    "connectionCapabilities": "此连接的模型能力（可选）",
-    "connectionCapabilitiesHint": "有供应商声明时再填写。留空沿用模板设置；模板也未指定时保持未指定。这里只影响当前连接。",
+    "connectionCapabilities": "按连接单独设置",
+    "connectionCapabilitiesHint": "下面显示各连接最终使用的能力。只有供应商或模型存在差异时才需要修改；单独设置的值优先于模板默认值。",
     "catalogFallbackAvailable": "模型目录加载失败，仍可选择预设候选、手动填写模型 ID 或重试。",
-    "capabilityUnknownHint": "不知道可留空；填写前请以该模型的官方说明为准。",
+    "capabilityUnknownHint": "单位：token，可清空为未指定",
     "draft": {
       "discardTitle": "放弃未保存的修改？",
       "discardHint": "当前修改尚未保存，继续编辑可保留本次填写的内容。",
@@ -1315,7 +1315,21 @@
       "preset": "含本次预设声明（未实测）",
       "declared": "已填写能力声明",
       "unspecified": "未单独指定"
-    }
+    },
+    "editorSections": "模板设置",
+    "connectionTab": "连接配置",
+    "capabilitiesTab": "模型能力",
+    "sharedCapabilities": "模板默认能力",
+    "sharedCapabilitiesHint": "所有连接共用这些值，单独设置的连接除外。新模板初始为 256K 上下文、64K 最大输出、支持推理，可按实际模型修改；这些是配置默认值，不代表实测能力。",
+    "inheritedValue": "继承模板",
+    "overriddenValue": "连接单独设置",
+    "unspecifiedValue": "未指定",
+    "resetInheritance": "全部恢复为继承模板",
+    "notesOptional": "模板备注（可选）",
+    "effortLevelsHint": "仅勾选该模型支持的档位；不确定时留空。支持推理并不代表支持全部档位。",
+    "effortPreferenceHint": "从已声明的档位中选择；不指定时沿用工具或服务商的默认行为。",
+    "effortUnknownHint": "尚未声明支持的档位，先沿用默认行为；确认档位后再指定偏好。",
+    "followDefault": "不指定，沿用默认"
   },
   "favorite": {
     "result": "操作完成"

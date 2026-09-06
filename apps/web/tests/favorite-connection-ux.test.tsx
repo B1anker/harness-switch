@@ -1,6 +1,6 @@
 import { expect, test } from '@rstest/core';
 import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ConnectionCard } from '@/components/model-favorites/connection-card';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
 import {
@@ -68,7 +68,10 @@ test('invalid per-connection capability remains editable and exposes its field e
   const actions = stubStoreActions(['saveFavorite']);
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
   fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
-  const context = await screen.findByRole('spinbutton', { name: '上下文窗口' });
+  const context = within(await screen.findByRole('region', { name: '按连接单独设置' })).getByRole(
+    'spinbutton',
+    { name: '上下文窗口' },
+  );
   expect(context).toHaveValue(0);
   expect(context).toHaveAttribute('aria-invalid', 'true');
   expect(actions.saveFavorite).toHaveLength(0);

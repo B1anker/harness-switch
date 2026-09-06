@@ -5,8 +5,8 @@ import {
 } from '@seaveyon/harness-switch-shared';
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
-import { type InferredFacts, updateConnectionFacts } from '../draft-facts';
-import { presetProtocolForUrl } from '../preset-connections';
+import { type InferredFacts, NEW_TEMPLATE_FACTS, updateConnectionFacts } from '../draft-facts';
+import { presetFactsForConnection, presetProtocolForUrl } from '../preset-connections';
 
 function emptyConnection(providerId = '', endpointKey = ''): FavoriteConnection {
   return {
@@ -32,7 +32,7 @@ export function useFavoriteDraft(
     initialDraft ?? {
       name: '',
       notes: '',
-      defaults: {},
+      defaults: { ...NEW_TEMPLATE_FACTS },
       preferences: {},
       connections: [],
     },
@@ -97,7 +97,11 @@ export function useFavoriteDraft(
       const updated = { ...connection, ...patch };
       const model = updated.requestModelId ?? '';
       const candidates = modelHints?.[`${updated.providerId}/${updated.endpointKey}`];
-      const hint = !modelHints || candidates?.includes(model) ? hintFacts?.[model] : undefined;
+      const hint =
+        (!modelHints || candidates?.includes(model) ? hintFacts?.[model] : undefined) ??
+        (updated.providerId && updated.endpointKey
+          ? presetFactsForConnection(providers, updated.providerId, updated.endpointKey, model)
+          : undefined);
       const result = updateConnectionFacts(current, id, patch, inferred.current, hint);
       inferred.current = result.inferred;
       return result.draft;

@@ -36,16 +36,15 @@ test('new template opens a three-way choice instead of a blank form', async () =
   expect(await screen.findByLabelText('模板名称')).toBeInTheDocument();
 });
 
-test('blank create leaves unknown model capabilities unspecified', async () => {
+test('blank create starts with the requested editable template defaults', async () => {
   renderList();
   fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
   fireEvent.click(screen.getByRole('button', { name: /手动配置（高级）/ }));
-  expect(screen.queryByText(/256K/)).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
-  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(null);
-  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(null);
-  // Reasoning deliberately stays undeclared.
-  expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('未设置');
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
+  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(262144);
+  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(65536);
+  // Default reasoning does not guess any supported effort levels.
+  expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('是');
   fireEvent.change(screen.getByRole('spinbutton', { name: '上下文窗口' }), {
     target: { value: '' },
   });
@@ -68,7 +67,7 @@ test('editing an unknown model offers unknown placeholders without guessing a ca
       <FavoriteEditor favorite={favorite} onClose={() => undefined} />
     </>,
   );
-  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   const context = screen.getByRole('spinbutton', { name: '上下文窗口' });
   const output = screen.getByRole('spinbutton', { name: '最大输出 token' });
   expect(context).toHaveValue(null);
@@ -126,10 +125,9 @@ test('a preset with a matching vault entry pre-fills the channel without any set
     'OpenAI 兼容（Chat Completions）',
   );
   expect(screen.queryByLabelText('API Key')).toBeNull();
-  // A service preset alone does not declare the capabilities of an unknown model.
-  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
-  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(null);
-  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(null);
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
+  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(262144);
+  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(65536);
 });
 
 test('a preset without a vault entry creates it inline and adopts curated model facts', async () => {
@@ -166,10 +164,11 @@ test('a preset without a vault entry creates it inline and adopts curated model 
   // Curated candidates are offered without a live catalog, and choosing one adopts its facts.
   fireEvent.click(await screen.findByRole('combobox', { name: '模型' }));
   fireEvent.click(await screen.findByRole('option', { name: 'deepseek-reasoner' }));
-  fireEvent.click(screen.getByRole('button', { name: /连接详情/ }));
-  fireEvent.click(screen.getByRole('button', { name: /此连接的模型能力/ }));
-  expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('是');
-  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(128000);
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
+  const overrides = within(screen.getByRole('region', { name: '按连接单独设置' }));
+  fireEvent.click(overrides.getByRole('button', { name: /deepseek-reasoner/ }));
+  expect(overrides.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('是');
+  expect(overrides.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(128000);
 });
 
 test('cloning a template copies every channel under a "copy" name as a fresh draft', async () => {

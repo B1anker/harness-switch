@@ -40,14 +40,14 @@ test('disabling reasoning clears hidden effort conflicts so the template can be 
   const actions = stubStoreActions(['saveFavorite']);
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
   expect(screen.queryByText('思考能力声明与已声明档位或偏好档位冲突。')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   fireEvent.click(screen.getByRole('combobox', { name: '支持推理' }));
   fireEvent.click(screen.getByRole('option', { name: '否' }));
   expect(screen.queryByText('思考能力声明与已声明档位或偏好档位冲突。')).toBeNull();
   expect(screen.getByRole('combobox', { name: '支持推理' }).getAttribute('aria-invalid')).not.toBe(
     'true',
   );
-  expect(screen.queryByRole('combobox', { name: '偏好思考档位' })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: '默认思考偏好' })).toBeNull();
   expect(actions.saveFavorite).toHaveLength(0);
 });
 

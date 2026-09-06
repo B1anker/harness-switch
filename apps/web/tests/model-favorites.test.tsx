@@ -160,7 +160,7 @@ test('model capability fields are optional and hidden until advanced settings ar
   setStoreState({ providers: [] });
   renderWithI18n(<FavoriteEditor onClose={() => undefined} />);
   expect(screen.queryByRole('spinbutton')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   expect(screen.getAllByRole('spinbutton').length).toBeGreaterThan(0);
 });
 

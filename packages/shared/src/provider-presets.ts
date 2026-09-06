@@ -156,7 +156,13 @@ export const PROVIDER_PRESETS: ProviderPreset[] = z.array(providerPresetSchema).
     modelCatalog: [
       {
         requestModelId: 'gpt-5',
-        facts: { contextWindow: 400000, maxOutputTokens: 128000, reasoningSupported: true },
+        // https://developers.openai.com/api/docs/models/gpt-5
+        facts: {
+          contextWindow: 400000,
+          maxOutputTokens: 128000,
+          reasoningSupported: true,
+          supportedReasoningEfforts: ['minimal', 'low', 'medium', 'high'],
+        },
       },
       {
         requestModelId: 'gpt-5-codex',

@@ -1,7 +1,6 @@
 import {
   createFavoriteRequestSchema,
   type FavoriteInput,
-  favoriteEffortSchema,
   type ModelFacts,
   type ModelFavorite,
 } from '@seaveyon/harness-switch-shared';
@@ -16,20 +15,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Disclosure } from '@/components/ui/disclosure';
-import { FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { TabList, TabPanel } from '@/components/ui/tabs';
 import { isCrossFieldIssue, locateFavoriteIssues } from '@/lib/favorite-validation';
-import { formatTokens } from '@/lib/format-tokens';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
-import { ConnectionCard } from '../connection-card';
 import { DiscardDraftDialog } from '../discard-draft-dialog';
-import { updateDefaultFacts } from '../draft-facts';
-import { FavoriteFacts } from '../fields';
+import { FavoriteCapabilities } from './capabilities';
+import { FavoriteConnections } from './connections';
 
 import { useFavoriteDraft } from './use-favorite-draft';
 
@@ -85,6 +79,7 @@ export function FavoriteEditor({
     inferredFacts,
     dirty,
   } = useFavoriteDraft(favorite ?? initialDraft, modelHints, hintFacts);
+  const [tab, setTab] = useState('connections');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -114,24 +109,6 @@ export function FavoriteEditor({
   const cardErrors = Object.fromEntries(
     Object.entries(located.cards).map(([id, key]) => [id, t(key)]),
   );
-  const advancedError = Object.keys(located.fields).some(
-    (fieldId) => fieldId.startsWith('favorite-') && fieldId !== 'favorite-name',
-  );
-  const defaultsSummary = [
-    draft.defaults.contextWindow &&
-      `${t('favorites.contextWindow')} ${formatTokens(draft.defaults.contextWindow)}`,
-    draft.defaults.maxOutputTokens &&
-      `${t('favorites.maxOutputTokens')} ${formatTokens(draft.defaults.maxOutputTokens)}`,
-    draft.defaults.reasoningSupported !== undefined &&
-      `${t('favorites.reasoningSupported')} ${t(`favorites.${draft.defaults.reasoningSupported}`)}`,
-    draft.defaults.supportedReasoningEfforts?.length &&
-      `${t('favorites.supportedReasoningEfforts')} ${draft.defaults.supportedReasoningEfforts.join(', ')}`,
-    draft.preferences.reasoningEffort &&
-      `${t('favorites.reasoningEffort')} ${draft.preferences.reasoningEffort}`,
-  ].filter(Boolean);
-  const advancedSummary = defaultsSummary.length
-    ? t('favorites.advancedSummary', { value: defaultsSummary.join(' · ') })
-    : undefined;
   /** Post-save connectivity probe per channel; failures warn, never block the save. */
   const probeSaved = async (saved: ModelFavorite) => {
     const targets = saved.connections.filter(
@@ -155,6 +132,19 @@ export function FavoriteEditor({
     if (!result.success) {
       setSubmitted(true);
       const all = locateFavoriteIssues(draft, result.error.issues);
+      const connectionError =
+        result.error.issues.some(
+          (issue) =>
+            issue.path[0] === 'connections' &&
+            ['providerId', 'endpointKey', 'requestModelId', 'label', 'protocol'].includes(
+              String(issue.path[2]),
+            ),
+        ) || Object.values(all.cards).includes('favorites.validation.duplicateConnection');
+      setTab(
+        connectionError || all.fields['favorite-name'] || all.fields['favorite-notes']
+          ? 'connections'
+          : 'capabilities',
+      );
       setError(
         Object.keys(all.fields).length || Object.keys(all.cards).length
           ? ''
@@ -191,123 +181,68 @@ export function FavoriteEditor({
   return (
     <>
       <Dialog open onOpenChange={(open) => !open && requestClose()}>
-        <DialogContent className="flex max-h-[90dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[min(820px,90dvh)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">
             <DialogTitle>{t(favorite ? 'favorites.edit' : 'favorites.add')}</DialogTitle>
             <DialogDescription>{t('favorites.declared')}</DialogDescription>
           </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-5">
-            <FormField
-              id="favorite-name"
-              label={t('favorites.name')}
-              error={fieldErrors['favorite-name']}
-            >
-              {(control) => (
-                <Input
-                  {...control}
-                  maxLength={120}
-                  placeholder={draft.connections[0]?.requestModelId || t('favorites.autoName')}
-                  value={draft.name}
-                  onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+          <TabList
+            idPrefix="favorite-editor"
+            label={t('favorites.editorSections')}
+            items={[{ id: 'connections' }, { id: 'capabilities' }]}
+            value={tab}
+            onChange={setTab}
+            className="flex shrink-0 gap-2 border-b px-6 py-3"
+            tabClassName="px-4 py-2 text-sm font-medium"
+          >
+            {(item) =>
+              t(item.id === 'connections' ? 'favorites.connectionTab' : 'favorites.capabilitiesTab')
+            }
+          </TabList>
+          <fieldset disabled={busy} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5">
+            <div hidden={tab !== 'connections'}>
+              <TabPanel idPrefix="favorite-editor" value="connections" className="space-y-5">
+                <FavoriteConnections
+                  draft={draft}
+                  setDraft={setDraft}
+                  providers={providers}
+                  busy={busy}
+                  fieldErrors={fieldErrors}
+                  cardErrors={cardErrors}
+                  modelHints={modelHints}
+                  openVault={openVault}
+                  update={update}
+                  addConnection={addConnection}
                 />
-              )}
-            </FormField>
-            <div className="flex items-baseline gap-2">
-              <h3 className="font-semibold">{t('favorites.connections')}</h3>
-              <p className="min-w-0 truncate text-muted-foreground text-xs">
-                {t('favorites.channelHint')}
-              </p>
+              </TabPanel>
             </div>
-            {draft.connections.map((connection, index) => (
-              <ConnectionCard
-                key={connection.id}
-                connection={connection}
-                index={index}
-                disabled={busy}
-                error={cardErrors[connection.id]}
-                fieldErrors={fieldErrors}
-                inferredFacts={inferredFacts[connection.id]}
-                modelHints={modelHints?.[`${connection.providerId}/${connection.endpointKey}`]}
-                onAddProvider={() => openVault(connection.id)}
-                onChange={(patch) => update(connection.id, patch)}
-                onRemove={() =>
-                  setDraft({
-                    ...draft,
-                    connections: draft.connections.filter((item) => item.id !== connection.id),
-                  })
-                }
-              />
-            ))}
-            {!draft.connections.length ? (
-              <div className="space-y-3 rounded-xl border border-dashed px-4 py-8 text-center">
-                <p className="text-muted-foreground text-sm">{t('favorites.connectionsEmpty')}</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button variant="outline" disabled={busy} onClick={addConnection}>
-                    {t('favorites.addConnection')}
-                  </Button>
-                  {!providers.length ? (
-                    <Button variant="ghost" disabled={busy} onClick={() => openVault(null)}>
-                      {t('favorites.addProvider')}
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <Button
-                variant="outline"
-                className="w-full border-dashed text-muted-foreground"
-                disabled={busy || draft.connections.length >= 50}
-                onClick={addConnection}
-              >
-                {t('favorites.addConnection')}
-              </Button>
-            )}
-            <Disclosure
-              title={t('favorites.modelAdvanced')}
-              forceOpen={advancedError}
-              summary={advancedSummary}
-              triggerClassName="-ml-4"
-            >
-              <FormField
-                id="favorite-notes"
-                label={t('favorites.notes')}
-                error={fieldErrors['favorite-notes']}
-              >
-                {(control) => (
-                  <Textarea
-                    {...control}
-                    maxLength={4096}
-                    value={draft.notes}
-                    onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-                  />
-                )}
-              </FormField>
-              <FavoriteFacts
-                id="favorite"
-                facts={draft.defaults}
-                effort={draft.preferences.reasoningEffort}
-                errors={fieldErrors}
-                onFacts={(defaults) => setDraft((current) => updateDefaultFacts(current, defaults))}
-                onEffort={(value) =>
-                  setDraft((current) => ({
-                    ...current,
-                    preferences: {
-                      reasoningEffort: favoriteEffortSchema.optional().parse(value || undefined),
-                    },
-                  }))
-                }
-              />
-            </Disclosure>
-          </div>
+            <div hidden={tab !== 'capabilities'}>
+              <TabPanel idPrefix="favorite-editor" value="capabilities">
+                <FavoriteCapabilities
+                  draft={draft}
+                  setDraft={setDraft}
+                  update={update}
+                  inferredFacts={inferredFacts}
+                  fieldErrors={fieldErrors}
+                  cardErrors={cardErrors}
+                />
+              </TabPanel>
+            </div>
+          </fieldset>
           <div className="shrink-0 space-y-3 border-t bg-muted/20 px-6 py-4">
             {error ? (
               <p role="alert" className="text-destructive">
                 {error}
               </p>
             ) : null}
-            <Button className="w-full" disabled={busy} onClick={() => void submit()}>
-              {t('favorites.saveFavorite')}
-            </Button>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" disabled={busy} onClick={requestClose}>
+                {t('common.cancel')}
+              </Button>
+              <Button disabled={busy} onClick={() => void submit()}>
+                {t('favorites.saveFavorite')}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

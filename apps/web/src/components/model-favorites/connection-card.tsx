@@ -1,4 +1,4 @@
-import type { FavoriteConnection, ModelFacts } from '@seaveyon/harness-switch-shared';
+import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
 import { Loader2, Network, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,6 @@ export function ConnectionCard({
   error,
   fieldErrors = {},
   modelHints,
-  inferredFacts,
   onAddProvider,
   onChange,
   onRemove,
@@ -34,7 +33,6 @@ export function ConnectionCard({
   fieldErrors?: Record<string, string>;
   /** Curated model candidates from a preset, merged with the live catalog. */
   modelHints?: string[];
-  inferredFacts?: ModelFacts;
   /** Opens the vault while preserving the current template draft. */
   onAddProvider?(): void;
   onChange(patch: Partial<FavoriteConnection>): void;
@@ -133,62 +131,67 @@ export function ConnectionCard({
         </p>
       ) : null}
       <fieldset disabled={disabled} className="min-w-0 space-y-4 p-4">
-        <FavoriteSelect
-          id={`${connection.id}-provider`}
-          label={t('favorites.channelProvider')}
-          value={connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''}
-          placeholder={t('favorites.chooseProvider')}
-          options={choices}
-          error={fieldErrors[`${connection.id}-provider`]}
-          className="max-w-md"
-          onChange={(value) => {
-            const selected = choices.find((item) => item.value === value);
-            if (selected) {
-              request.current++;
-              setLoading(false);
-              setFailed(false);
-              onChange({
-                providerId: selected.providerId,
-                endpointKey: selected.endpointKey,
-                ...(selected.protocol ? { protocol: selected.protocol } : {}),
-              });
-            }
-          }}
-        />
-        {onAddProvider ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full border-dashed text-muted-foreground"
-            disabled={disabled}
-            onClick={onAddProvider}
-          >
-            {t('favorites.addProvider')}
-          </Button>
-        ) : null}
-        <div>
-          <FormField
-            id={`${connection.id}-model`}
-            label={t('favorites.modelPicker')}
-            hint={t('favorites.modelPickerHint')}
-            error={fieldErrors[`${connection.id}-model`]}
-          >
-            {(control) => (
-              <CreatableCombobox
-                key={`${connection.providerId}/${connection.endpointKey}`}
-                {...control}
-                value={connection.requestModelId}
-                options={[...new Set([...(modelHints ?? []), ...(catalog?.models ?? [])])]}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <FavoriteSelect
+              id={`${connection.id}-provider`}
+              label={t('favorites.channelProvider')}
+              value={
+                connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''
+              }
+              placeholder={t('favorites.chooseProvider')}
+              options={choices}
+              error={fieldErrors[`${connection.id}-provider`]}
+              onChange={(value) => {
+                const selected = choices.find((item) => item.value === value);
+                if (selected) {
+                  request.current++;
+                  setLoading(false);
+                  setFailed(false);
+                  onChange({
+                    providerId: selected.providerId,
+                    endpointKey: selected.endpointKey,
+                    ...(selected.protocol ? { protocol: selected.protocol } : {}),
+                  });
+                }
+              }}
+            />
+            {onAddProvider ? (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto px-0 text-primary"
                 disabled={disabled}
-                onChange={(requestModelId) => onChange({ requestModelId })}
-                placeholder={t('favorites.modelPlaceholder')}
-                searchLabel={t('favorites.modelSearch')}
-                emptyHint={t('favorites.modelEmpty')}
-                customLabel={(value) => t('favorites.modelCustom', { value })}
-              />
-            )}
-          </FormField>
+                onClick={onAddProvider}
+              >
+                {t('favorites.addProvider')}
+              </Button>
+            ) : null}
+          </div>
+          <div>
+            <FormField
+              id={`${connection.id}-model`}
+              label={t('favorites.modelPicker')}
+              hint={t('favorites.modelPickerHint')}
+              error={fieldErrors[`${connection.id}-model`]}
+            >
+              {(control) => (
+                <CreatableCombobox
+                  key={`${connection.providerId}/${connection.endpointKey}`}
+                  {...control}
+                  value={connection.requestModelId}
+                  options={[...new Set([...(modelHints ?? []), ...(catalog?.models ?? [])])]}
+                  disabled={disabled}
+                  onChange={(requestModelId) => onChange({ requestModelId })}
+                  placeholder={t('favorites.modelPlaceholder')}
+                  searchLabel={t('favorites.modelSearch')}
+                  emptyHint={t('favorites.modelEmpty')}
+                  customLabel={(value) => t('favorites.modelCustom', { value })}
+                />
+              )}
+            </FormField>
+          </div>
         </div>
         {loading ? (
           <p role="status" className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -227,7 +230,6 @@ export function ConnectionCard({
           endpoint={provider?.endpoints.find((endpoint) => endpoint.key === connection.endpointKey)}
           fieldErrors={fieldErrors}
           hasConflict={!!error}
-          inferredFacts={inferredFacts}
           onChange={onChange}
         />
       </fieldset>

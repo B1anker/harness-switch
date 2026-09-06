@@ -1,11 +1,7 @@
-import {
-  type FavoriteConnection,
-  favoriteEffortSchema,
-  type ModelFacts,
-} from '@seaveyon/harness-switch-shared';
+import { type FavoriteConnection } from '@seaveyon/harness-switch-shared';
 import { Disclosure } from '@/components/ui/disclosure';
 import { useTranslation } from '@/lib/i18n';
-import { FavoriteFacts, FavoriteSelect } from './fields';
+import { FavoriteSelect } from './fields';
 import { presetProtocolForUrl } from './preset-connections';
 
 const PROTOCOL_LABEL_KEYS = {
@@ -19,14 +15,12 @@ export function ConnectionSettings({
   endpoint,
   fieldErrors,
   hasConflict,
-  inferredFacts,
   onChange,
 }: {
   connection: FavoriteConnection;
   endpoint?: { baseUrl: string };
   fieldErrors: Record<string, string>;
   hasConflict?: boolean;
-  inferredFacts?: ModelFacts;
   onChange(patch: Partial<FavoriteConnection>): void;
 }) {
   const { t } = useTranslation();
@@ -38,12 +32,6 @@ export function ConnectionSettings({
         !['label', 'model', 'provider'].some((field) => key === `${connection.id}-${field}`),
     );
   const knownProtocol = endpoint && presetProtocolForUrl(endpoint.baseUrl);
-  const facts = {
-    contextWindow: connection.factOverrides.contextWindow ?? undefined,
-    maxOutputTokens: connection.factOverrides.maxOutputTokens ?? undefined,
-    reasoningSupported: connection.factOverrides.reasoningSupported ?? undefined,
-    supportedReasoningEfforts: connection.factOverrides.supportedReasoningEfforts ?? undefined,
-  };
   return (
     <Disclosure
       title={t('favorites.connectionDetails')}
@@ -69,41 +57,6 @@ export function ConnectionSettings({
         error={fieldErrors[`${connection.id}-protocol`]}
         onChange={(protocol) => onChange({ protocol: protocol as FavoriteConnection['protocol'] })}
       />
-      <Disclosure
-        title={t('favorites.connectionCapabilities')}
-        summary={t(
-          Object.values(inferredFacts ?? {}).some((value) => value !== undefined)
-            ? 'favorites.capabilitiesSource.preset'
-            : Object.values(connection.factOverrides).some((value) => value != null)
-              ? 'favorites.capabilitiesSource.declared'
-              : 'favorites.capabilitiesSource.unspecified',
-        )}
-        forceOpen={hasError}
-        triggerClassName="h-auto whitespace-normal text-left"
-      >
-        <p className="text-sm text-muted-foreground">{t('favorites.connectionCapabilitiesHint')}</p>
-        <FavoriteFacts
-          id={connection.id}
-          facts={facts}
-          effort={connection.preferenceOverrides.reasoningEffort ?? undefined}
-          errors={fieldErrors}
-          onFacts={(factOverrides) => {
-            const changed = Object.fromEntries(
-              Object.entries(factOverrides).filter(
-                ([key, value]) => value !== facts[key as keyof typeof facts],
-              ),
-            );
-            onChange({ factOverrides: { ...connection.factOverrides, ...changed } });
-          }}
-          onEffort={(value) =>
-            onChange({
-              preferenceOverrides: {
-                reasoningEffort: favoriteEffortSchema.optional().parse(value || undefined),
-              },
-            })
-          }
-        />
-      </Disclosure>
     </Disclosure>
   );
 }
