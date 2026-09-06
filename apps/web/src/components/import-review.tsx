@@ -87,6 +87,9 @@ export function ImportReview({
 
       <div className="flex flex-wrap items-center gap-2">
         <Badge>{t('transfer.profileCount', { count: preview.profileCount })}</Badge>
+        {preview.favoriteCount ? (
+          <Badge>{t('favorites.importCount', { count: preview.favoriteCount })}</Badge>
+        ) : null}
         <Badge variant="secondary">
           {t('transfer.providerCount', { count: preview.providerCount })}
         </Badge>

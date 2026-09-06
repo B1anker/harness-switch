@@ -4,6 +4,7 @@ export {
   type DoctorCode,
   ERROR_CODES,
   type ErrorCode,
+  FAVORITE_CODES,
   isMessageCode,
   type LocalizedMessage,
   type MessageParams,
@@ -30,6 +31,7 @@ export {
   LANGUAGES,
   type Language,
 } from './locales';
+export * from './model-favorites';
 export type {
   CompletionProtocol,
   CreateProfileRequest,
@@ -81,7 +83,6 @@ export {
   updateProviderRequestSchema,
   userSyncRequestSchema,
 } from './schemas';
-
 export type {
   ActivateResponse,
   ActivePublic,

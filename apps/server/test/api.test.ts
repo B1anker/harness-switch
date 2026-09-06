@@ -1170,7 +1170,7 @@ describe('rest api', () => {
     // Which section is broken decides what the user has to go fix, so each one keeps
     // its own code rather than collapsing into a single "bad file".
     const cases = [
-      { code: ERROR_CODES.transferEnvelopeInvalid, payload: { ...base, version: 2 } },
+      { code: ERROR_CODES.transferEnvelopeInvalid, payload: { ...base, version: 3 } },
       {
         code: ERROR_CODES.transferProfilesInvalid,
         payload: { ...base, profiles: [{ ...profile, harness: 'nope' }] },

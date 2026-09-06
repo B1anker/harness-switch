@@ -11,6 +11,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { TabList, TabPanel } from '@/components/ui/tabs';
+import { currentPath } from '@/components/workspace/configuration-path';
+import { SwitchFlow } from '@/components/workspace/switch-flow';
+import { configuredModel } from '@/lib/configured-model';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText, type MessageLine } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
@@ -46,6 +50,7 @@ export function ActivateDialog({
   const [activationError, setActivationError] = useState<MessageLine | null>(null);
   const [executing, setExecuting] = useState(false);
   const [previewAttempt, setPreviewAttempt] = useState(0);
+  const [tab, setTab] = useState('route');
 
   useEffect(() => {
     if (!open) {
@@ -109,7 +114,10 @@ export function ActivateDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-4xl">
+      <AlertDialogContent
+        style={{ height: profile && tab === 'route' ? 'min(520px, 90dvh)' : 'min(820px, 90dvh)' }}
+        className="flex flex-col overflow-hidden sm:max-w-4xl data-[state=open]:animate-none data-[state=closed]:animate-none"
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             {official ? t('activate.officialTitle') : t('activate.title')}
@@ -123,17 +131,54 @@ export function ActivateDialog({
             })}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {previewError ? (
-          <p className="text-sm text-destructive">
-            {t('activate.loadFailed', { reason: lineText(t, previewError) })}
+        {profile ? (
+          <TabList
+            idPrefix="profile-preview"
+            label={t('favorites.reviewChanges')}
+            items={[
+              { id: 'route', label: t('workspace.switchMap') },
+              { id: 'diff', label: t('workspace.fileDiffTab') },
+            ]}
+            value={tab}
+            onChange={setTab}
+            className="flex gap-2"
+            tabClassName="px-4 py-2 text-sm"
+          >
+            {(item) => item.label}
+          </TabList>
+        ) : null}
+        <TabPanel idPrefix="profile-preview" value={tab} className="min-h-0 flex-1 overflow-auto">
+          {profile && tab === 'route' ? (
+            <SwitchFlow
+              current={currentPath(harness, t)}
+              candidate={{
+                provider: profile.name,
+                model: configuredModel(profile, t),
+                sourceLabel: t(
+                  profile.modelFavorite?.favoriteId ? 'templates.tag' : 'workspace.configuration',
+                ),
+              }}
+              harness={harness}
+            />
+          ) : previewError ? (
+            <p className="text-sm text-destructive">
+              {t('activate.loadFailed', { reason: lineText(t, previewError) })}
+            </p>
+          ) : targets === null ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              {t('activate.loading')}
+            </p>
+          ) : (
+            <div className="max-h-[52dvh] overflow-y-auto rounded-xl border p-3">
+              <ConfigDiffs files={files} />
+            </div>
+          )}
+        </TabPanel>
+        {profile && tab === 'route' && previewError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {lineText(t, previewError)}
           </p>
-        ) : targets === null ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">{t('activate.loading')}</p>
-        ) : (
-          <div className="max-h-[52dvh] overflow-y-auto rounded-xl border p-3">
-            <ConfigDiffs files={files} />
-          </div>
-        )}
+        ) : null}
         {activationError ? (
           <p className="text-sm text-destructive">
             {t('activate.failed', { reason: lineText(t, activationError) })}

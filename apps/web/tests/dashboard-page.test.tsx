@@ -1,7 +1,16 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DashboardPage } from '@/pages/dashboard-page';
-import { harnessFixture, profileFixture, setStoreState } from './support';
+import { harnessFixture, profileFixture, setStoreState, stubStoreActions } from './support';
+
+test('global backups are available from the main tool view', () => {
+  setDashboardState();
+  const actions = stubStoreActions(['loadFavoriteBackups']);
+  render(<DashboardPage />);
+  fireEvent.click(screen.getByRole('tab', { name: '恢复时间线' }));
+  expect(screen.getByRole('heading', { name: '恢复时间线' })).toBeInTheDocument();
+  expect(actions.loadFavoriteBackups).toHaveLength(2);
+});
 
 function setDashboardState() {
   const claudeProfile = profileFixture({ name: 'claude-main' });
@@ -38,6 +47,9 @@ function setDashboardState() {
     ],
     usersLoading: false,
     notice: null,
+    favorites: [],
+    loadFavorites: async () => {},
+    loadFavoriteBackups: async () => {},
     providers: [],
     drift: [],
     doctor: [],
@@ -62,16 +74,30 @@ test('switches the visible harness with the app tabs', () => {
   expect(screen.getByRole('heading', { name: '配置迁移' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '关闭对话框' }));
 
+  fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
   const claudeTab = screen.getByRole('tab', { name: /Claude Code/ });
   const codexTab = screen.getByRole('tab', { name: /Codex/ });
   expect(claudeTab).toHaveAttribute('aria-selected', 'true');
-  expect(within(screen.getByRole('tabpanel')).getByText('claude-main')).toBeInTheDocument();
+  expect(
+    within(screen.getByRole('tabpanel', { name: /Claude Code/ })).getAllByText('claude-main'),
+  ).not.toHaveLength(0);
 
   fireEvent.click(codexTab);
 
   expect(codexTab).toHaveAttribute('aria-selected', 'true');
-  expect(within(screen.getByRole('tabpanel')).getByText('codex-main')).toBeInTheDocument();
-  expect(within(screen.getByRole('tabpanel')).queryByText('claude-main')).toBeNull();
+  expect(
+    within(screen.getByRole('tabpanel', { name: /Codex/ })).getAllByText('codex-main'),
+  ).not.toHaveLength(0);
+  expect(
+    within(screen.getByRole('tabpanel', { name: /Codex/ })).queryAllByText('claude-main'),
+  ).toHaveLength(0);
+
+  fireEvent.click(screen.getByRole('button', { name: '返回工作台' }));
+  expect(screen.getByRole('tab', { name: /Codex/ })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: /Claude Code/ })).toHaveAttribute(
+    'aria-selected',
+    'false',
+  );
 });
 
 test('the header opens the vault dialog', () => {
@@ -185,6 +211,7 @@ test('the right column shows the doctor and operations cards for the selected ha
 
   render(<DashboardPage />);
 
+  fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
   expect(screen.getByText('诊断')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '查看差异' })).toBeNull();
   expect(screen.getByText('操作记录')).toBeInTheDocument();

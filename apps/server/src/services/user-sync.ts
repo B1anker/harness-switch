@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type {
   HarnessId,
@@ -7,7 +8,13 @@ import type {
   UserSyncPreview,
   UserSyncResponse,
 } from '@seaveyon/harness-switch-shared';
-import { ERROR_CODES, WARNING_CODES } from '@seaveyon/harness-switch-shared';
+import {
+  ERROR_CODES,
+  favoriteStoreSchema,
+  type ModelFavorite,
+  modelFavoriteLinkSchema,
+  WARNING_CODES,
+} from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import { IActivationService } from './activation';
@@ -16,6 +23,7 @@ import { ICryptoService } from './crypto';
 import { IEnvironmentService, type LocalUser } from './environment';
 import { IFileService } from './files';
 import { ILiveWriteService, type PlannedWrite } from './live-write';
+import { IModelFavoriteStore } from './model-favorite-store';
 import type { ProfileStore, StoredProfile } from './profiles';
 import { IUserService } from './users';
 import type { VaultEntry, VaultStore } from './vault';
@@ -23,6 +31,7 @@ import type { VaultEntry, VaultStore } from './vault';
 type PortableProvider = Omit<VaultEntry, 'api_key'> & { apiKey: string };
 type PortableProfile = Omit<StoredProfile, 'api_key'> & { apiKey: string };
 type PortableUserData = {
+  favorites: ModelFavorite[];
   profiles: Record<string, Record<string, PortableProfile>>;
   providers: Record<string, PortableProvider>;
 };
@@ -48,6 +57,7 @@ export const IUserSyncService = createDecorator<IUserSyncService>('userSyncServi
   ICodexLoginCacheService,
   ILiveWriteService,
   IActivationService,
+  IModelFavoriteStore,
 )
 export class UserSyncService implements IUserSyncService {
   declare readonly _serviceBrand: undefined;
@@ -60,6 +70,7 @@ export class UserSyncService implements IUserSyncService {
     private readonly codexLoginCache: ICodexLoginCacheService,
     private readonly liveWrite: ILiveWriteService,
     private readonly activation: IActivationService,
+    private readonly favorites: IModelFavoriteStore,
   ) {}
 
   preview(sourceUsername: string): UserSyncPreview {
@@ -181,9 +192,34 @@ export class UserSyncService implements IUserSyncService {
       }
     }
 
-    const providerMap = new Map<string, string>();
+    const selectedConnections = new Map<string, Set<string>>();
+    const requiredProviders = new Set<string>();
     for (const { profile } of selected) {
-      const sourceId = profile.provider_id;
+      if (profile.provider_id) {
+        requiredProviders.add(profile.provider_id);
+      }
+      if (profile.model_favorite) {
+        const link = modelFavoriteLinkSchema.parse(profile.model_favorite);
+        const favorite = portable.favorites.find((item) => item.id === link.favoriteId);
+        const connection = favorite?.connections.find((item) => item.id === link.connectionId);
+        if (
+          !connection ||
+          !portable.providers[connection.providerId] ||
+          !portable.providers[link.baseline.providerId]
+        ) {
+          throw new HttpError(409, ERROR_CODES.favoriteStoreInvalid, {
+            code: ERROR_CODES.favoriteStoreInvalid,
+          });
+        }
+        const ids = selectedConnections.get(link.favoriteId) ?? new Set<string>();
+        ids.add(link.connectionId);
+        selectedConnections.set(link.favoriteId, ids);
+        requiredProviders.add(connection.providerId);
+        requiredProviders.add(link.baseline.providerId);
+      }
+    }
+    const providerMap = new Map<string, string>();
+    for (const sourceId of requiredProviders) {
       if (!sourceId || providerMap.has(sourceId)) {
         continue;
       }
@@ -206,6 +242,33 @@ export class UserSyncService implements IUserSyncService {
       };
     }
 
+    const favorites = this.favorites.list();
+    const favoriteMap = new Map<string, string>();
+    const connectionMap = new Map<string, string>();
+    for (const favorite of portable.favorites) {
+      const ids = selectedConnections.get(favorite.id);
+      if (!ids) {
+        continue;
+      }
+      const id = randomUUID();
+      favoriteMap.set(favorite.id, id);
+      favorites.push({
+        ...favorite,
+        id,
+        connections: favorite.connections
+          .filter((connection) => ids.has(connection.id))
+          .map((connection) => {
+            const connectionId = randomUUID();
+            connectionMap.set(`${favorite.id}/${connection.id}`, connectionId);
+            return {
+              ...connection,
+              id: connectionId,
+              providerId: providerMap.get(connection.providerId)!,
+            };
+          }),
+      });
+    }
+    favoriteStoreSchema.parse({ schemaVersion: 1, favorites });
     for (const { harness, name, profile } of selected) {
       targetProfiles[harness] ||= {};
       const mappedProvider = profile.provider_id ? providerMap.get(profile.provider_id) : undefined;
@@ -217,6 +280,15 @@ export class UserSyncService implements IUserSyncService {
         provider_endpoint: mappedProvider ? profile.provider_endpoint : undefined,
         updated_at: new Date().toISOString(),
       };
+      if (profile.model_favorite) {
+        const link = profile.model_favorite;
+        targetProfiles[harness]![name]!.model_favorite = {
+          ...link,
+          favoriteId: favoriteMap.get(link.favoriteId)!,
+          connectionId: connectionMap.get(`${link.favoriteId}/${link.connectionId}`)!,
+          baseline: { ...link.baseline, providerId: providerMap.get(link.baseline.providerId)! },
+        };
+      }
     }
 
     this.liveWrite.transaction(
@@ -225,12 +297,16 @@ export class UserSyncService implements IUserSyncService {
         harness: 'codex',
         profile: `同步-${source.username}`,
         writes: cacheWrite,
-        metadata: ['vault', 'profiles'],
+        metadata: ['vault', 'profiles', 'favorites'],
       },
       () => {
         try {
           this.files.writeJson(vaultPath, targetVault);
           this.files.writeJson(profilesPath, targetProfiles);
+          this.files.writeJson(
+            this.environment.files.favorites,
+            favoriteStoreSchema.parse({ schemaVersion: 1, favorites }),
+          );
         } catch (error) {
           this.restore(vaultPath, vaultSnapshot);
           this.restore(profilesPath, profileSnapshot);
@@ -301,7 +377,11 @@ export class UserSyncService implements IUserSyncService {
           };
         }
       }
-      return { profiles: portableProfiles, providers: portableProviders };
+      return {
+        profiles: portableProfiles,
+        providers: portableProviders,
+        favorites: this.favorites.list(),
+      };
     });
   }
 
@@ -325,7 +405,12 @@ export class UserSyncService implements IUserSyncService {
     profile: PortableProfile,
     providers: Record<string, PortableProvider>,
   ): Record<string, unknown> {
-    const { updated_at: _updatedAt, provider_id: providerId, ...content } = profile;
+    const {
+      updated_at: _updatedAt,
+      provider_id: providerId,
+      model_favorite: _favorite,
+      ...content
+    } = profile;
     const provider = providerId ? providers[providerId] : undefined;
     const comparableProvider = provider
       ? {
