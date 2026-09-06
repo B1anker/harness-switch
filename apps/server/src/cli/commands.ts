@@ -24,6 +24,7 @@ import {
   validatePositionals,
 } from './args';
 import { CliClient, readWebPassword, resolveBaseUrl } from './client';
+import { runFavoriteCli } from './favorites';
 import {
   cliUsage,
   OutputMode,
@@ -64,12 +65,19 @@ export async function runCli(
     return fail(error, json);
   }
 
+  let retainSession = false;
   try {
     const selectedUser = flagValue(flags, 'user');
     if (selectedUser) {
       await selectUser(client, selectedUser);
     }
     switch (command) {
+      case 'favorites':
+        printJson(await client.get('/api/model-favorites'));
+        return 0;
+      case 'favorite':
+        retainSession = await runFavoriteCli(client, positional, flags);
+        return 0;
       case 'list':
         return await cmdList(client, json);
       case 'profiles':
@@ -107,12 +115,35 @@ export async function runCli(
   } catch (error) {
     return fail(error, json);
   } finally {
-    await client.logout().catch(() => undefined);
+    if (!retainSession) {
+      await client.logout().catch(() => undefined);
+    }
   }
 }
 
 function validateCommand(command: string, positional: string[], flags: CliFlags): void {
   const specs: Record<string, { flags?: string[]; min: number; max: number; usage: string }> = {
+    favorites: { min: 0, max: 0, usage: 'favorites --json' },
+    favorite: {
+      flags: [
+        'name',
+        'harness',
+        'connection',
+        'profile',
+        'existing',
+        'activate',
+        'extract-credential',
+        'link-source',
+        'ignore-preference',
+        'overwrite-diverged',
+        'overwrite-login-cache',
+        'request-id',
+        'yes',
+      ],
+      min: 2,
+      max: 3,
+      usage: 'favorite capture|plan|apply',
+    },
     list: { min: 0, max: 0, usage: 'list [options]' },
     profiles: { min: 0, max: 1, usage: 'profiles [harness] [options]' },
     create: {

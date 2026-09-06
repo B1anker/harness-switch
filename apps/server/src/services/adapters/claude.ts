@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
+import { HttpError } from '../../common/errors';
 import { BaseAdapter } from './base';
 import { compact, type DetectedProfile, seedProfile, toCandidate } from './detect';
 import {
@@ -177,6 +179,24 @@ function tierFields(tier: ModelMapping): FieldSpec[] {
  * `claude` as a child process.
  */
 export class ClaudeAdapter extends BaseAdapter implements HarnessAdapter {
+  validate(profile: AdapterProfile): void {
+    super.validate(profile);
+    if (
+      profile.favoriteManaged &&
+      parseEnvLines(profile.extras.extraEnv).some(([key]) =>
+        [MODEL_VAR, BASE_URL_VAR, ...AUTH_VARS].includes(key),
+      )
+    ) {
+      throw new HttpError(409, ERROR_CODES.favoriteRawOverrideConflict, {
+        code: ERROR_CODES.favoriteRawOverrideConflict,
+      });
+    }
+  }
+
+  extractFavorite(profile: AdapterProfile) {
+    this.validate({ ...profile, favoriteManaged: true });
+    return super.extractFavorite(profile);
+  }
   readonly id = 'claude' as const;
   readonly mode: HarnessMode = 'replace';
   readonly envVarNames = [

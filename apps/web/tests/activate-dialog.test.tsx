@@ -47,9 +47,11 @@ test('shows the diff against live files before activating', async () => {
   );
 
   expect(await screen.findByText(/将把 Claude Code 切换到「openrouter-main」/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: '文件差异' }));
   expect(await screen.findByText('将新建')).toBeInTheDocument();
   expect(screen.getByText('将覆盖')).toBeInTheDocument();
   expect(screen.getByText('无变更')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: '文件差异' }));
   expect(screen.getByText('/home/test/.claude/settings.json')).toBeInTheDocument();
 });
 
@@ -107,6 +109,7 @@ test('keeps the preview open and offers retry when activation fails', async () =
   fireEvent.click(await screen.findByRole('button', { name: '确认激活' }));
   expect(await screen.findByText(/写入失败/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '重试激活' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: '文件差异' }));
   expect(screen.getByText('/home/test/.claude/settings.json')).toBeInTheDocument();
 });
 

@@ -21,3 +21,11 @@ export function expectHttpError(run: () => unknown, code: ErrorCode, status?: nu
   }
   return error;
 }
+export async function expectResponseError(
+  response: Response,
+  code: string,
+  status = 409,
+): Promise<void> {
+  expect(response.status).toBe(status);
+  expect(((await response.json()) as { code: string }).code).toBe(code);
+}

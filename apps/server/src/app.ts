@@ -10,6 +10,11 @@ import { createDoctorRoutes } from './http/routes/doctor';
 import { createDriftRoutes } from './http/routes/drift';
 import { createGitHubRoutes } from './http/routes/github';
 import { createHarnessRoutes } from './http/routes/harnesses';
+import {
+  createModelFavoriteOperationRoutes,
+  createModelFavoritePlanRoutes,
+  createModelFavoriteRoutes,
+} from './http/routes/model-favorites';
 import { createOperationRoutes } from './http/routes/operations';
 import { createProbeRoutes } from './http/routes/probe';
 import { createProviderRoutes } from './http/routes/providers';
@@ -55,6 +60,9 @@ export function createApp(services: InstantiationService): Hono {
     api.route(path, routes);
   };
 
+  guarded('/model-favorites', createModelFavoriteRoutes(services));
+  guarded('/model-favorite-plans', createModelFavoritePlanRoutes(services));
+  guarded('/model-favorite-operations', createModelFavoriteOperationRoutes(services));
   guarded('/users', createUserRoutes(services));
   guarded('/harnesses', createHarnessRoutes(services));
   guarded('/backups', createBackupRoutes(services));

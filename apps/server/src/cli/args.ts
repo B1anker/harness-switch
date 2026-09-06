@@ -6,6 +6,9 @@ export type ParsedArgs = {
 };
 
 const VALUE_FLAGS = new Set([
+  'connection',
+  'profile',
+  'request-id',
   'api-key',
   'api-key-env',
   'base-url',

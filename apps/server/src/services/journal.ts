@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { basename, join } from 'node:path';
 import {
   ERROR_CODES,
@@ -25,9 +26,12 @@ const METADATA_KEYS = [
   'profiles',
   'active',
   'vault',
+  'favorites',
 ] as const satisfies readonly OperationMetadataKey[];
 
 const OPERATION_KINDS = [
+  'favorite-capture',
+  'favorite-apply',
   'activate',
   'activate-official',
   'revoke',
@@ -55,6 +59,26 @@ const OPERATION_STATES = [
  * that still has a rollback owing.
  */
 const receiptSchema = z.object({
+  metadataGuardVersion: z.literal(1).optional(),
+  favoriteResult: z
+    .object({
+      status: z.enum(['applied', 'unchanged', 'failed', 'skipped']),
+      code: z.string().optional(),
+    })
+    .optional(),
+  favoriteRequest: z
+    .object({
+      version: z.literal(1),
+      requestId: z.uuid(),
+      planId: z.uuid(),
+      item: z.number().int().min(0).max(4),
+      approvalHash: z.string().length(64),
+      targets: z
+        .array(z.object({ harness: harnessIdSchema, profile: z.string().max(120) }))
+        .max(5)
+        .optional(),
+    })
+    .optional(),
   state: z.enum(OPERATION_STATES),
   kind: z.enum(OPERATION_KINDS),
   harness: harnessIdSchema,
@@ -77,6 +101,8 @@ const receiptSchema = z.object({
 
 /** What an operation intends to change, declared before any of it happens. */
 export type JournalPlan = {
+  favoriteResult?: OperationReceipt['favoriteResult'];
+  favoriteRequest?: OperationReceipt['favoriteRequest'];
   kind: OperationKind;
   harness: HarnessId;
   profile: string;
@@ -93,12 +119,13 @@ export type OperationHandle = {
   metadataCommitted(): void;
   committed(): void;
   /** The in-process rollback already put everything back. */
-  rolledBack(): void;
+  rolledBack(code?: string): void;
   /** Something could not be put back and needs a human. */
   degraded(note: string): void;
 };
 
 export interface IJournalService {
+  setFavoriteResult(id: string, result: NonNullable<OperationReceipt['favoriteResult']>): void;
   readonly _serviceBrand: undefined;
   begin(plan: JournalPlan): OperationHandle;
   list(): OperationReceipt[];
@@ -156,6 +183,9 @@ export class JournalService implements IJournalService {
     }
 
     const receipt: OperationReceipt = {
+      metadataGuardVersion: plan.metadata.length ? 1 : undefined,
+      favoriteResult: plan.favoriteResult,
+      favoriteRequest: plan.favoriteRequest,
       id,
       state: 'prepared',
       kind: plan.kind,
@@ -185,11 +215,37 @@ export class JournalService implements IJournalService {
     return {
       id,
       applying: () => advance('applying'),
-      metadataCommitted: () => advance('metadata-committed'),
+      metadataCommitted: () => {
+        if (receipt.metadataGuardVersion === 1) {
+          this.files.writeJson(
+            join(dir, 'metadata-after.json'),
+            Object.fromEntries(plan.metadata.map((key) => [key, this.metadataFingerprint(key)])),
+          );
+        }
+        advance('metadata-committed');
+      },
       committed: () => advance('committed'),
-      rolledBack: () => advance('rolled-back'),
+      rolledBack: (code) => {
+        if (receipt.favoriteRequest) {
+          receipt.favoriteResult = { status: 'failed', code };
+        }
+        advance('rolled-back');
+      },
       degraded: (note: string) => advance('degraded', note),
     };
+  }
+
+  private metadataFingerprint(key: OperationMetadataKey): string {
+    return createHash('sha256')
+      .update(JSON.stringify(this.files.readOptional(this.environment.files[key]) ?? null))
+      .digest('hex');
+  }
+
+  setFavoriteResult(id: string, result: NonNullable<OperationReceipt['favoriteResult']>): void {
+    const { dir, receipt } = this.require(id);
+    if (receipt.favoriteRequest) {
+      this.write(dir, { ...receipt, favoriteResult: result });
+    }
   }
 
   list(): OperationReceipt[] {
@@ -213,6 +269,19 @@ export class JournalService implements IJournalService {
       throw new HttpError(409, '该操作尚未完成，请先等待或重启服务让它自动恢复', {
         code: ERROR_CODES.operationIncomplete,
       });
+    }
+    if (receipt.metadataGuardVersion === 1) {
+      const after = z
+        .partialRecord(z.enum(METADATA_KEYS), z.string())
+        .safeParse(this.files.readJson(join(dir, 'metadata-after.json'), null));
+      if (
+        !after.success ||
+        receipt.metadata.some((key) => after.data[key] !== this.metadataFingerprint(key))
+      ) {
+        throw new HttpError(409, ERROR_CODES.favoriteUndoConflict, {
+          code: ERROR_CODES.favoriteUndoConflict,
+        });
+      }
     }
     this.revert(dir, receipt);
     const reverted: OperationReceipt = {

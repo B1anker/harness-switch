@@ -23,17 +23,38 @@ export function changeKind(file: BackupFileDetail): ChangeKind {
   return file.content === file.currentContent ? 'same' : 'replace';
 }
 
-export function ConfigDiffs({ files }: { files: BackupFileDetail[] }) {
+export function ConfigDiffs({
+  files,
+  intent = 'restore',
+  collapseUnchanged = false,
+}: {
+  files: BackupFileDetail[];
+  intent?: 'restore' | 'apply';
+  collapseUnchanged?: boolean;
+}) {
   return (
     <div className="space-y-3">
       {files.map((file) => (
-        <ConfigFileDiff key={file.path} file={file} />
+        <ConfigFileDiff
+          key={file.path}
+          file={file}
+          intent={intent}
+          collapseUnchanged={collapseUnchanged}
+        />
       ))}
     </div>
   );
 }
 
-function ConfigFileDiff({ file }: { file: BackupFileDetail }) {
+function ConfigFileDiff({
+  file,
+  intent,
+  collapseUnchanged,
+}: {
+  file: BackupFileDetail;
+  intent: 'restore' | 'apply';
+  collapseUnchanged: boolean;
+}) {
   const { t } = useTranslation();
   const kind = changeKind(file);
   return (
@@ -44,29 +65,31 @@ function ConfigFileDiff({ file }: { file: BackupFileDetail }) {
         </p>
         <Badge variant="secondary">{t(`diff.${kind}`)}</Badge>
       </div>
-      <DiffErrorBoundary fallback={<PlainFileDiff file={file} />}>
+      <DiffErrorBoundary fallback={<PlainFileDiff file={file} intent={intent} />}>
         <Suspense
           fallback={
             <p className="px-3 py-4 text-sm text-muted-foreground">{t('diff.rendering')}</p>
           }
         >
-          <PierreFileDiff file={file} />
+          <PierreFileDiff file={file} collapseUnchanged={collapseUnchanged} />
         </Suspense>
       </DiffErrorBoundary>
     </div>
   );
 }
 
-function PlainFileDiff({ file }: { file: BackupFileDetail }) {
+function PlainFileDiff({ file, intent }: { file: BackupFileDetail; intent: 'restore' | 'apply' }) {
   const { t } = useTranslation();
   return (
     <div className="grid gap-2 p-3 font-mono text-xs">
       <pre className="whitespace-pre-wrap text-red-400/90">
         {file.currentContent ?? t('diff.absent')}
       </pre>
-      <p className="font-sans text-muted-foreground">{t('diff.afterRestore')}</p>
+      <p className="font-sans text-muted-foreground">
+        {t(intent === 'apply' ? 'favorites.after' : 'diff.afterRestore')}
+      </p>
       <pre className="whitespace-pre-wrap text-emerald-400/90">
-        {file.content ?? t('diff.deletedAfterRestore')}
+        {file.content ?? t(intent === 'apply' ? 'diff.absent' : 'diff.deletedAfterRestore')}
       </pre>
     </div>
   );

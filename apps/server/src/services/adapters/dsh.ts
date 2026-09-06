@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
+import { z } from 'zod';
 import { HttpError } from '../../common/errors';
 import { BaseAdapter } from './base';
 import {
@@ -164,7 +165,21 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
     this.validate(profile);
     const { official, providerId, credentialRef } = this.route(profile);
     const settings = parseYamlDocument(current[SETTINGS]);
-    const models = this.models(profile, official);
+    let models = this.models(profile, official);
+    if (profile.favoriteManaged && !official) {
+      const prior = settings.getIn(['llm-pi-ai', 'providers', providerId, 'models']);
+      const parsed = z
+        .array(z.object({ id: z.string() }).passthrough())
+        .safeParse(isYamlNode(prior) ? prior.toJSON() : prior);
+      if (parsed.success) {
+        // Favorites own only the primary model; preserve native declarations for other slots.
+        models = models.map((model) =>
+          model.id === profile.model
+            ? model
+            : (parsed.data.find((entry) => entry.id === model.id) ?? model),
+        );
+      }
+    }
     if (official) {
       settings.setIn(['llm-deepseek', 'apiKeyEnv'], credentialRef);
       settings.setIn(['llm-deepseek', 'baseURL'], profile.baseUrl || 'https://api.deepseek.com');
