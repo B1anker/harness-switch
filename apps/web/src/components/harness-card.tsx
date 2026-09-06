@@ -2,6 +2,7 @@ import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-sha
 import { CircleUserRound, Copy, Pencil, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { ActivateDialog } from '@/components/activate-dialog';
+import { FavoriteLinkStatus } from '@/components/model-favorites/link-status';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { configuredModel } from '@/lib/configured-model';
 import { harnessWords } from '@/lib/harness-words';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -26,9 +28,19 @@ type HarnessCardProps = {
   onEdit: (profile: ProfilePublic) => void;
   onCopy?: (profile: ProfilePublic) => void;
   extraActions?: ReactNode;
+  onOpenTemplate?: (id: string) => void;
+  switching?: boolean;
 };
 
-export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: HarnessCardProps) {
+export function HarnessCard({
+  harness,
+  onAdd,
+  onEdit,
+  onCopy,
+  extraActions,
+  onOpenTemplate,
+  switching,
+}: HarnessCardProps) {
   const { t } = useTranslation();
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
@@ -98,7 +110,7 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
       <section>
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold">{t(words.collection)}</h3>
+            {!switching ? <h3 className="text-sm font-semibold">{t(words.collection)}</h3> : null}
             <p className="mt-1 text-xs text-muted-foreground">
               {t('harness.profileCount', { count: visibleProfiles.length })}
             </p>
@@ -185,10 +197,16 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                       <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
                         {profile.baseUrl}
                       </p>
-                      {profile.model ? (
-                        <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                          {profile.model}
+                      {
+                        <p
+                          title={configuredModel(profile, t)}
+                          className="mt-0.5 truncate font-mono text-xs text-muted-foreground"
+                        >
+                          {configuredModel(profile, t)}
                         </p>
+                      }
+                      {profile.modelFavorite ? (
+                        <FavoriteLinkStatus profile={profile} onOpenTemplate={onOpenTemplate} />
                       ) : null}
                     </div>
                   </div>
@@ -200,7 +218,15 @@ export function HarnessCard({ harness, onAdd, onEdit, onCopy, extraActions }: Ha
                       disabled={active}
                     >
                       {!active ? <Play /> : null}
-                      {t(active ? words.appliedBadge : words.apply)}
+                      {t(
+                        switching
+                          ? active
+                            ? 'workspace.activeNow'
+                            : 'workspace.useConfiguration'
+                          : active
+                            ? words.appliedBadge
+                            : words.apply,
+                      )}
                     </Button>
                     <Button
                       size="icon"

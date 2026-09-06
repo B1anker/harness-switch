@@ -184,6 +184,8 @@ if (command === 'help' || command === '--help' || command === '-h') {
   command === 'create' ||
   command === 'delete' ||
   command === 'providers' ||
+  command === 'favorites' ||
+  command === 'favorite' ||
   command === 'doctor' ||
   command === 'plan' ||
   command === 'activate' ||

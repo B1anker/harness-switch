@@ -91,8 +91,10 @@ export function ProfileDialog({
     (endpoint) => endpoint.key === providerEndpoint,
   );
   /** Model ids from the last successful catalog request. */
-  const probe = useProbe(JSON.stringify([baseUrl, apiKey, providerId, providerEndpoint]));
-  const catalogModels = probe.result?.ok ? (probe.result.models ?? []) : [];
+  const probeSignature = JSON.stringify([baseUrl, apiKey, providerId, providerEndpoint]);
+  const probe = useProbe(probeSignature);
+  const [catalog, setCatalog] = useState<{ signature: string; models: string[] } | null>(null);
+  const catalogModels = catalog?.signature === probeSignature ? catalog.models : [];
   const selectableModels =
     model && !catalogModels.includes(model) ? [model, ...catalogModels] : catalogModels;
   const providerMissing = providers !== null && providerId !== '' && selectedProvider === null;
@@ -191,8 +193,8 @@ export function ProfileDialog({
     setError(null);
     setProbeAction(completion ? 'completion' : 'models');
     try {
-      await probe.run(() =>
-        selectedProvider || apiKey.trim()
+      await probe.run(async () => {
+        const result = await (selectedProvider || apiKey.trim()
           ? probeDraft({
               baseUrl: url,
               ...(selectedProvider ? { providerId } : { apiKey }),
@@ -211,14 +213,34 @@ export function ProfileDialog({
                     ...(trimmedModel ? { model: trimmedModel } : {}),
                   }
                 : undefined,
-            ),
-      );
+            ));
+        if (!completion) {
+          setCatalog({ signature: probeSignature, models: result.ok ? (result.models ?? []) : [] });
+        }
+        return result;
+      });
     } catch (err) {
       setError(errorLine(err));
     } finally {
       setProbeAction(null);
     }
   }
+
+  const fetchModelsAction = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="h-6 px-2 text-xs"
+      onClick={() => void onProbe()}
+      disabled={probe.pending}
+    >
+      {probe.pending && probeAction === 'models' ? <Loader2 className="animate-spin" /> : null}
+      {probe.pending && probeAction === 'models'
+        ? t('probe.fetchingModels')
+        : t('probe.fetchModels')}
+    </Button>
+  );
 
   function validateForm(): boolean {
     const next: ProfileFieldErrors = {};
@@ -546,93 +568,67 @@ export function ProfileDialog({
               </FormField>
 
               {!isDshOfficial ? (
-                <FormField
-                  id="model"
-                  label={harness.id === 'claude' ? t('profile.fallbackModel') : t('profile.model')}
-                  error={fieldErrors.model ? lineText(t, fieldErrors.model) : undefined}
-                  hint={harness.id === 'claude' ? t('profile.claudeModelHint') : null}
-                >
-                  {(control) =>
-                    catalogModels.length > 0 ? (
-                      <Select
-                        value={model}
-                        onValueChange={(value) => {
-                          setModel(value);
-                          clearFieldErrors('model');
-                        }}
-                      >
-                        <SelectTrigger {...control} aria-label={t('profile.model')}>
-                          <SelectValue
-                            placeholder={
-                              harness.id === 'claude'
-                                ? t('profile.fallbackModelPlaceholder')
-                                : t('profile.modelPlaceholder')
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {selectableModels.map((id) => (
-                            <SelectItem key={id} value={id}>
-                              {id}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    ) : (
-                      <Input
-                        {...control}
-                        value={model}
-                        onChange={(event) => {
-                          setModel(event.target.value);
-                          clearFieldErrors('model');
-                        }}
-                        placeholder={
-                          harness.id === 'claude'
-                            ? t('profile.fallbackModelPlaceholder')
-                            : t('profile.modelPlaceholder')
-                        }
-                      />
-                    )
-                  }
-                </FormField>
+                <div className="space-y-2">
+                  <FormField
+                    id="model"
+                    label={
+                      harness.id === 'claude' ? t('profile.fallbackModel') : t('profile.model')
+                    }
+                    error={fieldErrors.model ? lineText(t, fieldErrors.model) : undefined}
+                    hint={harness.id === 'claude' ? t('profile.claudeModelHint') : null}
+                  >
+                    {(control) =>
+                      catalogModels.length > 0 ? (
+                        <Select
+                          value={model}
+                          onValueChange={(value) => {
+                            setModel(value);
+                            clearFieldErrors('model');
+                          }}
+                        >
+                          <SelectTrigger {...control} aria-label={t('profile.model')}>
+                            <SelectValue
+                              placeholder={
+                                harness.id === 'claude'
+                                  ? t('profile.fallbackModelPlaceholder')
+                                  : t('profile.modelPlaceholder')
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectableModels.map((id) => (
+                              <SelectItem key={id} value={id}>
+                                {id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          {...control}
+                          value={model}
+                          onChange={(event) => {
+                            setModel(event.target.value);
+                            clearFieldErrors('model');
+                          }}
+                          placeholder={
+                            harness.id === 'claude'
+                              ? t('profile.fallbackModelPlaceholder')
+                              : t('profile.modelPlaceholder')
+                          }
+                        />
+                      )
+                    }
+                  </FormField>
+                  {harness.id !== 'claude' ? fetchModelsAction : null}
+                </div>
               ) : null}
 
               {!isDshOfficial ? (
                 <div className="space-y-2 sm:col-span-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void onProbe()}
-                      disabled={probe.pending}
-                    >
-                      {probe.pending && probeAction === 'models' ? (
-                        <Loader2 className="animate-spin" />
-                      ) : null}
-                      {probe.pending && probeAction === 'models'
-                        ? t('probe.fetchingModels')
-                        : t('probe.fetchModels')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void onProbe(true)}
-                      disabled={probe.pending}
-                    >
-                      {probe.pending && probeAction === 'completion' ? (
-                        <Loader2 className="animate-spin" />
-                      ) : null}
-                      {probe.pending && probeAction === 'completion'
-                        ? t('probe.testingCompletion')
-                        : t('probe.completionAction')}
-                    </Button>
                     {probe.result ? <ProbeResultLine result={probe.result} /> : null}
                   </div>
-                  <Alert variant="muted" size="sm">
-                    {t('probe.completionHint')}
-                  </Alert>
                   {probe.result?.ok && catalogModels.length > 0 ? (
                     <Alert variant="muted" size="sm">
                       {t('probe.catalogHint')}
@@ -660,6 +656,7 @@ export function ProfileDialog({
                   values={extras}
                   errors={fieldErrors}
                   modelOptions={catalogModels}
+                  fetchAction={fetchModelsAction}
                   onChange={(key, value) => {
                     setExtras((current) => ({ ...current, [key]: value }));
                     clearFieldErrors(`extra:${key}`);
@@ -740,6 +737,22 @@ export function ProfileDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}
             </Button>
+            {!isDshOfficial ? (
+              <Button
+                type="button"
+                variant="outline"
+                title={t('probe.completionHint')}
+                onClick={() => void onProbe(true)}
+                disabled={probe.pending}
+              >
+                {probe.pending && probeAction === 'completion' ? (
+                  <Loader2 className="animate-spin" />
+                ) : null}
+                {probe.pending && probeAction === 'completion'
+                  ? t('probe.testingCompletion')
+                  : t('probe.completionAction')}
+              </Button>
+            ) : null}
             <Button type="submit" disabled={pending}>
               {pending ? t('profile.saving') : t('profile.save')}
             </Button>

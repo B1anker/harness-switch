@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   ActivePublic,
   HarnessId,
@@ -33,8 +34,12 @@ export type ActivationResult = {
 };
 
 export interface IActivationService {
+  fingerprint(harness: HarnessId): string;
   readonly _serviceBrand: undefined;
   getActive(harness: HarnessId): ActivePublic | null;
+  prepareFavorite(harness: HarnessId, profile: AdapterProfile): PlannedWrite[];
+  commitFavorite(harness: HarnessId, profile: AdapterProfile): void;
+  refreshEnv(): void;
   activate(harness: HarnessId, name: string): ActivationResult;
   activateOfficial(harness: HarnessId): ActivationResult;
   syncProfile(harness: HarnessId, name: string): void;
@@ -88,6 +93,38 @@ export class ActivationService implements IActivationService {
     };
   }
 
+  fingerprint(harness: HarnessId): string {
+    return createHash('sha256')
+      .update(JSON.stringify(this.read()[harness] ?? null))
+      .digest('hex');
+  }
+
+  prepareFavorite(harness: HarnessId, profile: AdapterProfile): PlannedWrite[] {
+    const adapter = this.adapters.get(harness);
+    adapter.validate?.(profile);
+    const targets = adapter.targets();
+    return this.toWrites(targets, adapter.render(profile, this.readCurrent(targets)));
+  }
+
+  commitFavorite(harness: HarnessId, profile: AdapterProfile): void {
+    const adapter = this.adapters.get(harness);
+    const active = this.read();
+    this.backfillPrevious(adapter, active[harness], profile.name, []);
+    active[harness] = {
+      name: profile.name,
+      base_url: profile.baseUrl,
+      api_key: profile.apiKey,
+      model: profile.model,
+      extras: profile.extras,
+      official: false,
+    };
+    this.files.writeJson(this.environment.files.active, active);
+  }
+
+  refreshEnv(): void {
+    this.writeEnv(this.read());
+  }
+
   activate(harness: HarnessId, name: string): ActivationResult {
     const adapter = this.adapters.get(harness);
     const profile = this.profiles.decrypt(harness, name);
@@ -95,13 +132,19 @@ export class ActivationService implements IActivationService {
 
     const warnings: LocalizedMessage[] = [];
     const active = this.read();
-    this.backfillPrevious(adapter, active[harness], name, warnings);
 
     const writes = this.expectedNamedWrites(harness, name);
     // The active pointer commits inside the transaction, so the live files and the
     // record of what is live can never end up describing different profiles.
     this.liveWrite.transaction(
-      { kind: 'activate', harness, profile: name, writes, metadata: ['active'] },
+      {
+        kind: 'activate',
+        harness,
+        profile: name,
+        writes,
+        metadata: ['active', 'profiles'],
+        beforeWrites: () => this.backfillPrevious(adapter, active[harness], name, warnings),
+      },
       () => {
         active[harness] = {
           name: profile.name,
@@ -145,9 +188,6 @@ export class ActivationService implements IActivationService {
 
     // Always re-render even when already marked official: config.toml can drift
     // (Codex re-selects a leftover provider) while active.json still says official.
-    if (!alreadyOfficial) {
-      this.backfillPrevious(adapter, previous, '__official__', warnings);
-    }
     const writes = this.expectedOfficialWrites(harness);
     this.liveWrite.transaction(
       {
@@ -155,7 +195,12 @@ export class ActivationService implements IActivationService {
         harness,
         profile: '官方登录',
         writes,
-        metadata: ['active'],
+        metadata: ['active', 'profiles'],
+        beforeWrites: () => {
+          if (!alreadyOfficial) {
+            this.backfillPrevious(adapter, previous, '__official__', warnings);
+          }
+        },
       },
       () => {
         active[harness] = {

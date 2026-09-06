@@ -5,6 +5,7 @@ import { HttpError } from '../common/errors';
 import type { InstantiationService } from '../di';
 import { IAuthService } from '../services/auth';
 import { IEnvironmentService } from '../services/environment';
+import { IFavoriteBackupService } from '../services/favorite-backup';
 import { IUserService } from '../services/users';
 
 export function createOriginGuard(): MiddlewareHandler {
@@ -38,6 +39,9 @@ export function createAuthGuard(services: InstantiationService): MiddlewareHandl
     }
     const username = auth.userForToken(token) ?? environment.defaultUser.username;
     const user = users.require(username);
-    await environment.runAsUser(user, () => next());
+    await environment.runAsUser(user, () => {
+      services.get(IFavoriteBackupService).recover();
+      return next();
+    });
   };
 }
