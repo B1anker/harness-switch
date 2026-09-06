@@ -9,9 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { formatTokens } from '@/lib/format-tokens';
 import { useTranslation } from '@/lib/i18n';
-import { SUGGESTED_FACTS } from './suggested-defaults';
 
 export function FavoriteSelect({
   id,
@@ -96,7 +94,7 @@ export function FavoriteFacts({
           key={field}
           id={`${id}-${field}`}
           label={t(`favorites.${field}`)}
-          hint={t('favorites.declared')}
+          hint={t('favorites.capabilityUnknownHint')}
           error={errors[`${id}-${field}`]}
         >
           {(control) => (
@@ -107,11 +105,7 @@ export function FavoriteFacts({
               max={100000000}
               className="max-w-36"
               value={facts[field] ?? ''}
-              placeholder={
-                facts[field] === undefined
-                  ? t('favorites.suggestedValue', { value: formatTokens(SUGGESTED_FACTS[field]) })
-                  : undefined
-              }
+              placeholder={facts[field] === undefined ? t('favorites.unknown') : undefined}
               onChange={(event) =>
                 onFacts({
                   ...facts,
@@ -138,6 +132,8 @@ export function FavoriteFacts({
           onFacts({
             ...facts,
             reasoningSupported: value === 'unknown' ? undefined : value === 'true',
+            supportedReasoningEfforts:
+              value === 'false' ? undefined : facts.supportedReasoningEfforts,
           })
         }
       />

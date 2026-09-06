@@ -1,12 +1,11 @@
 import {
   createFavoriteRequestSchema,
-  type FavoriteConnection,
   type FavoriteInput,
   favoriteEffortSchema,
   type ModelFacts,
   type ModelFavorite,
 } from '@seaveyon/harness-switch-shared';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { Button } from '@/components/ui/button';
@@ -27,24 +26,14 @@ import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
-import { ConnectionCard } from './connection-card';
-import { FavoriteFacts } from './fields';
-import { SUGGESTED_FACTS } from './suggested-defaults';
+import { ConnectionCard } from '../connection-card';
+import { DiscardDraftDialog } from '../discard-draft-dialog';
+import { updateDefaultFacts } from '../draft-facts';
+import { FavoriteFacts } from '../fields';
+
+import { useFavoriteDraft } from './use-favorite-draft';
 
 export type FavoriteSaveNext = 'configure' | 'review' | null;
-
-function emptyConnection(providerId = '', endpointKey = ''): FavoriteConnection {
-  return {
-    id: crypto.randomUUID(),
-    label: '',
-    providerId,
-    endpointKey,
-    protocol: 'openai-responses',
-    requestModelId: '',
-    factOverrides: {},
-    preferenceOverrides: {},
-  };
-}
 
 /** The candidate payload: empty name/labels fall back to the model and provider names. */
 function favoritePayload(draft: FavoriteInput, providers: { id: string; name: string }[]) {
@@ -77,70 +66,39 @@ export function FavoriteEditor({
   /** Curated capability defaults per model id, applied when the model is chosen. */
   hintFacts?: Record<string, ModelFacts>;
   onClose(): void;
-  /** Toast primary action: open the apply wizard or jump to the relationship view. */
+  /** Called on save with null, then with the chosen follow-up action if requested. */
   onSaved?(saved: ModelFavorite, next: FavoriteSaveNext): void;
 }) {
   const { t } = useTranslation();
-  const providerList = useAppStore((state) => state.providers);
-  const providers = providerList ?? [];
   const save = useAppStore((state) => state.saveFavorite);
   const loadCatalog = useAppStore((state) => state.loadFavoriteCatalog);
   const setNotice = useAppStore((state) => state.setNotice);
-  const [draft, setDraft] = useState<FavoriteInput>(
-    favorite ??
-      initialDraft ?? {
-        name: '',
-        notes: '',
-        defaults: { ...SUGGESTED_FACTS },
-        preferences: {},
-        connections: [],
-      },
-  );
+  const {
+    draft,
+    setDraft,
+    providers,
+    vaultTarget,
+    setVaultTarget,
+    openVault,
+    addConnection,
+    update,
+    inferredFacts,
+    dirty,
+  } = useFavoriteDraft(favorite ?? initialDraft, modelHints, hintFacts);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  /**
-   * Which channel asked for a new vault entry: a connection id, null for "append a new
-   * channel", undefined for "vault closed". The baseline lets the effect below spot the
-   * entry the user just created and select it.
-   */
-  const [vaultTarget, setVaultTarget] = useState<string | null | undefined>(undefined);
-  const vaultBaseline = useRef<string[]>([]);
-  const openVault = (target: string | null) => {
-    vaultBaseline.current = providers.map((provider) => provider.id);
-    setVaultTarget(target);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const requestClose = () => {
+    if (busy || vaultTarget !== undefined) {
+      return;
+    }
+    if (dirty) {
+      setDiscardOpen(true);
+    } else {
+      onClose();
+    }
   };
-  useEffect(() => {
-    if (vaultTarget === undefined) {
-      return;
-    }
-    const created = providerList?.find((provider) => !vaultBaseline.current.includes(provider.id));
-    if (!created) {
-      return;
-    }
-    const endpointKey = created.endpoints[0]?.key ?? '';
-    setDraft((current) =>
-      vaultTarget === null
-        ? {
-            ...current,
-            connections: [...current.connections, emptyConnection(created.id, endpointKey)],
-          }
-        : {
-            ...current,
-            connections: current.connections.map((connection) =>
-              connection.id === vaultTarget
-                ? { ...connection, providerId: created.id, endpointKey }
-                : connection,
-            ),
-          },
-    );
-    setVaultTarget(undefined);
-  }, [providerList, vaultTarget]);
-  const addConnection = () =>
-    setDraft((current) => ({
-      ...current,
-      connections: [...current.connections, emptyConnection()],
-    }));
   // Cross-field rules surface as the fields change; plain field errors wait for a save
   // attempt so an untouched form does not light up red.
   const parsed = createFavoriteRequestSchema.safeParse(favoritePayload(draft, providers));
@@ -174,17 +132,6 @@ export function FavoriteEditor({
   const advancedSummary = defaultsSummary.length
     ? t('favorites.advancedSummary', { value: defaultsSummary.join(' · ') })
     : undefined;
-  const update = (id: string, patch: Partial<FavoriteConnection>) =>
-    setDraft((current) => {
-      const connections = current.connections.map((connection) =>
-        connection.id === id ? { ...connection, ...patch } : connection,
-      );
-      // Choosing a curated candidate adopts its declared capabilities as the defaults.
-      const hinted = patch.requestModelId ? hintFacts?.[patch.requestModelId] : undefined;
-      return hinted
-        ? { ...current, connections, defaults: { ...hinted } }
-        : { ...current, connections };
-    });
   /** Post-save connectivity probe per channel; failures warn, never block the save. */
   const probeSaved = async (saved: ModelFavorite) => {
     const targets = saved.connections.filter(
@@ -218,8 +165,11 @@ export function FavoriteEditor({
     setBusy(true);
     try {
       const saved = await save(result.data, favorite);
-      const affected = favorite?.references.some((ref) => ref.needsUpdate || ref.diverged) ?? false;
+      const refreshed = useAppStore.getState().favorites?.find((entry) => entry.id === saved.id);
+      const affected =
+        refreshed?.references.some((ref) => ref.needsUpdate || ref.diverged) ?? false;
       const next: FavoriteSaveNext = !favorite ? 'configure' : affected ? 'review' : null;
+      onSaved?.(saved, null);
       toast.success(t('favorites.nextStep.saved', { name: saved.name }), {
         action: next
           ? {
@@ -240,7 +190,7 @@ export function FavoriteEditor({
   };
   return (
     <>
-      <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
+      <Dialog open onOpenChange={(open) => !open && requestClose()}>
         <DialogContent className="flex max-h-[90dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
           <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">
             <DialogTitle>{t(favorite ? 'favorites.edit' : 'favorites.add')}</DialogTitle>
@@ -276,6 +226,7 @@ export function FavoriteEditor({
                 disabled={busy}
                 error={cardErrors[connection.id]}
                 fieldErrors={fieldErrors}
+                inferredFacts={inferredFacts[connection.id]}
                 modelHints={modelHints?.[`${connection.providerId}/${connection.endpointKey}`]}
                 onAddProvider={() => openVault(connection.id)}
                 onChange={(patch) => update(connection.id, patch)}
@@ -336,14 +287,14 @@ export function FavoriteEditor({
                 facts={draft.defaults}
                 effort={draft.preferences.reasoningEffort}
                 errors={fieldErrors}
-                onFacts={(defaults) => setDraft({ ...draft, defaults })}
+                onFacts={(defaults) => setDraft((current) => updateDefaultFacts(current, defaults))}
                 onEffort={(value) =>
-                  setDraft({
-                    ...draft,
+                  setDraft((current) => ({
+                    ...current,
                     preferences: {
                       reasoningEffort: favoriteEffortSchema.optional().parse(value || undefined),
                     },
-                  })
+                  }))
                 }
               />
             </Disclosure>
@@ -368,6 +319,7 @@ export function FavoriteEditor({
           }
         }}
       />
+      <DiscardDraftDialog open={discardOpen} onOpenChange={setDiscardOpen} onDiscard={onClose} />
     </>
   );
 }

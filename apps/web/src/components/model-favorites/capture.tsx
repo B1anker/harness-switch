@@ -17,9 +17,11 @@ import { useAppStore } from '@/stores/app-store';
 import { FavoriteSelect } from './fields';
 export function CaptureFavorite({
   onClose,
+  onCreate,
   initialSource,
 }: {
   onClose(): void;
+  onCreate?(): void;
   initialSource?: { harness: HarnessId; name: string };
 }) {
   const { t } = useTranslation();
@@ -66,64 +68,80 @@ export function CaptureFavorite({
           <DialogDescription>{t('workspace.captureHint')}</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 overflow-y-auto p-6">
-          <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
-            <FavoriteSelect
-              id="favorite-source"
-              label={t('favorites.capture')}
-              value={source}
-              options={sources.map((item) => ({
-                value: item.value,
-                label: `${item.harness} / ${item.profile.name}`,
-              }))}
-              onChange={(value) => {
-                setSource(value);
-                const item = sources.find((candidate) => candidate.value === value);
-                setName(item?.profile.name ?? '');
-              }}
-            />
-            <FormField id="capture-name" label={t('favorites.name')}>
-              {(control) => (
-                <Input
-                  {...control}
-                  maxLength={120}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
+          {!sources.length ? (
+            <div className="space-y-4">
+              <h3 className="font-medium">{t('favorites.onboarding.captureEmpty')}</h3>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {t('favorites.onboarding.captureEmptyHint')}
+              </p>
+              {onCreate ? (
+                <Button onClick={onCreate}>{t('favorites.add')}</Button>
+              ) : (
+                <Button variant="outline" onClick={onClose}>
+                  {t('favorites.cancel')}
+                </Button>
               )}
-            </FormField>
-            {source && !sources.find((item) => item.value === source)?.profile.providerId ? (
+            </div>
+          ) : (
+            <fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
+              <FavoriteSelect
+                id="favorite-source"
+                label={t('favorites.capture')}
+                value={source}
+                options={sources.map((item) => ({
+                  value: item.value,
+                  label: `${item.harness} / ${item.profile.name}`,
+                }))}
+                onChange={(value) => {
+                  setSource(value);
+                  const item = sources.find((candidate) => candidate.value === value);
+                  setName(item?.profile.name ?? '');
+                }}
+              />
+              <FormField id="capture-name" label={t('favorites.name')}>
+                {(control) => (
+                  <Input
+                    {...control}
+                    maxLength={120}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                )}
+              </FormField>
+              {source && !sources.find((item) => item.value === source)?.profile.providerId ? (
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="capture-credential"
+                    checked={credential}
+                    onCheckedChange={(value) => setCredential(value === true)}
+                  />
+                  <label htmlFor="capture-credential">{t('favorites.extractCredential')}</label>
+                </div>
+              ) : null}
               <div className="flex items-center gap-2">
                 <Checkbox
-                  id="capture-credential"
-                  checked={credential}
-                  onCheckedChange={(value) => setCredential(value === true)}
+                  id="capture-link"
+                  checked={linkSource}
+                  onCheckedChange={(value) => setLinkSource(value === true)}
                 />
-                <label htmlFor="capture-credential">{t('favorites.extractCredential')}</label>
+                <label htmlFor="capture-link">{t('favorites.linkSource')}</label>
               </div>
-            ) : null}
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="capture-link"
-                checked={linkSource}
-                onCheckedChange={(value) => setLinkSource(value === true)}
-              />
-              <label htmlFor="capture-link">{t('favorites.linkSource')}</label>
-            </div>
-            <Button
-              disabled={busy || !source || !name}
-              onClick={() =>
-                void run(async () => {
-                  const item = sources.find((candidate) => candidate.value === source);
-                  if (item) {
-                    await capture(item.harness, item.profile.name, name, credential, linkSource);
-                    onClose();
-                  }
-                })
-              }
-            >
-              {t('favorites.capture')}
-            </Button>
-          </fieldset>
+              <Button
+                disabled={busy || !source || !name}
+                onClick={() =>
+                  void run(async () => {
+                    const item = sources.find((candidate) => candidate.value === source);
+                    if (item) {
+                      await capture(item.harness, item.profile.name, name, credential, linkSource);
+                      onClose();
+                    }
+                  })
+                }
+              >
+                {t('favorites.capture')}
+              </Button>
+            </fieldset>
+          )}
           {error ? (
             <p role="alert" className="mt-3 text-sm text-destructive">
               {error}

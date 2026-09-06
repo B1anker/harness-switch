@@ -26,7 +26,6 @@ export function FavoriteLinkStatus({
   return (
     <div className="mt-2 space-y-1 text-xs text-muted-foreground">
       <div className="flex flex-wrap items-center gap-2">
-        {' '}
         {favorite && onOpenTemplate ? (
           <Button
             size="sm"
@@ -37,10 +36,9 @@ export function FavoriteLinkStatus({
             {t('templates.tag')}
           </Button>
         ) : null}
-        <span>
+        <span className="min-w-0 break-words">
           {t('favorites.linked')}:{' '}
-          {favorite?.name ??
-            (favorites ? t('favorites.sourceMissing') : profile.modelFavorite?.favoriteId)}
+          {favorite?.name ?? (favorites ? t('favorites.sourceMissing') : t('favorites.loading'))}
         </span>
       </div>
       {reference?.connectionMissing ? <p>{t('favorites.connectionMissing')}</p> : null}

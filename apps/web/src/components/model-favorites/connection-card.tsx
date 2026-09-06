@@ -1,4 +1,4 @@
-import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
+import type { FavoriteConnection, ModelFacts } from '@seaveyon/harness-switch-shared';
 import { Loader2, Network, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -9,14 +9,9 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { ConnectionSettings } from './connection-settings';
 import { FavoriteSelect } from './fields';
-
-/** Locale keys for the human-readable protocol labels; the enum stays as subtitle. */
-const PROTOCOL_LABEL_KEYS = {
-  'openai-chat': 'openaiChat',
-  'openai-responses': 'openaiResponses',
-  'anthropic-messages': 'anthropicMessages',
-} as const;
+import { presetProtocolForUrl } from './preset-connections';
 
 export function ConnectionCard({
   connection,
@@ -25,6 +20,7 @@ export function ConnectionCard({
   error,
   fieldErrors = {},
   modelHints,
+  inferredFacts,
   onAddProvider,
   onChange,
   onRemove,
@@ -38,7 +34,8 @@ export function ConnectionCard({
   fieldErrors?: Record<string, string>;
   /** Curated model candidates from a preset, merged with the live catalog. */
   modelHints?: string[];
-  /** Shown in place of an empty provider list: opens the vault to add one. */
+  inferredFacts?: ModelFacts;
+  /** Opens the vault while preserving the current template draft. */
   onAddProvider?(): void;
   onChange(patch: Partial<FavoriteConnection>): void;
   onRemove(): void;
@@ -65,6 +62,7 @@ export function ConnectionCard({
       label: `${item.name} · ${endpoint.label || endpoint.key}`,
       providerId: item.id,
       endpointKey: endpoint.key,
+      protocol: presetProtocolForUrl(endpoint.baseUrl),
     })),
   );
   const fetchCatalog = async () => {
@@ -84,6 +82,12 @@ export function ConnectionCard({
     }
   };
   const catalogKey = `${connection.providerId}/${connection.endpointKey}`;
+  useEffect(
+    () => () => {
+      request.current++;
+    },
+    [],
+  );
   useEffect(() => {
     if (!provider || !connection.endpointKey || catalog || attempted.current === catalogKey) {
       return;
@@ -143,11 +147,15 @@ export function ConnectionCard({
               request.current++;
               setLoading(false);
               setFailed(false);
-              onChange({ providerId: selected.providerId, endpointKey: selected.endpointKey });
+              onChange({
+                providerId: selected.providerId,
+                endpointKey: selected.endpointKey,
+                ...(selected.protocol ? { protocol: selected.protocol } : {}),
+              });
             }
           }}
         />
-        {!choices.length && onAddProvider ? (
+        {onAddProvider ? (
           <Button
             type="button"
             variant="outline"
@@ -159,7 +167,7 @@ export function ConnectionCard({
             {t('favorites.addProvider')}
           </Button>
         ) : null}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
           <FormField
             id={`${connection.id}-model`}
             label={t('favorites.modelPicker')}
@@ -181,22 +189,6 @@ export function ConnectionCard({
               />
             )}
           </FormField>
-          <FavoriteSelect
-            id={`${connection.id}-protocol`}
-            label={t('favorites.protocol')}
-            value={connection.protocol}
-            options={(['openai-chat', 'openai-responses', 'anthropic-messages'] as const).map(
-              (value) => ({
-                value,
-                label: t(`favorites.protocolOptions.${PROTOCOL_LABEL_KEYS[value]}`),
-                description: value,
-              }),
-            )}
-            error={fieldErrors[`${connection.id}-protocol`]}
-            onChange={(protocol) =>
-              onChange({ protocol: protocol as FavoriteConnection['protocol'] })
-            }
-          />
         </div>
         {loading ? (
           <p role="status" className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -204,8 +196,15 @@ export function ConnectionCard({
             {t('favorites.catalogLoading')}
           </p>
         ) : failed || (catalog && catalog.ok === false) ? (
-          <p role="status" className="flex items-center gap-2 text-muted-foreground text-xs">
-            {t('favorites.catalogAutoFailed')}
+          <p
+            role="status"
+            className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs"
+          >
+            {t(
+              modelHints?.length
+                ? 'favorites.catalogFallbackAvailable'
+                : 'favorites.catalogAutoFailed',
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -223,6 +222,14 @@ export function ConnectionCard({
               : t('favorites.noCatalogManual')}
           </p>
         ) : null}
+        <ConnectionSettings
+          connection={connection}
+          endpoint={provider?.endpoints.find((endpoint) => endpoint.key === connection.endpointKey)}
+          fieldErrors={fieldErrors}
+          hasConflict={!!error}
+          inferredFacts={inferredFacts}
+          onChange={onChange}
+        />
       </fieldset>
     </Card>
   );

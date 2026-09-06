@@ -18,6 +18,8 @@ const CUSTOM_ISSUE_KEYS: Record<string, string> = {
   favoriteDuplicateConnection: 'favorites.validation.duplicateConnection',
 };
 
+const factControl = (field: string) => (field === 'reasoningSupported' ? 'reasoning' : field);
+
 function issueKey(issue: z.core.$ZodIssue): string {
   if (issue.code === 'custom') {
     return CUSTOM_ISSUE_KEYS[issue.message] ?? 'favorites.invalid';
@@ -45,8 +47,11 @@ export function locateFavoriteIssues(
       located.fields['favorite-notes'] = key;
     } else if (head === 'defaults') {
       // Cross-field rule: point at the reasoning declaration it constrains.
-      located.fields[typeof second === 'string' ? `favorite-${second}` : 'favorite-reasoning'] =
-        key;
+      located.fields[
+        typeof second === 'string' ? `favorite-${factControl(second)}` : 'favorite-reasoning'
+      ] = key;
+    } else if (head === 'preferences') {
+      located.fields['favorite-effort'] = key;
     } else if (head === 'connections' && typeof second === 'number') {
       const connection = draft.connections[second];
       if (!connection) {
@@ -86,9 +91,9 @@ function locateConnectionIssue(
   } else if (field === 'label') {
     located.fields[`${connectionId}-label`] = key;
   } else if (field === 'factOverrides' && typeof subfield === 'string') {
-    located.fields[`${connectionId}-${subfield}`] = key;
+    located.fields[`${connectionId}-${factControl(subfield)}`] = key;
   } else if (field === 'preferenceOverrides') {
-    located.fields[`${connectionId}-reasoningEffort`] = key;
+    located.fields[`${connectionId}-effort`] = key;
   } else {
     located.cards[connectionId] = key;
   }

@@ -1,23 +1,27 @@
-import { expect, test } from '@rstest/core';
+import { beforeEach, expect, test } from '@rstest/core';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
 import { Toaster } from '@/components/ui/sonner';
 import {
   favoriteFixture,
+  OFFLINE,
   providerFixture,
   renderWithI18n,
   setStoreState,
+  stubFetch,
   stubStoreActions,
 } from './support';
+
+beforeEach(() => stubFetch(OFFLINE));
 
 test('validation errors land on the channel fields instead of one generic line', async () => {
   setStoreState({ providers: [providerFixture()] });
   const actions = stubStoreActions(['saveFavorite', 'loadFavoriteCatalog']);
   renderWithI18n(<FavoriteEditor onClose={() => undefined} />);
-  fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
+  fireEvent.click(screen.getByRole('button', { name: '添加模型连接' }));
   fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
   await waitFor(() =>
-    expect(screen.getByRole('combobox', { name: '供应商 / 入口' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: '服务商账号' })).toHaveAttribute(
       'aria-invalid',
       'true',
     ),
@@ -28,7 +32,7 @@ test('validation errors land on the channel fields instead of one generic line',
   expect(actions.saveFavorite).toHaveLength(0);
 });
 
-test('cross-field reasoning rules validate while editing, before any save attempt', async () => {
+test('disabling reasoning clears hidden effort conflicts so the template can be saved', async () => {
   const favorite = favoriteFixture('daily', 'model');
   favorite.defaults = { reasoningSupported: true, supportedReasoningEfforts: ['low', 'high'] };
   favorite.preferences = { reasoningEffort: 'high' };
@@ -39,11 +43,11 @@ test('cross-field reasoning rules validate while editing, before any save attemp
   fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
   fireEvent.click(screen.getByRole('combobox', { name: '支持推理' }));
   fireEvent.click(screen.getByRole('option', { name: '否' }));
-  expect(await screen.findAllByText('思考能力声明与已声明档位或偏好档位冲突。')).toHaveLength(2);
-  expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveAttribute(
-    'aria-invalid',
+  expect(screen.queryByText('思考能力声明与已声明档位或偏好档位冲突。')).toBeNull();
+  expect(screen.getByRole('combobox', { name: '支持推理' }).getAttribute('aria-invalid')).not.toBe(
     'true',
   );
+  expect(screen.queryByRole('combobox', { name: '偏好思考档位' })).toBeNull();
   expect(actions.saveFavorite).toHaveLength(0);
 });
 
@@ -108,8 +112,8 @@ test('saving a new template toasts a primary action that opens the next step', a
       />
     </>,
   );
-  fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
-  fireEvent.click(screen.getByRole('combobox', { name: '供应商 / 入口' }));
+  fireEvent.click(screen.getByRole('button', { name: '添加模型连接' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '服务商账号' }));
   fireEvent.click(await screen.findByRole('option', { name: 'OpenRouter · 主入口' }));
   fireEvent.click(screen.getByRole('combobox', { name: '模型' }));
   fireEvent.change(screen.getByRole('combobox', { name: '搜索或输入模型 ID' }), {
@@ -117,10 +121,14 @@ test('saving a new template toasts a primary action that opens the next step', a
   });
   fireEvent.click(await screen.findByRole('option', { name: '使用「Vendor/Model:Exact」' }));
   fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
+  await waitFor(() => expect(onSaved).toEqual([[saved, null]]));
   const action = await screen.findByRole('button', { name: '配置到工具' });
   expect(screen.getByText('模板「Vendor/Model:Exact」已保存。')).toBeInTheDocument();
   fireEvent.click(action);
-  expect(onSaved).toEqual([[saved, 'configure']]);
+  expect(onSaved).toEqual([
+    [saved, null],
+    [saved, 'configure'],
+  ]);
 });
 
 test('editing a template with affected profiles offers the relationship view instead', async () => {
@@ -129,7 +137,7 @@ test('editing a template with affected profiles offers the relationship view ins
     {
       harness: 'pi',
       name: 'main',
-      needsUpdate: true,
+      needsUpdate: false,
       diverged: false,
       sourceMissing: false,
       connectionMissing: false,
@@ -138,7 +146,17 @@ test('editing a template with affected profiles offers the relationship view ins
   const onSaved: Array<[unknown, unknown]> = [];
   setStoreState({
     providers: [],
-    saveFavorite: async () => favorite,
+    saveFavorite: async () => {
+      setStoreState({
+        favorites: [
+          {
+            ...favorite,
+            references: favorite.references.map((ref) => ({ ...ref, needsUpdate: true })),
+          },
+        ],
+      });
+      return favorite;
+    },
   });
   renderWithI18n(
     <>
@@ -153,5 +171,8 @@ test('editing a template with affected profiles offers the relationship view ins
   fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
   const action = await screen.findByRole('button', { name: '查看受影响配置' });
   fireEvent.click(action);
-  expect(onSaved).toEqual([[favorite, 'review']]);
+  expect(onSaved).toEqual([
+    [favorite, null],
+    [favorite, 'review'],
+  ]);
 });

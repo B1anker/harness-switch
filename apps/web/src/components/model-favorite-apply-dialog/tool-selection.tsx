@@ -1,4 +1,5 @@
 import {
+  catalogKey,
   ERROR_CODES,
   type FavoritePlan,
   type FavoritePlanRequest,
@@ -9,6 +10,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { HarnessIcon } from '@/components/harness-icon';
 import { FavoriteSelect } from '@/components/model-favorites/fields';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Disclosure } from '@/components/ui/disclosure';
 import { FormField } from '@/components/ui/form-field';
@@ -26,6 +28,9 @@ export function ToolSelection({
   targets,
   clear,
   change,
+  completedHarnesses = [],
+  onEditConnections,
+  onlyHarness,
 }: {
   favorite: ModelFavorite;
   items: FavoritePlanRequest['items'];
@@ -34,6 +39,9 @@ export function ToolSelection({
   plan: FavoritePlan | null;
   targets: FavoriteSlice['favoriteTargets'][string] | undefined;
   clear(): void;
+  completedHarnesses?: (typeof HARNESS_IDS)[number][];
+  onEditConnections?(): void;
+  onlyHarness?: (typeof HARNESS_IDS)[number];
   change(
     harness: (typeof HARNESS_IDS)[number],
     patch: Partial<FavoritePlanRequest['items'][number]>,
@@ -43,8 +51,14 @@ export function ToolSelection({
   const harnesses = useAppStore((state) => state.harnesses);
   return (
     <div className="space-y-3">
-      {' '}
-      {HARNESS_IDS.map((harness) => {
+      {HARNESS_IDS.filter(
+        (harness) =>
+          (!onlyHarness || harness === onlyHarness) && !completedHarnesses.includes(harness),
+      ).map((harness) => {
+        const blockers =
+          targets
+            ?.find((target) => target.harness === harness)
+            ?.connections.flatMap((entry) => entry.projection.blockers) ?? [];
         const connections = favorite.connections.filter((connection) =>
           targets
             ?.find((target) => target.harness === harness)
@@ -124,6 +138,21 @@ export function ToolSelection({
                 }}
               />
             </div>
+            {targets && !connections.length ? (
+              <div className="space-y-2 border-t px-4 py-3 text-xs text-muted-foreground">
+                <p>{t('favorites.noCompatibleHint')}</p>
+                {blockers.slice(0, 2).map((blocker, index) => (
+                  <p key={`${blocker.code}-${index}`}>
+                    {t(catalogKey(blocker.code), blocker.data)}
+                  </p>
+                ))}
+                {onEditConnections ? (
+                  <Button size="sm" variant="outline" onClick={onEditConnections}>
+                    {t('favorites.editForCompatibility')}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             {item ? (
               <div className="space-y-3 border-t border-primary/10 px-4 py-3">
                 {connections.length > 1 ? (

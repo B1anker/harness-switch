@@ -6,12 +6,12 @@ import { providerFixture, renderWithI18n, setStoreState, stubStoreActions } from
 test('a blank template starts with an add-channel empty state, not an empty card', () => {
   setStoreState({ providers: [providerFixture()] });
   renderWithI18n(<FavoriteEditor onClose={() => undefined} />);
-  expect(screen.queryByRole('combobox', { name: '供应商 / 入口' })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: '服务商账号' })).toBeNull();
   expect(
     screen.getByText('还没有渠道。添加一个供应商渠道，或先保存为待连接模板。'),
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
-  expect(screen.getByRole('combobox', { name: '供应商 / 入口' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '添加模型连接' }));
+  expect(screen.getByRole('combobox', { name: '服务商账号' })).toBeInTheDocument();
 });
 
 test('an empty vault offers inline provider creation and selects the new entry', async () => {
@@ -23,7 +23,7 @@ test('an empty vault offers inline provider creation and selects the new entry',
   // The user creates the entry inside the vault dialog; the store reload picks it up.
   setStoreState({ providers: [providerFixture()] });
   await waitFor(() =>
-    expect(screen.getByRole('combobox', { name: '供应商 / 入口' })).toHaveTextContent(
+    expect(screen.getByRole('combobox', { name: '服务商账号' })).toHaveTextContent(
       'OpenRouter · 主入口',
     ),
   );
@@ -35,7 +35,7 @@ test('a channel card with an empty vault embeds the add-provider entry', () => {
   renderWithI18n(<FavoriteEditor onClose={() => undefined} />);
   // No vault entries: the empty state shows both paths; adding a channel first keeps the
   // add-provider entry inside the card itself.
-  fireEvent.click(screen.getByRole('button', { name: '+ 添加渠道' }));
-  expect(screen.getByRole('combobox', { name: '供应商 / 入口' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '添加模型连接' }));
+  expect(screen.getByRole('combobox', { name: '服务商账号' })).toBeInTheDocument();
   expect(screen.getAllByRole('button', { name: '添加供应商' }).length).toBeGreaterThanOrEqual(1);
 });

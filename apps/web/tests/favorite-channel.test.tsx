@@ -67,7 +67,7 @@ test('changing endpoint preserves the model and uses only that endpoint catalog'
   });
   const actions = stubStoreActions(['loadFavoriteCatalog']);
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
-  fireEvent.click(screen.getByRole('combobox', { name: '供应商 / 入口' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '服务商账号' }));
   fireEvent.click(await screen.findByRole('option', { name: 'OpenRouter · fallback' }));
   expect(screen.getByRole('combobox', { name: '模型' })).toHaveTextContent('manual/model');
   fireEvent.click(screen.getByRole('combobox', { name: '模型' }));

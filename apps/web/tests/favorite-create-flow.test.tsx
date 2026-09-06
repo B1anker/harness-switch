@@ -1,4 +1,4 @@
-import { expect, test } from '@rstest/core';
+import { beforeEach, expect, test } from '@rstest/core';
 import type { ModelFavorite } from '@seaveyon/harness-switch-shared';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { ModelFavorites } from '@/components/model-favorites';
@@ -9,12 +9,16 @@ import { useAppStore } from '@/stores/app-store';
 import {
   favoriteFixture,
   harnessFixture,
+  OFFLINE,
   profileFixture,
   providerFixture,
   renderWithI18n,
   setStoreState,
+  stubFetch,
   stubStoreActions,
 } from './support';
+
+beforeEach(() => stubFetch(OFFLINE));
 
 function renderList() {
   setStoreState({ favorites: [], providers: [providerFixture()], harnesses: [] });
@@ -26,21 +30,20 @@ test('new template opens a three-way choice instead of a blank form', async () =
   renderList();
   fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
   const dialog = await screen.findByRole('dialog');
-  expect(within(dialog).getByRole('button', { name: /从预设创建/ })).toBeInTheDocument();
-  expect(within(dialog).getByRole('button', { name: /从已有配置收藏/ })).toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole('button', { name: /空白创建/ }));
+  expect(within(dialog).getByRole('button', { name: /快速创建（推荐）/ })).toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: /从已有配置创建模板/ })).toBeInTheDocument();
+  fireEvent.click(within(dialog).getByRole('button', { name: /手动配置（高级）/ }));
   expect(await screen.findByLabelText('模板名称')).toBeInTheDocument();
 });
 
-test('blank create suggests safe capability defaults, editable like any form value', async () => {
+test('blank create leaves unknown model capabilities unspecified', async () => {
   renderList();
   fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
-  fireEvent.click(screen.getByRole('button', { name: /空白创建/ }));
-  // The collapsed advanced section already advertises them in its summary, K-formatted.
-  expect(await screen.findByText(/256K · 最大输出 token 32K/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /手动配置（高级）/ }));
+  expect(screen.queryByText(/256K/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
-  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(262144);
-  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(32768);
+  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(null);
+  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(null);
   // Reasoning deliberately stays undeclared.
   expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('未设置');
   fireEvent.change(screen.getByRole('spinbutton', { name: '上下文窗口' }), {
@@ -49,7 +52,7 @@ test('blank create suggests safe capability defaults, editable like any form val
   expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(null);
 });
 
-test('editing a facts-less template shows suggested placeholders that never reach the payload', async () => {
+test('editing an unknown model offers unknown placeholders without guessing a capability', async () => {
   const favorite = favoriteFixture('facts-less', 'model');
   const saves: unknown[][] = [];
   setStoreState({
@@ -69,8 +72,8 @@ test('editing a facts-less template shows suggested placeholders that never reac
   const context = screen.getByRole('spinbutton', { name: '上下文窗口' });
   const output = screen.getByRole('spinbutton', { name: '最大输出 token' });
   expect(context).toHaveValue(null);
-  expect(context).toHaveAttribute('placeholder', '建议 256K');
-  expect(output).toHaveAttribute('placeholder', '建议 32K');
+  expect(context).toHaveAttribute('placeholder', '未设置');
+  expect(output).toHaveAttribute('placeholder', '未设置');
   // A typed value replaces the hint instead of mixing with it.
   fireEvent.change(context, { target: { value: '128000' } });
   expect(context).toHaveValue(128000);
@@ -88,9 +91,9 @@ test('capture links the source profile by default and opting out is explicit', a
   const actions = stubStoreActions(['captureFavorite']);
   renderWithI18n(<CaptureFavorite onClose={() => undefined} />);
   expect(screen.getByRole('checkbox', { name: '关联来源配置' })).toBeChecked();
-  fireEvent.click(screen.getByRole('combobox', { name: '从已有配置收藏' }));
+  fireEvent.click(screen.getByRole('combobox', { name: '从已有配置创建模板' }));
   fireEvent.click(await screen.findByRole('option', { name: 'claude / openrouter-main' }));
-  fireEvent.click(screen.getByRole('button', { name: '从已有配置收藏' }));
+  fireEvent.click(screen.getByRole('button', { name: '从已有配置创建模板' }));
   await waitFor(() => expect(actions.captureFavorite).toHaveLength(1));
   expect(actions.captureFavorite[0]).toEqual([
     'claude',
@@ -100,7 +103,7 @@ test('capture links the source profile by default and opting out is explicit', a
     true,
   ]);
   fireEvent.click(screen.getByRole('checkbox', { name: '关联来源配置' }));
-  fireEvent.click(screen.getByRole('button', { name: '从已有配置收藏' }));
+  fireEvent.click(screen.getByRole('button', { name: '从已有配置创建模板' }));
   await waitFor(() => expect(actions.captureFavorite).toHaveLength(2));
   expect(actions.captureFavorite[1]).toEqual([
     'claude',
@@ -114,19 +117,19 @@ test('capture links the source profile by default and opting out is explicit', a
 test('a preset with a matching vault entry pre-fills the channel without any setup', async () => {
   renderList();
   fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
-  fireEvent.click(screen.getByRole('button', { name: /从预设创建/ }));
+  fireEvent.click(screen.getByRole('button', { name: /快速创建（推荐）/ }));
   fireEvent.click(screen.getByRole('button', { name: 'OpenRouter' }));
-  expect(await screen.findByRole('combobox', { name: '供应商 / 入口' })).toHaveTextContent(
+  expect(await screen.findByRole('combobox', { name: '服务商账号' })).toHaveTextContent(
     'OpenRouter · 主入口',
   );
-  expect(screen.getByRole('combobox', { name: '协议' })).toHaveTextContent(
+  expect(screen.getByRole('button', { name: /连接详情/ })).toHaveTextContent(
     'OpenAI 兼容（Chat Completions）',
   );
   expect(screen.queryByLabelText('API Key')).toBeNull();
-  // The preset declares no defaultFacts, so the suggested defaults stand in until curated data wins.
+  // A service preset alone does not declare the capabilities of an unknown model.
   fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
-  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(262144);
-  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(32768);
+  expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(null);
+  expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(null);
 });
 
 test('a preset without a vault entry creates it inline and adopts curated model facts', async () => {
@@ -148,11 +151,11 @@ test('a preset without a vault entry creates it inline and adopts curated model 
   });
   renderWithI18n(<ModelFavorites />);
   fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
-  fireEvent.click(screen.getByRole('button', { name: /从预设创建/ }));
+  fireEvent.click(screen.getByRole('button', { name: /快速创建（推荐）/ }));
   fireEvent.click(screen.getByRole('button', { name: 'DeepSeek' }));
   expect(await screen.findByText(/api\.deepseek\.com/)).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('API Key'), { target: { value: 'sk-test' } });
-  fireEvent.click(screen.getByRole('button', { name: '在凭据库中创建' }));
+  fireEvent.click(screen.getByRole('button', { name: '连接供应商' }));
   expect(created[0]).toEqual([
     {
       name: 'DeepSeek',
@@ -163,7 +166,8 @@ test('a preset without a vault entry creates it inline and adopts curated model 
   // Curated candidates are offered without a live catalog, and choosing one adopts its facts.
   fireEvent.click(await screen.findByRole('combobox', { name: '模型' }));
   fireEvent.click(await screen.findByRole('option', { name: 'deepseek-reasoner' }));
-  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
+  fireEvent.click(screen.getByRole('button', { name: /连接详情/ }));
+  fireEvent.click(screen.getByRole('button', { name: /此连接的模型能力/ }));
   expect(screen.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('是');
   expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(128000);
 });
@@ -188,7 +192,7 @@ test('cloning a template copies every channel under a "copy" name as a fresh dra
   });
   stubStoreActions(['loadFavorites', 'loadProviders', 'loadFavoriteTargets']);
   renderWithI18n(<ModelFavorites />);
-  fireEvent.click(screen.getByRole('button', { name: '克隆' }));
+  fireEvent.click(screen.getByRole('button', { name: '复制模板' }));
   const nameInput = await screen.findByLabelText('模板名称');
   expect(nameInput).toHaveValue('daily 副本');
   fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
