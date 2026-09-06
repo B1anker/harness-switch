@@ -196,7 +196,11 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
     }
     settings.setIn(['agent-default-model', 'provider'], providerId);
     settings.setIn(['agent-default-model', 'model'], profile.model);
-    settings.deleteIn(['agent-default-model', 'reasoningEffort']);
+    if (profile.extras.reasoningEffort) {
+      settings.setIn(['agent-default-model', 'reasoningEffort'], profile.extras.reasoningEffort);
+    } else {
+      settings.deleteIn(['agent-default-model', 'reasoningEffort']);
+    }
 
     const credentials = parseYamlDocument(current[CREDENTIALS]);
     this.normalizeCredentials(credentials);

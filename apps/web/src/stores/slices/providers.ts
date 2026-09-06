@@ -16,7 +16,7 @@ export type ProviderSlice = {
   providersLoading: boolean;
   providersError: MessageLine | null;
   loadProviders: () => Promise<void>;
-  createProvider: (input: CreateProviderRequest) => Promise<void>;
+  createProvider: (input: CreateProviderRequest) => Promise<ProviderPublic>;
   updateProvider: (id: string, input: UpdateProviderRequest) => Promise<ProviderMutationResponse>;
   deleteProvider: (id: string) => Promise<void>;
   /** Reveals the stored key material; requires a server endpoint that returns it. */
@@ -36,8 +36,12 @@ export const createProviderSlice: Slice<ProviderSlice> = (set, get) => ({
   },
 
   createProvider: async (input) => {
-    await api(providersPath(), { method: 'POST', body: JSON.stringify(input) });
+    const result = await api<ProviderMutationResponse>(providersPath(), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
     await get().loadProviders();
+    return result.provider;
   },
 
   updateProvider: async (id, input) => {

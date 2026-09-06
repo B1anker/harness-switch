@@ -715,6 +715,8 @@
     "favoriteUndoConflict": "Favorite undo conflict.",
     "favoritePreferenceNotRepresented": "Confirm ignoring the reasoning preference this harness cannot express.",
     "favoriteEffortUnverified": "The connection reasoning effort levels are unverified.",
+    "favoriteEffortMapped": "Reasoning effort {{from}} is beyond what this harness can express and was mapped to the nearest level, {{to}}.",
+    "favoriteEffortUnset": "Reasoning effort {{from}} has no equivalent in this harness's configuration and will be left unset.",
     "favoriteStoreInvalid": "Favorite store invalid.",
     "favoriteLimitReached": "Favorite limit reached.",
     "favoriteCredentialConsentRequired": "Favorite credential consent required.",
@@ -742,6 +744,9 @@
       "profileGone": "The configuration is no longer on disk; skipped",
       "profileExists": "A profile with the same name already exists; skipped",
       "importFailed": "Import failed: {{reason}}"
+    },
+    "favorite": {
+      "probeFailed": "{{count}} channels failed the connectivity probe; the template was saved anyway."
     }
   },
   "update": {
@@ -1014,7 +1019,7 @@
     "reasoningEffort": "Preferred reasoning effort",
     "supportedReasoningEfforts": "Supported reasoning efforts",
     "effortsHint": "Comma-separated: none,minimal,low,medium,high,xhigh,max,ultra",
-    "unknown": "Unknown / unset",
+    "unknown": "Not set",
     "true": "Yes",
     "false": "No",
     "declared": "User-declared values; capabilities are not verified.",
@@ -1022,6 +1027,18 @@
     "overridden": "Connection override; blank clears inheritance",
     "inherit": "Inherit",
     "invalid": "Check the name, connections and capability declarations.",
+    "validation": {
+      "required": "Fill in this field.",
+      "invalidValue": "This value is invalid.",
+      "invalidFacts": "The reasoning capability conflicts with the declared efforts or the preferred effort.",
+      "duplicateConnection": "Another channel already uses the same provider, endpoint, protocol and model."
+    },
+    "nextStep": {
+      "saved": "Template “{{name}}” saved.",
+      "reviewAffected": "Review affected profiles"
+    },
+    "catalogAutoFailed": "Could not load the model catalog; you can still enter a model ID.",
+    "catalogRetry": "Retry",
     "configure": "Configure tools",
     "saveOnlyHint": "Saving alone does not change native files. Choose activation to apply to a tool.",
     "target": "Target profile",
@@ -1055,9 +1072,44 @@
     "detach": "Detach, keep profile",
     "harnesses": "Harness profiles",
     "autoName": "Use the model name when empty",
-    "modelAdvanced": "Advanced: capabilities, reasoning and notes",
-    "channelName": "Customize channel name",
-    "channelAdvanced": "Advanced: channel overrides",
+    "modelAdvanced": "Capabilities and notes (defaults already set, usually no changes needed)",
+    "protocolOptions": {
+      "openaiChat": "OpenAI-compatible (Chat Completions)",
+      "openaiResponses": "OpenAI Responses",
+      "anthropicMessages": "Anthropic Messages"
+    },
+    "connectionsEmpty": "No channels yet. Add a provider channel, or save now and connect later.",
+    "addProvider": "Add provider",
+    "advancedSummary": "Defaults: {{value}} · editable",
+    "suggestedValue": "Suggested: {{value}}",
+    "createChoice": {
+      "title": "New template",
+      "preset": "Start from a preset",
+      "presetHint": "Pick a provider; endpoint, protocol and capabilities are filled in",
+      "captureHint": "Turn a tuned configuration into a template",
+      "blank": "Start blank",
+      "blankHint": "Fill in every field by hand"
+    },
+    "presets": {
+      "title": "Choose a provider preset",
+      "back": "Back",
+      "providerHint": "This provider is not in the vault yet. Name it and paste the key; the base URL comes from the preset.",
+      "createProvider": "Create in vault",
+      "baseUrl": "Base URL",
+      "deepseek": "DeepSeek",
+      "zhipu": "Zhipu GLM",
+      "kimi": "Kimi (Moonshot)",
+      "minimax": "MiniMax",
+      "qwen": "Qwen (DashScope)",
+      "siliconflow": "SiliconFlow",
+      "openrouter": "OpenRouter",
+      "openai": "OpenAI",
+      "anthropic": "Anthropic"
+    },
+    "clone": {
+      "action": "Clone",
+      "name": "{{name}} copy"
+    },
     "targetAdvanced": "Change target profile or name",
     "changeDetails": "View parameter changes",
     "fileDetails": "View native file changes",

@@ -64,6 +64,18 @@ test('preview tabs show one tool at a time and support keyboard switching withou
   expect(actions.planFavorite).toHaveLength(0);
 });
 
+test('the preview renders an effort-mapping warning with its interpolation data', () => {
+  const item = favoritePlanFixture(favoriteFixture('daily', 'model')).items[0]!;
+  const projection = {
+    ...item.projection,
+    warnings: [{ code: 'favoriteEffortMapped', data: { from: 'ultra', to: 'max' } }],
+  };
+  renderWithI18n(<FavoritePreview item={{ ...item, projection }} />);
+  expect(
+    screen.getByText('思考档位 ultra 超出此工具的可表达范围，已就近映射为 max'),
+  ).toBeInTheDocument();
+});
+
 test('selection and review are separate steps, and going back preserves choices without applying', async () => {
   const favorite = favoriteFixture('daily', 'model');
   setStoreState({
@@ -148,7 +160,7 @@ test('model capability fields are optional and hidden until advanced settings ar
   setStoreState({ providers: [] });
   renderWithI18n(<FavoriteEditor onClose={() => undefined} />);
   expect(screen.queryByRole('spinbutton')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: '高级设置：能力、思考与备注' }));
+  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
   expect(screen.getAllByRole('spinbutton').length).toBeGreaterThan(0);
 });
 

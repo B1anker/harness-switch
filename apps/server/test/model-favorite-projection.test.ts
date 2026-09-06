@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import {
   createFavoriteRequestSchema,
   type FavoriteInput,
+  mapReasoningEffort,
   resolveFavorite,
 } from '@seaveyon/harness-switch-shared';
 import { IAdapterRegistry } from '../src/services/adapters';
@@ -139,7 +140,7 @@ describe('favorite contracts and adapter projections', () => {
     });
     const dsh = adapters.get('dsh').projectFavorite(value, connection);
     expect(dsh.projection.extras.reasoningEfforts).toBe('low,high');
-    expect(dsh.notRepresented).toContain('reasoningEffort');
+    expect(dsh.projection.extras.reasoningEffort).toBe('high');
     expect(
       adapters.get('codex').projectFavorite(value, connection).projection.extras.reasoningEffort,
     ).toBe('high');
@@ -173,6 +174,81 @@ describe('favorite contracts and adapter projections', () => {
     expect(() =>
       adapters.get('claude').extractFavorite({ ...profile, model: 'model[1m]' }),
     ).toThrow();
+  });
+});
+
+describe('reasoning effort normalization', () => {
+  test('maps the canonical ladder onto each harness table', () => {
+    expect(mapReasoningEffort('claude', 'ultra')).toEqual({ native: 'max', clamped: true });
+    expect(mapReasoningEffort('claude', 'minimal')).toEqual({ native: 'low', clamped: true });
+    expect(mapReasoningEffort('claude', 'none')).toEqual({ native: undefined, clamped: true });
+    expect(mapReasoningEffort('codex', 'max')).toEqual({ native: 'xhigh', clamped: true });
+    expect(mapReasoningEffort('codex', 'none')).toEqual({ native: 'minimal', clamped: true });
+    expect(mapReasoningEffort('codex', 'xhigh')).toEqual({ native: 'xhigh', clamped: false });
+    for (const id of ['kimi', 'pi', 'dsh'] as const) {
+      expect(mapReasoningEffort(id, 'xhigh')).toEqual({ native: 'high', clamped: true });
+      expect(mapReasoningEffort(id, 'none')).toEqual({ native: undefined, clamped: true });
+    }
+  });
+
+  test('clamps a mapped effort into the declared set, downward first then upward', () => {
+    expect(mapReasoningEffort('codex', 'high', ['low'])).toEqual({
+      native: 'low',
+      clamped: true,
+    });
+    expect(mapReasoningEffort('codex', 'low', ['high'])).toEqual({
+      native: 'high',
+      clamped: true,
+    });
+    expect(mapReasoningEffort('codex', 'high', ['low', 'high'])).toEqual({
+      native: 'high',
+      clamped: false,
+    });
+  });
+
+  test('projections write the mapped native value and note the clamp', () => {
+    const adapters = createTestServices().get(IAdapterRegistry);
+    const connection = fixture().connections[0]!;
+    const withEffort = (effort: string, declared?: string[]) => {
+      const value = fixture();
+      value.preferences.reasoningEffort = effort as FavoriteInput['preferences']['reasoningEffort'];
+      value.defaults.supportedReasoningEfforts =
+        declared as FavoriteInput['defaults']['supportedReasoningEfforts'];
+      return value;
+    };
+
+    const claude = adapters.get('claude').projectFavorite(withEffort('ultra'), connection);
+    expect(claude.projection.extras.effortLevel).toBe('max');
+    expect(claude.warnings).toContainEqual({
+      code: 'favoriteEffortMapped',
+      data: { from: 'ultra', to: 'max' },
+    });
+
+    expect(
+      adapters.get('codex').projectFavorite(withEffort('max'), connection).projection.extras
+        .reasoningEffort,
+    ).toBe('xhigh');
+    expect(
+      adapters.get('dsh').projectFavorite(withEffort('high'), connection).projection.extras
+        .reasoningEffort,
+    ).toBe('high');
+
+    const unset = adapters.get('claude').projectFavorite(withEffort('none'), connection);
+    expect(unset.projection.extras.effortLevel).toBeUndefined();
+    expect(unset.warnings).toContainEqual({
+      code: 'favoriteEffortUnset',
+      data: { from: 'none' },
+    });
+
+    const declared = adapters.get('codex').projectFavorite(withEffort('high', ['low']), connection);
+    expect(declared.projection.extras.reasoningEffort).toBe('low');
+    expect(declared.warnings).toContainEqual({
+      code: 'favoriteEffortMapped',
+      data: { from: 'high', to: 'low' },
+    });
+
+    const kimi = adapters.get('kimi').projectFavorite(withEffort('high'), connection);
+    expect(kimi.notRepresented).toContain('reasoningEffort');
   });
 });
 

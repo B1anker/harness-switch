@@ -5,6 +5,7 @@ import { HarnessIcon } from '@/components/harness-icon';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Disclosure } from '@/components/ui/disclosure';
+import { formatTokenField } from '@/lib/format-tokens';
 import { useTranslation } from '@/lib/i18n';
 
 export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
@@ -38,7 +39,7 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
         ) : null}
         {[...item.projection.warnings, ...item.projection.blockers].map((warning, index) => (
           <Alert key={`${warning.code}-${index}`} variant="warning">
-            {t(catalogKey(warning.code))}
+            {t(catalogKey(warning.code), warning.data)}
           </Alert>
         ))}
         {item.mode === 'activate' ? (
@@ -87,10 +88,10 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
                     <tr key={diff.field} className="border-t">
                       <td className="px-3 py-2 font-mono">{diff.field}</td>
                       <td className="max-w-60 break-all px-3 py-2 text-muted-foreground">
-                        {diff.before ?? '—'}
+                        {formatTokenField(diff.field, diff.before) ?? '—'}
                       </td>
                       <td className="max-w-60 break-all bg-primary/[0.025] px-3 py-2 font-medium">
-                        {diff.after ?? '—'}
+                        {formatTokenField(diff.field, diff.after) ?? '—'}
                       </td>
                     </tr>
                   ))}
@@ -125,7 +126,7 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
           ) : null}
           {Object.entries(item.projection.rendererDefaults).map(([field, value]) => (
             <p key={field} className="text-xs text-muted-foreground">
-              {t('favorites.rendererDefault')}: {field} = {value}
+              {t('favorites.rendererDefault')}: {field} = {formatTokenField(field, value)}
             </p>
           ))}
         </Disclosure>

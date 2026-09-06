@@ -1,5 +1,11 @@
-import type { FavoritePlanRequest, ModelFavorite } from '@seaveyon/harness-switch-shared';
-import { ArrowDownToLine, Box, Plus, Star } from 'lucide-react';
+import type {
+  FavoriteInput,
+  FavoritePlanRequest,
+  ModelFacts,
+  ProviderPreset,
+  ProviderPublic,
+} from '@seaveyon/harness-switch-shared';
+import { ArrowDownToLine, Box, Copy, Plus, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { Alert } from '@/components/ui/alert';
@@ -11,9 +17,22 @@ import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 import { CaptureFavorite } from './capture';
+import { FavoriteCreateDialog } from './create-dialog';
 import { FavoriteEditor } from './editor';
 import { FavoriteRelationships } from './relationships';
+import { SUGGESTED_FACTS } from './suggested-defaults';
+
+type EditingState =
+  | { kind: 'new' }
+  | { kind: 'edit'; favorite: FavoriteListItem }
+  | {
+      kind: 'draft';
+      draft: FavoriteInput;
+      modelHints?: Record<string, string[]>;
+      hintFacts?: Record<string, ModelFacts>;
+    };
 
 export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?: string }) {
   const { t } = useTranslation();
@@ -26,7 +45,8 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
   const clear = useAppStore((state) => state.clearFavoritePlan);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(initialSelectedId);
-  const [editing, setEditing] = useState<ModelFavorite | 'new' | null>(null);
+  const [editing, setEditing] = useState<EditingState | null>(null);
+  const [creating, setCreating] = useState(false);
   const [applying, setApplying] = useState<FavoritePlanRequest['items'] | null>(null);
   const [capturing, setCapturing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -46,6 +66,62 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
       setBusy(false);
     }
   };
+  const startFromPreset = (
+    preset: ProviderPreset,
+    provider: ProviderPublic,
+    endpointKey: string,
+  ) => {
+    setCreating(false);
+    setEditing({
+      kind: 'draft',
+      draft: {
+        name: '',
+        notes: '',
+        defaults: preset.defaultFacts ?? { ...SUGGESTED_FACTS },
+        preferences: {},
+        connections: [
+          {
+            id: crypto.randomUUID(),
+            label: '',
+            providerId: provider.id,
+            endpointKey,
+            protocol: preset.protocols[0]!,
+            requestModelId: '',
+            factOverrides: {},
+            preferenceOverrides: {},
+          },
+        ],
+      },
+      modelHints: preset.modelCatalog?.length
+        ? {
+            [`${provider.id}/${endpointKey}`]: preset.modelCatalog.map(
+              (model) => model.requestModelId,
+            ),
+          }
+        : undefined,
+      hintFacts: Object.fromEntries(
+        (preset.modelCatalog ?? [])
+          .filter((model) => model.facts)
+          .map((model) => [model.requestModelId, model.facts!]),
+      ),
+    });
+  };
+  const cloneFavorite = (source: FavoriteListItem) =>
+    setEditing({
+      kind: 'draft',
+      draft: {
+        name: t('favorites.clone.name', { name: source.name }),
+        notes: source.notes,
+        defaults: { ...source.defaults },
+        preferences: { ...source.preferences },
+        connections: source.connections.map((connection) => ({
+          ...connection,
+          id: crypto.randomUUID(),
+          factOverrides: { ...connection.factOverrides },
+          preferenceOverrides: { ...connection.preferenceOverrides },
+        })),
+      },
+    });
   const filtered =
     favorites?.filter((favorite) =>
       [
@@ -70,7 +146,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
             <ArrowDownToLine />
             {t('favorites.capture')}
           </Button>
-          <Button onClick={() => setEditing('new')}>
+          <Button onClick={() => setCreating(true)}>
             <Plus />
             {t('favorites.add')}
           </Button>
@@ -135,7 +211,15 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
                   {selected.notes || t('workspace.favoriteDetail')}
                 </span>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setEditing(selected)}>
+                  <Button variant="ghost" size="sm" onClick={() => cloneFavorite(selected)}>
+                    <Copy />
+                    {t('favorites.clone.action')}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditing({ kind: 'edit', favorite: selected })}
+                  >
                     {t('favorites.edit')}
                   </Button>
                   <Button
@@ -185,10 +269,34 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
           ) : null}
         </div>
       )}
+      {creating ? (
+        <FavoriteCreateDialog
+          onClose={() => setCreating(false)}
+          onCapture={() => {
+            setCreating(false);
+            setCapturing(true);
+          }}
+          onBlank={() => {
+            setCreating(false);
+            setEditing({ kind: 'new' });
+          }}
+          onPreset={startFromPreset}
+        />
+      ) : null}
       {editing ? (
         <FavoriteEditor
-          favorite={editing === 'new' ? undefined : editing}
+          favorite={editing.kind === 'edit' ? editing.favorite : undefined}
+          initialDraft={editing.kind === 'draft' ? editing.draft : undefined}
+          modelHints={editing.kind === 'draft' ? editing.modelHints : undefined}
+          hintFacts={editing.kind === 'draft' ? editing.hintFacts : undefined}
           onClose={() => setEditing(null)}
+          onSaved={(saved, next) => {
+            setSelectedId(saved.id);
+            if (next === 'configure') {
+              clear();
+              setApplying([]);
+            }
+          }}
         />
       ) : null}
       {capturing ? <CaptureFavorite onClose={() => setCapturing(false)} /> : null}

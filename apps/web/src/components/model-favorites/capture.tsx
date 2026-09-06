@@ -30,7 +30,7 @@ export function CaptureFavorite({
   );
   const [name, setName] = useState(initialSource?.name ?? '');
   const [credential, setCredential] = useState(false);
-  const [linkSource, setLinkSource] = useState(false);
+  const [linkSource, setLinkSource] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const run = async (action: () => Promise<void>) => {

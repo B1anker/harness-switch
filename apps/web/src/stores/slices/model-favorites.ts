@@ -53,7 +53,7 @@ export type FavoriteSlice = {
   >;
   loadFavoriteTargets(id: string): Promise<void>;
   favoriteCatalogs: Record<string, ProbeResult>;
-  loadFavoriteCatalog(providerId: string, endpointKey: string): Promise<void>;
+  loadFavoriteCatalog(providerId: string, endpointKey: string): Promise<ProbeResult>;
   favorites: FavoriteListItem[] | null;
   favoritesLoading: boolean;
   favoritesError: MessageLine | null;
@@ -61,7 +61,7 @@ export type FavoriteSlice = {
   favoriteOperation: FavoriteOperation | null;
   favoriteOperationHistory: FavoriteOperation[];
   loadFavorites(): Promise<void>;
-  saveFavorite(input: FavoriteInput, existing?: ModelFavorite): Promise<void>;
+  saveFavorite(input: FavoriteInput, existing?: ModelFavorite): Promise<ModelFavorite>;
   deleteFavorite(favorite: ModelFavorite): Promise<void>;
   captureFavorite(
     harness: HarnessId,
@@ -150,6 +150,7 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => {
           },
         });
       }
+      return result.result;
     },
     favorites: null,
     favoritesLoading: false,
@@ -171,11 +172,15 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => {
       const body: FavoriteInput | UpdateFavoriteRequest = existing
         ? { ...input, expectedRevision: existing.revision }
         : input;
-      await api(existing ? favoritePath(existing.id) : favoritesPath(), {
-        method: existing ? 'PATCH' : 'POST',
-        body: JSON.stringify(body),
-      });
+      const result = await api<{ data: ModelFavorite }>(
+        existing ? favoritePath(existing.id) : favoritesPath(),
+        {
+          method: existing ? 'PATCH' : 'POST',
+          body: JSON.stringify(body),
+        },
+      );
       await get().loadFavorites();
+      return result.data;
     },
     deleteFavorite: async (favorite) => {
       await api(favoritePath(favorite.id), {

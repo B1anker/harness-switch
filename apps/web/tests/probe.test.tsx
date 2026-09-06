@@ -337,7 +337,7 @@ function setupVaultDialog(): VaultCalls {
     providersLoading: false,
     providersError: null,
     loadProviders: async () => {},
-    createProvider: async () => {},
+    createProvider: async () => providerFixture(),
     updateProvider: async () => ({ provider: providerFixture(), warnings: [] }),
     deleteProvider: async () => {},
     revealProvider: async () => ({ apiKey: 'sk-secret' }),

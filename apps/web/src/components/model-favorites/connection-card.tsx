@@ -1,30 +1,45 @@
-import type { FavoriteConnection, FavoriteInput } from '@seaveyon/harness-switch-shared';
-import { Loader2, Network, RefreshCw, Trash2 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
+import { Loader2, Network, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CreatableCombobox } from '@/components/ui/creatable-combobox';
-import { Disclosure } from '@/components/ui/disclosure';
-import { FormField } from '@/components/ui/form-field';
+import { controlProps, FieldError, FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
-import { errorLine, lineText } from '@/lib/messages';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { ChannelOverrides } from './channel-overrides';
 import { FavoriteSelect } from './fields';
 
+/** Locale keys for the human-readable protocol labels; the enum stays as subtitle. */
+const PROTOCOL_LABEL_KEYS = {
+  'openai-chat': 'openaiChat',
+  'openai-responses': 'openaiResponses',
+  'anthropic-messages': 'anthropicMessages',
+} as const;
+
 export function ConnectionCard({
-  favorite,
   connection,
   index,
   disabled,
+  error,
+  fieldErrors = {},
+  modelHints,
+  onAddProvider,
   onChange,
   onRemove,
 }: {
-  favorite: FavoriteInput;
   connection: FavoriteConnection;
   index: number;
   disabled: boolean;
+  /** Card-level validation message (cross-field or duplicate rules). */
+  error?: string;
+  /** Field-level validation messages, keyed by `FormField` id. */
+  fieldErrors?: Record<string, string>;
+  /** Curated model candidates from a preset, merged with the live catalog. */
+  modelHints?: string[];
+  /** Shown in place of an empty provider list: opens the vault to add one. */
+  onAddProvider?(): void;
   onChange(patch: Partial<FavoriteConnection>): void;
   onRemove(): void;
 }) {
@@ -35,11 +50,15 @@ export function ConnectionCard({
   );
   const load = useAppStore((state) => state.loadFavoriteCatalog);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [failed, setFailed] = useState(false);
   const request = useRef(0);
+  /** Endpoint pairs already auto-fetched this mount, so failures do not loop. */
+  const attempted = useRef('');
   const provider = providers.find((item) => item.id === connection.providerId);
   const title =
     connection.label || provider?.name || t('favorites.channelNumber', { count: index + 1 });
+  const labelId = `${connection.id}-label`;
+  const labelError = fieldErrors[labelId];
   const choices = providers.flatMap((item) =>
     item.endpoints.map((endpoint) => ({
       value: `${item.id}/${endpoint.key}`,
@@ -48,109 +67,111 @@ export function ConnectionCard({
       endpointKey: endpoint.key,
     })),
   );
+  const fetchCatalog = async () => {
+    const currentRequest = ++request.current;
+    setLoading(true);
+    setFailed(false);
+    try {
+      await load(connection.providerId, connection.endpointKey);
+    } catch {
+      if (currentRequest === request.current) {
+        setFailed(true);
+      }
+    } finally {
+      if (currentRequest === request.current) {
+        setLoading(false);
+      }
+    }
+  };
+  const catalogKey = `${connection.providerId}/${connection.endpointKey}`;
+  useEffect(() => {
+    if (!provider || !connection.endpointKey || catalog || attempted.current === catalogKey) {
+      return;
+    }
+    attempted.current = catalogKey;
+    void fetchCatalog();
+  });
+  const invalid =
+    !!error || Object.keys(fieldErrors).some((fieldId) => fieldId.startsWith(`${connection.id}-`));
   return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center gap-3 border-b bg-muted/25 px-4 py-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Network className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h4 className="truncate text-sm font-semibold">{title}</h4>
-          <p className="text-xs text-muted-foreground">{t('favorites.channelHint')}</p>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          disabled={disabled}
-          aria-label={t('favorites.removeChannelNamed', { name: title })}
-          onClick={onRemove}
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-        >
-          <Trash2 className="size-4" />
-        </Button>
-      </div>
-      <fieldset disabled={disabled} className="min-w-0 space-y-4 p-4">
-        <div className="grid gap-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <FavoriteSelect
-            id={`${connection.id}-provider`}
-            label={t('favorites.channelProvider')}
-            value={
-              connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''
-            }
-            placeholder={t('favorites.chooseProvider')}
-            options={choices}
-            onChange={(value) => {
-              const selected = choices.find((item) => item.value === value);
-              if (selected) {
-                request.current++;
-                setLoading(false);
-                setError('');
-                onChange({ providerId: selected.providerId, endpointKey: selected.endpointKey });
-              }
-            }}
+    <Card className={cn('overflow-hidden', invalid && 'border-destructive')}>
+      <div className="border-b bg-muted/25 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Network className="size-4" />
+          </span>
+          <Input
+            {...controlProps(labelId, labelError)}
+            aria-label={t('favorites.label')}
+            value={connection.label}
+            placeholder={provider?.name || t('favorites.channelNumber', { count: index + 1 })}
+            maxLength={120}
+            disabled={disabled}
+            onChange={(event) => onChange({ label: event.target.value })}
+            className="h-auto w-auto min-w-24 max-w-56 flex-none border-transparent bg-transparent px-0 py-0 font-semibold text-sm shadow-none [field-sizing:content] hover:border-input focus-visible:border-ring/50"
           />
-          <FavoriteSelect
-            id={`${connection.id}-protocol`}
-            label={t('favorites.protocol')}
-            value={connection.protocol}
-            options={['openai-chat', 'openai-responses', 'anthropic-messages'].map((value) => ({
-              value,
-              label: value,
-            }))}
-            onChange={(protocol) =>
-              onChange({ protocol: protocol as FavoriteConnection['protocol'] })
-            }
-          />
-        </div>
-        <div className="relative pt-1">
           <Button
             variant="ghost"
-            size="sm"
-            className="absolute -top-1 right-0 h-7 gap-1.5 px-1.5 text-xs text-primary"
-            disabled={disabled || loading || !provider || !connection.endpointKey}
-            title={t('favorites.catalog')}
-            onClick={async () => {
-              const currentRequest = ++request.current;
-              setLoading(true);
-              setError('');
-              try {
-                await load(connection.providerId, connection.endpointKey);
-              } catch (cause) {
-                if (currentRequest === request.current) {
-                  setError(lineText(t, errorLine(cause)));
-                }
-              } finally {
-                if (currentRequest === request.current) {
-                  setLoading(false);
-                }
-              }
-            }}
+            size="icon"
+            disabled={disabled}
+            aria-label={t('favorites.removeChannelNamed', { name: title })}
+            onClick={onRemove}
+            className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
           >
-            {loading ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="size-3.5" />
-            )}
-            {t(
-              loading
-                ? 'favorites.catalogLoading'
-                : catalog
-                  ? 'favorites.catalogRefresh'
-                  : 'favorites.catalogLoad',
-            )}
+            <Trash2 className="size-4" />
           </Button>
+        </div>
+        <FieldError id={labelId}>{labelError}</FieldError>
+      </div>
+      {error ? (
+        <p role="alert" className="border-b bg-destructive/5 px-4 py-2 text-destructive text-xs">
+          {error}
+        </p>
+      ) : null}
+      <fieldset disabled={disabled} className="min-w-0 space-y-4 p-4">
+        <FavoriteSelect
+          id={`${connection.id}-provider`}
+          label={t('favorites.channelProvider')}
+          value={connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''}
+          placeholder={t('favorites.chooseProvider')}
+          options={choices}
+          error={fieldErrors[`${connection.id}-provider`]}
+          className="max-w-md"
+          onChange={(value) => {
+            const selected = choices.find((item) => item.value === value);
+            if (selected) {
+              request.current++;
+              setLoading(false);
+              setFailed(false);
+              onChange({ providerId: selected.providerId, endpointKey: selected.endpointKey });
+            }
+          }}
+        />
+        {!choices.length && onAddProvider ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full border-dashed text-muted-foreground"
+            disabled={disabled}
+            onClick={onAddProvider}
+          >
+            {t('favorites.addProvider')}
+          </Button>
+        ) : null}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FormField
             id={`${connection.id}-model`}
             label={t('favorites.modelPicker')}
-            labelClassName="pr-28"
             hint={t('favorites.modelPickerHint')}
+            error={fieldErrors[`${connection.id}-model`]}
           >
             {(control) => (
               <CreatableCombobox
                 key={`${connection.providerId}/${connection.endpointKey}`}
                 {...control}
                 value={connection.requestModelId}
-                options={catalog?.models ?? []}
+                options={[...new Set([...(modelHints ?? []), ...(catalog?.models ?? [])])]}
                 disabled={disabled}
                 onChange={(requestModelId) => onChange({ requestModelId })}
                 placeholder={t('favorites.modelPlaceholder')}
@@ -160,33 +181,48 @@ export function ConnectionCard({
               />
             )}
           </FormField>
-          {error ? (
-            <p role="alert" className="mt-2 text-xs text-destructive">
-              {error}
-            </p>
-          ) : catalog ? (
-            <p role="status" className="mt-2 text-xs text-muted-foreground">
-              {catalog.models?.length
-                ? t('favorites.catalogCount', { count: catalog.models.length })
-                : t('favorites.noCatalogManual')}
-            </p>
-          ) : null}
+          <FavoriteSelect
+            id={`${connection.id}-protocol`}
+            label={t('favorites.protocol')}
+            value={connection.protocol}
+            options={(['openai-chat', 'openai-responses', 'anthropic-messages'] as const).map(
+              (value) => ({
+                value,
+                label: t(`favorites.protocolOptions.${PROTOCOL_LABEL_KEYS[value]}`),
+                description: value,
+              }),
+            )}
+            error={fieldErrors[`${connection.id}-protocol`]}
+            onChange={(protocol) =>
+              onChange({ protocol: protocol as FavoriteConnection['protocol'] })
+            }
+          />
         </div>
-        <div className="space-y-2 border-t pt-2">
-          <Disclosure title={t('favorites.channelName')}>
-            <FormField id={`${connection.id}-label`} label={t('favorites.label')}>
-              {(control) => (
-                <Input
-                  {...control}
-                  value={connection.label}
-                  maxLength={120}
-                  onChange={(event) => onChange({ label: event.target.value })}
-                />
-              )}
-            </FormField>
-          </Disclosure>
-          <ChannelOverrides favorite={favorite} connection={connection} onChange={onChange} />
-        </div>
+        {loading ? (
+          <p role="status" className="flex items-center gap-1.5 text-muted-foreground text-xs">
+            <Loader2 className="size-3.5 animate-spin" />
+            {t('favorites.catalogLoading')}
+          </p>
+        ) : failed || (catalog && catalog.ok === false) ? (
+          <p role="status" className="flex items-center gap-2 text-muted-foreground text-xs">
+            {t('favorites.catalogAutoFailed')}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-1.5 text-primary text-xs"
+              disabled={disabled || loading}
+              onClick={() => void fetchCatalog()}
+            >
+              {t('favorites.catalogRetry')}
+            </Button>
+          </p>
+        ) : catalog ? (
+          <p role="status" className="text-muted-foreground text-xs">
+            {catalog.models?.length
+              ? t('favorites.catalogCount', { count: catalog.models.length })
+              : t('favorites.noCatalogManual')}
+          </p>
+        ) : null}
       </fieldset>
     </Card>
   );
