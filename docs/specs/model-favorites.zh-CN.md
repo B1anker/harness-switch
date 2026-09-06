@@ -254,6 +254,23 @@ Dashboard 顶层增加“模型收藏夹”，和当前工具配置视图并存�
 
 每个投影结果包含 `ownedFields`、`set`、`remove`、`warnings`、`blockers`。清除收藏字段时要显式移除以前由收藏写入的对应值，不得留下旧值；同时不能删除从未归收藏管理的字段。`projectionVersion` 随映射规则变化递增，规则升级也需要重新预览。
 
+### 6.1 思考档位归一化
+
+偏好里的 `reasoningEffort` 是一把 canonical 八档刻度（`none < minimal < low < medium < high < xhigh < max < ultra`，即 schema 枚举的顺序），不是任何一家工具的原生词汇。投影时经 `mapReasoningEffort(harness, effort, declaredEfforts?)`（`packages/shared/src/effort-mapping.ts`）落两级约束：
+
+1. **harness 静态表**（`HARNESS_EFFORT_RULES`，数据 + 注释，非分支硬编码）：该工具原生配置层可接受的档位集合，以及 `none` 的落点（原生替身或不写）。
+
+   | 工具 | 原生键 | 可接受档位 | `none` 落点 |
+   | --- | --- | --- | --- |
+   | Claude | settings 顶层 `effortLevel` | low / medium / high / xhigh / max | 不写（思考关闭） |
+   | Codex | `model_reasoning_effort` | minimal / low / medium / high / xhigh | minimal（无真关闭） |
+   | Kimi / Pi | 配置层无对应键（不落地，仍报 `notRepresented`） | minimal / low / medium / high（保守表，供将来接入） | 不写 |
+   | DSH | `agent-default-model.reasoningEffort` | minimal / low / medium / high | 不写 |
+
+2. **declaredEfforts 声明集**：模型声明了 `supportedReasoningEfforts` 时，映射结果还须就近降进声明集。
+
+降档语义是**就近取值**：先向下取最近的可表达档，无更低档时向上取最低档。落点与请求档位不一致即 `clamped`，投影带 `favoriteEffortMapped` 警告（plan/preview 的 warnings 机制展示）；`none` 在无对应值的工具上不写键并带 `favoriteEffortUnset` 警告。降档永远不再硬阻断——Codex 此前对表单枚举外档位的 `favoriteProjectionUnsupported` 阻断已被此机制取代。
+
 ## 7. 计划、事务与恢复
 
 ### 7.1 计划
