@@ -121,9 +121,7 @@ test('a preset with a matching vault entry pre-fills the channel without any set
   expect(await screen.findByRole('combobox', { name: '服务商账号' })).toHaveTextContent(
     'OpenRouter · 主入口',
   );
-  expect(screen.getByRole('button', { name: /服务地址与接口协议/ })).toHaveTextContent(
-    'OpenAI 兼容（Chat Completions）',
-  );
+  expect(screen.getByText('OpenAI 兼容（Chat Completions）')).toBeInTheDocument();
   expect(screen.queryByLabelText('API Key')).toBeNull();
   fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(262144);

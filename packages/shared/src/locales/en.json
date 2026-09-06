@@ -1037,7 +1037,7 @@
       "saved": "Template “{{name}}” saved.",
       "reviewAffected": "Review affected profiles"
     },
-    "catalogAutoFailed": "Could not load the model catalog; you can still enter a model ID.",
+    "catalogAutoFailed": "List unavailable. Enter a model ID manually.",
     "catalogRetry": "Retry",
     "configure": "Configure tools",
     "saveOnlyHint": "Saving alone does not change native files. Choose activation to apply to a tool.",
@@ -1216,19 +1216,19 @@
       "restore": "Before global restore to {{name}}"
     },
     "channelNumber": "Channel {{count}}",
-    "channelHint": "Choose an account and model. Expand connection details when needed.",
+    "channelHint": "Choose an account and model",
     "channelProvider": "Provider account",
     "chooseProvider": "Choose a provider endpoint",
     "removeChannelNamed": "Remove channel: {{name}}",
     "modelPicker": "Model",
-    "modelPickerHint": "Choose from the list or enter the provider model ID. Changing the account or model resets this connection’s effort levels and preference.",
+    "modelPickerHint": "Choose a model or enter its ID.",
     "modelPlaceholder": "Choose or enter a model ID",
     "modelSearch": "Search or enter a model ID",
     "modelEmpty": "Enter a model ID to add it, or load the provider catalog first.",
     "modelCustom": "Use “{{value}}”",
     "catalogLoad": "Load catalog",
     "catalogRefresh": "Refresh catalog",
-    "catalogLoading": "Loading",
+    "catalogLoading": "Loading model list…",
     "catalogCount": "{{count}} catalog models available to search above.",
     "noCatalogManual": "No catalog available. You can still enter a model ID.",
     "modeHint": {
@@ -1303,7 +1303,7 @@
     "connectionDetailsHint": "View the service address and adjust the API protocol for this connection. Manage addresses in the credential vault. Usually the protocol needs no changes; follow your provider documentation for custom services.",
     "connectionCapabilities": "Customize per connection",
     "connectionCapabilitiesHint": "Each connection shows its effective capabilities. Change only values that differ by provider or model; connection settings take precedence over template defaults.",
-    "catalogFallbackAvailable": "The model catalog could not load. You can still choose a preset candidate, enter a model ID, or retry.",
+    "catalogFallbackAvailable": "List unavailable. Use a preset or enter a model ID.",
     "capabilityUnknownHint": "Unit: tokens; clear to leave unspecified",
     "draft": {
       "discardTitle": "Discard unsaved changes?",
@@ -1329,7 +1329,8 @@
     "effortLevelsHint": "Select only levels supported by this model; leave empty if unknown. Reasoning support does not imply support for every level.",
     "effortPreferenceHint": "Choose a declared level, or leave unspecified to use the tool or provider default.",
     "effortUnknownHint": "Supported levels are not declared. Keep the default behavior until the levels are confirmed.",
-    "followDefault": "Unspecified; use default"
+    "followDefault": "Unspecified; use default",
+    "changeProtocol": "Change protocol"
   },
   "favorite": {
     "result": "Operation completed"

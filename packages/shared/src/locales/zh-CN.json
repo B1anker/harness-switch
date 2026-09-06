@@ -1037,7 +1037,7 @@
       "saved": "模板「{{name}}」已保存。",
       "reviewAffected": "查看受影响配置"
     },
-    "catalogAutoFailed": "模型目录加载失败，仍可手动输入模型 ID。",
+    "catalogAutoFailed": "暂时无法获取列表，可手动输入模型 ID。",
     "catalogRetry": "重试",
     "configure": "配置到工具",
     "saveOnlyHint": "仅保存不会修改原生文件。选择同时激活后才会应用到工具。",
@@ -1216,19 +1216,19 @@
       "restore": "全局恢复到 {{name}} 前"
     },
     "channelNumber": "渠道 {{count}}",
-    "channelHint": "选择账号和模型，连接详情可按需展开",
+    "channelHint": "选择账号和模型",
     "channelProvider": "服务商账号",
     "chooseProvider": "选择供应商入口",
     "removeChannelNamed": "移除渠道：{{name}}",
     "modelPicker": "模型",
-    "modelPickerHint": "可从列表选择，也可输入服务商提供的模型 ID。更换账号或模型后，会重新设置此连接的思考档位与偏好。",
+    "modelPickerHint": "可选择模型，也可直接输入模型 ID。",
     "modelPlaceholder": "选择或输入模型 ID",
     "modelSearch": "搜索或输入模型 ID",
     "modelEmpty": "输入模型 ID 即可添加，也可以先加载供应商目录。",
     "modelCustom": "使用「{{value}}」",
     "catalogLoad": "加载目录",
     "catalogRefresh": "刷新目录",
-    "catalogLoading": "加载中",
+    "catalogLoading": "正在获取模型列表…",
     "catalogCount": "目录中有 {{count}} 个模型，可在上方搜索选择。",
     "noCatalogManual": "暂无可用目录，仍可手动输入模型 ID。",
     "modeHint": {
@@ -1303,7 +1303,7 @@
     "connectionDetailsHint": "这里显示此连接使用的服务地址，并可调整接口协议。服务地址在凭据库中管理；协议通常无需修改，自定义服务请以供应商文档为准。",
     "connectionCapabilities": "按连接单独设置",
     "connectionCapabilitiesHint": "下面显示各连接最终使用的能力。只有供应商或模型存在差异时才需要修改；单独设置的值优先于模板默认值。",
-    "catalogFallbackAvailable": "模型目录加载失败，仍可选择预设候选、手动填写模型 ID 或重试。",
+    "catalogFallbackAvailable": "暂时无法获取列表，可使用预设或手动输入。",
     "capabilityUnknownHint": "单位：token，可清空为未指定",
     "draft": {
       "discardTitle": "放弃未保存的修改？",
@@ -1329,7 +1329,8 @@
     "effortLevelsHint": "仅勾选该模型支持的档位；不确定时留空。支持推理并不代表支持全部档位。",
     "effortPreferenceHint": "从已声明的档位中选择；不指定时沿用工具或服务商的默认行为。",
     "effortUnknownHint": "尚未声明支持的档位，先沿用默认行为；确认档位后再指定偏好。",
-    "followDefault": "不指定，沿用默认"
+    "followDefault": "不指定，沿用默认",
+    "changeProtocol": "更改协议"
   },
   "favorite": {
     "result": "操作完成"

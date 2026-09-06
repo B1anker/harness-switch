@@ -82,7 +82,7 @@ test('a failed catalog load degrades to manual entry with a non-blocking hint', 
     },
   });
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
-  expect(await screen.findByText('模型目录加载失败，仍可手动输入模型 ID。')).toBeInTheDocument();
+  expect(await screen.findByText('暂时无法获取列表，可手动输入模型 ID。')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
   expect((screen.getByRole('combobox', { name: '模型' }) as HTMLButtonElement).disabled).toBe(
     false,

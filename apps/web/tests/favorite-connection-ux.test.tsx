@@ -12,7 +12,7 @@ import {
   stubStoreActions,
 } from './support';
 
-test('custom service details open and close on every click even with unrelated capability errors', () => {
+test('custom routes show address and protocol directly and allow optional editing', () => {
   const connection = favoriteFixture('custom', 'model').connections[0]!;
   renderWithI18n(
     <ConnectionSettings
@@ -22,15 +22,13 @@ test('custom service details open and close on every click even with unrelated c
       onChange={() => undefined}
     />,
   );
-  const toggle = screen.getByRole('button', { name: /服务地址与接口协议/ });
-  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  const toggle = screen.getByRole('button', { name: '更改协议' });
+  expect(screen.getByText('https://custom.example/v1')).toBeVisible();
   expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
   fireEvent.click(toggle);
-  expect(toggle).toHaveAttribute('aria-expanded', 'true');
   expect(screen.getByText('https://custom.example/v1')).toBeVisible();
   expect(screen.getByRole('combobox', { name: '协议' })).toBeVisible();
-  fireEvent.click(toggle);
-  expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(screen.getByRole('button', { name: '完成' }));
   expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
   fireEvent.click(toggle);
   expect(screen.getByRole('combobox', { name: '协议' })).toBeVisible();
@@ -138,9 +136,24 @@ test('a failed catalog explains that preset candidates and manual IDs are still 
       onRemove={() => undefined}
     />,
   );
-  expect(
-    screen.getByText('模型目录加载失败，仍可选择预设候选、手动填写模型 ID 或重试。'),
-  ).toBeInTheDocument();
+  expect(screen.getByText('暂时无法获取列表，可使用预设或手动输入。')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('combobox', { name: '模型' }));
   expect(await screen.findByRole('option', { name: 'preset/model' })).toBeInTheDocument();
+});
+
+test('an endpoint with one preset protocol shows its address and protocol without extra controls', () => {
+  const connection = favoriteFixture('official', 'model').connections[0]!;
+  connection.protocol = 'anthropic-messages';
+  renderWithI18n(
+    <ConnectionSettings
+      connection={connection}
+      endpoint={{ baseUrl: 'https://api.anthropic.com' }}
+      fieldErrors={{}}
+      onChange={() => undefined}
+    />,
+  );
+  expect(screen.getByText('Anthropic Messages')).toBeVisible();
+  expect(screen.getByText('https://api.anthropic.com')).toBeVisible();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(screen.queryByRole('combobox')).toBeNull();
 });

@@ -1,6 +1,5 @@
 import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
 import { Loader2, Network, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CreatableCombobox } from '@/components/ui/creatable-combobox';
@@ -12,6 +11,7 @@ import { useAppStore } from '@/stores/app-store';
 import { ConnectionSettings } from './connection-settings';
 import { FavoriteSelect } from './fields';
 import { presetProtocolForUrl } from './preset-connections';
+import { useConnectionCatalog } from './use-connection-catalog';
 
 export function ConnectionCard({
   connection,
@@ -40,16 +40,12 @@ export function ConnectionCard({
 }) {
   const { t } = useTranslation();
   const providers = useAppStore((state) => state.providers) ?? [];
-  const catalog = useAppStore(
-    (state) => state.favoriteCatalogs[`${connection.providerId}/${connection.endpointKey}`],
-  );
-  const load = useAppStore((state) => state.loadFavoriteCatalog);
-  const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const request = useRef(0);
-  /** Endpoint pairs already auto-fetched this mount, so failures do not loop. */
-  const attempted = useRef('');
   const provider = providers.find((item) => item.id === connection.providerId);
+  const { catalog, loading, failed, retry } = useConnectionCatalog(
+    connection.providerId,
+    connection.endpointKey,
+    !!provider,
+  );
   const title =
     connection.label || provider?.name || t('favorites.channelNumber', { count: index + 1 });
   const labelId = `${connection.id}-label`;
@@ -63,36 +59,6 @@ export function ConnectionCard({
       protocol: presetProtocolForUrl(endpoint.baseUrl),
     })),
   );
-  const fetchCatalog = async () => {
-    const currentRequest = ++request.current;
-    setLoading(true);
-    setFailed(false);
-    try {
-      await load(connection.providerId, connection.endpointKey);
-    } catch {
-      if (currentRequest === request.current) {
-        setFailed(true);
-      }
-    } finally {
-      if (currentRequest === request.current) {
-        setLoading(false);
-      }
-    }
-  };
-  const catalogKey = `${connection.providerId}/${connection.endpointKey}`;
-  useEffect(
-    () => () => {
-      request.current++;
-    },
-    [],
-  );
-  useEffect(() => {
-    if (!provider || !connection.endpointKey || catalog || attempted.current === catalogKey) {
-      return;
-    }
-    attempted.current = catalogKey;
-    void fetchCatalog();
-  });
   const invalid =
     !!error || Object.keys(fieldErrors).some((fieldId) => fieldId.startsWith(`${connection.id}-`));
   return (
@@ -145,9 +111,6 @@ export function ConnectionCard({
               onChange={(value) => {
                 const selected = choices.find((item) => item.value === value);
                 if (selected) {
-                  request.current++;
-                  setLoading(false);
-                  setFailed(false);
                   onChange({
                     providerId: selected.providerId,
                     endpointKey: selected.endpointKey,
@@ -213,7 +176,7 @@ export function ConnectionCard({
               size="sm"
               className="h-6 px-1.5 text-primary text-xs"
               disabled={disabled || loading}
-              onClick={() => void fetchCatalog()}
+              onClick={() => void retry()}
             >
               {t('favorites.catalogRetry')}
             </Button>

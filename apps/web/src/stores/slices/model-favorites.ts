@@ -55,7 +55,11 @@ export type FavoriteSlice = {
   >;
   loadFavoriteTargets(id: string): Promise<void>;
   favoriteCatalogs: Record<string, ProbeResult>;
-  loadFavoriteCatalog(providerId: string, endpointKey: string): Promise<ProbeResult>;
+  loadFavoriteCatalog(
+    providerId: string,
+    endpointKey: string,
+    signal?: AbortSignal,
+  ): Promise<ProbeResult>;
   favorites: FavoriteListItem[] | null;
   favoritesLoading: boolean;
   favoritesError: MessageLine | null;
@@ -138,21 +142,30 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => {
       }
     },
     favoriteCatalogs: {},
-    loadFavoriteCatalog: async (providerId, endpointKey) => {
+    loadFavoriteCatalog: async (providerId, endpointKey, signal) => {
       const user = get().currentUser;
-      const result = await api<{ result: ProbeResult }>(providerProbePath(providerId), {
-        method: 'POST',
-        body: JSON.stringify({ endpoint: endpointKey, completion: false }),
-      });
-      if (get().currentUser === user) {
-        set({
-          favoriteCatalogs: {
-            ...get().favoriteCatalogs,
-            [`${providerId}/${endpointKey}`]: result.result,
-          },
+      const timeout = new AbortController();
+      const timer = setTimeout(() => timeout.abort(), 25_000);
+      const requestSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
+      try {
+        const result = await api<{ result: ProbeResult }>(providerProbePath(providerId), {
+          method: 'POST',
+          body: JSON.stringify({ endpoint: endpointKey, completion: false }),
+          signal: requestSignal,
         });
+        requestSignal.throwIfAborted();
+        if (get().currentUser === user) {
+          set({
+            favoriteCatalogs: {
+              ...get().favoriteCatalogs,
+              [`${providerId}/${endpointKey}`]: result.result,
+            },
+          });
+        }
+        return result.result;
+      } finally {
+        clearTimeout(timer);
       }
-      return result.result;
     },
     favorites: null,
     favoritesLoading: false,
