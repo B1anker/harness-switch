@@ -2,6 +2,8 @@ import type { FavoritePlanRequest, HarnessSummary } from '@seaveyon/harness-swit
 import { useState } from 'react';
 import { ConfigurationFlow, flowEdge, flowNode } from '@/components/configuration-flow';
 import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/tabs';
 import { compatibleConnections, favoriteSelection } from '@/lib/favorite-selection';
 import { useTranslation } from '@/lib/i18n';
 import { useFavoriteTargets } from '@/lib/use-favorite-targets';
@@ -11,15 +13,18 @@ import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 export function FavoriteRelationships({
   favorite,
   onApply,
+  onEditConnections,
 }: {
   favorite: FavoriteListItem;
   onApply(items: FavoritePlanRequest['items']): void;
+  onEditConnections(): void;
 }) {
   const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
   const providers = useAppStore((state) => state.providers);
   const { targets, loading, error } = useFavoriteTargets(favorite);
   const [channel, setChannel] = useState(favorite.connections[0]?.id);
+  const [mode, setMode] = useState<'save' | 'activate'>('activate');
   const connection = favorite.connections.find((entry) => entry.id === channel);
   const status = (harness: HarnessSummary) => {
     const refs = favorite.references.filter(
@@ -85,7 +90,7 @@ export function FavoriteRelationships({
         action: () =>
           onApply([
             {
-              ...favoriteSelection(favorite, harness, targets, 'activate'),
+              ...favoriteSelection(favorite, harness, targets, mode),
               connectionId: channel!,
             },
           ]),
@@ -111,7 +116,30 @@ export function FavoriteRelationships({
         <p className="mt-2 text-sm text-muted-foreground">{t('workspace.graphHint')}</p>
       </div>
       {error ? <Alert>{error}</Alert> : null}
+      <SegmentedControl
+        options={['save', 'activate'] as const}
+        value={mode}
+        onChange={setMode}
+        className="max-w-sm"
+      >
+        {(value) =>
+          t(value === 'save' ? 'favorites.modeLabel.save' : 'favorites.modeLabel.activate')
+        }
+      </SegmentedControl>
       <ConfigurationFlow nodes={nodes} edges={edges} height={height} />
+      {connection ? (
+        <p className="break-all text-xs text-muted-foreground">
+          {connection.protocol} ·{' '}
+          {
+            providers
+              ?.find((entry) => entry.id === connection.providerId)
+              ?.endpoints.find((entry) => entry.key === connection.endpointKey)?.baseUrl
+          }
+        </p>
+      ) : null}
+      <Button variant="outline" size="sm" onClick={onEditConnections}>
+        {t('favorites.relationships.editConnection')}
+      </Button>
       {!favorite.connections.length ? (
         <p className="text-sm text-muted-foreground">{t('favorites.pending')}</p>
       ) : null}

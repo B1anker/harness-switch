@@ -62,6 +62,7 @@ test('the model picker trigger matches the protocol select height', () => {
   stubStoreActions(['loadFavoriteCatalog']);
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
   const model = screen.getByRole('combobox', { name: '模型' });
+  fireEvent.click(screen.getByRole('button', { name: '更改协议' }));
   const protocol = screen.getByRole('combobox', { name: '协议' });
   expect(model.className).toContain('h-10');
   expect(model.className).not.toContain('min-h-11');

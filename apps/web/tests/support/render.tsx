@@ -1,4 +1,4 @@
-import { type RenderResult, render } from '@testing-library/react';
+import { type RenderOptions, type RenderResult, render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { I18nProvider } from '@/lib/i18n';
 
@@ -9,6 +9,9 @@ import { I18nProvider } from '@/lib/i18n';
  * bare `render` is enough; use this only when the component under test calls `useTranslation`
  * itself.
  */
-export function renderWithI18n(ui: ReactElement): RenderResult {
-  return render(<I18nProvider>{ui}</I18nProvider>);
+export function renderWithI18n(
+  ui: ReactElement,
+  options?: Pick<RenderOptions, 'reactStrictMode'>,
+): RenderResult {
+  return render(ui, { wrapper: I18nProvider, ...options });
 }

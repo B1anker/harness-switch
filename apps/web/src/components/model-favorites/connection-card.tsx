@@ -1,6 +1,5 @@
 import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
 import { Loader2, Network, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CreatableCombobox } from '@/components/ui/creatable-combobox';
@@ -9,14 +8,10 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { ConnectionSettings } from './connection-settings';
 import { FavoriteSelect } from './fields';
-
-/** Locale keys for the human-readable protocol labels; the enum stays as subtitle. */
-const PROTOCOL_LABEL_KEYS = {
-  'openai-chat': 'openaiChat',
-  'openai-responses': 'openaiResponses',
-  'anthropic-messages': 'anthropicMessages',
-} as const;
+import { presetProtocolForUrl } from './preset-connections';
+import { useConnectionCatalog } from './use-connection-catalog';
 
 export function ConnectionCard({
   connection,
@@ -38,23 +33,19 @@ export function ConnectionCard({
   fieldErrors?: Record<string, string>;
   /** Curated model candidates from a preset, merged with the live catalog. */
   modelHints?: string[];
-  /** Shown in place of an empty provider list: opens the vault to add one. */
+  /** Opens the vault while preserving the current template draft. */
   onAddProvider?(): void;
   onChange(patch: Partial<FavoriteConnection>): void;
   onRemove(): void;
 }) {
   const { t } = useTranslation();
   const providers = useAppStore((state) => state.providers) ?? [];
-  const catalog = useAppStore(
-    (state) => state.favoriteCatalogs[`${connection.providerId}/${connection.endpointKey}`],
-  );
-  const load = useAppStore((state) => state.loadFavoriteCatalog);
-  const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const request = useRef(0);
-  /** Endpoint pairs already auto-fetched this mount, so failures do not loop. */
-  const attempted = useRef('');
   const provider = providers.find((item) => item.id === connection.providerId);
+  const { catalog, loading, failed, retry } = useConnectionCatalog(
+    connection.providerId,
+    connection.endpointKey,
+    !!provider,
+  );
   const title =
     connection.label || provider?.name || t('favorites.channelNumber', { count: index + 1 });
   const labelId = `${connection.id}-label`;
@@ -65,32 +56,9 @@ export function ConnectionCard({
       label: `${item.name} · ${endpoint.label || endpoint.key}`,
       providerId: item.id,
       endpointKey: endpoint.key,
+      protocol: presetProtocolForUrl(endpoint.baseUrl),
     })),
   );
-  const fetchCatalog = async () => {
-    const currentRequest = ++request.current;
-    setLoading(true);
-    setFailed(false);
-    try {
-      await load(connection.providerId, connection.endpointKey);
-    } catch {
-      if (currentRequest === request.current) {
-        setFailed(true);
-      }
-    } finally {
-      if (currentRequest === request.current) {
-        setLoading(false);
-      }
-    }
-  };
-  const catalogKey = `${connection.providerId}/${connection.endpointKey}`;
-  useEffect(() => {
-    if (!provider || !connection.endpointKey || catalog || attempted.current === catalogKey) {
-      return;
-    }
-    attempted.current = catalogKey;
-    void fetchCatalog();
-  });
   const invalid =
     !!error || Object.keys(fieldErrors).some((fieldId) => fieldId.startsWith(`${connection.id}-`));
   return (
@@ -129,74 +97,64 @@ export function ConnectionCard({
         </p>
       ) : null}
       <fieldset disabled={disabled} className="min-w-0 space-y-4 p-4">
-        <FavoriteSelect
-          id={`${connection.id}-provider`}
-          label={t('favorites.channelProvider')}
-          value={connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''}
-          placeholder={t('favorites.chooseProvider')}
-          options={choices}
-          error={fieldErrors[`${connection.id}-provider`]}
-          className="max-w-md"
-          onChange={(value) => {
-            const selected = choices.find((item) => item.value === value);
-            if (selected) {
-              request.current++;
-              setLoading(false);
-              setFailed(false);
-              onChange({ providerId: selected.providerId, endpointKey: selected.endpointKey });
-            }
-          }}
-        />
-        {!choices.length && onAddProvider ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full border-dashed text-muted-foreground"
-            disabled={disabled}
-            onClick={onAddProvider}
-          >
-            {t('favorites.addProvider')}
-          </Button>
-        ) : null}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <FormField
-            id={`${connection.id}-model`}
-            label={t('favorites.modelPicker')}
-            hint={t('favorites.modelPickerHint')}
-            error={fieldErrors[`${connection.id}-model`]}
-          >
-            {(control) => (
-              <CreatableCombobox
-                key={`${connection.providerId}/${connection.endpointKey}`}
-                {...control}
-                value={connection.requestModelId}
-                options={[...new Set([...(modelHints ?? []), ...(catalog?.models ?? [])])]}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <FavoriteSelect
+              id={`${connection.id}-provider`}
+              label={t('favorites.channelProvider')}
+              value={
+                connection.providerId ? `${connection.providerId}/${connection.endpointKey}` : ''
+              }
+              placeholder={t('favorites.chooseProvider')}
+              options={choices}
+              error={fieldErrors[`${connection.id}-provider`]}
+              onChange={(value) => {
+                const selected = choices.find((item) => item.value === value);
+                if (selected) {
+                  onChange({
+                    providerId: selected.providerId,
+                    endpointKey: selected.endpointKey,
+                    ...(selected.protocol ? { protocol: selected.protocol } : {}),
+                  });
+                }
+              }}
+            />
+            {onAddProvider ? (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto px-0 text-primary"
                 disabled={disabled}
-                onChange={(requestModelId) => onChange({ requestModelId })}
-                placeholder={t('favorites.modelPlaceholder')}
-                searchLabel={t('favorites.modelSearch')}
-                emptyHint={t('favorites.modelEmpty')}
-                customLabel={(value) => t('favorites.modelCustom', { value })}
-              />
-            )}
-          </FormField>
-          <FavoriteSelect
-            id={`${connection.id}-protocol`}
-            label={t('favorites.protocol')}
-            value={connection.protocol}
-            options={(['openai-chat', 'openai-responses', 'anthropic-messages'] as const).map(
-              (value) => ({
-                value,
-                label: t(`favorites.protocolOptions.${PROTOCOL_LABEL_KEYS[value]}`),
-                description: value,
-              }),
-            )}
-            error={fieldErrors[`${connection.id}-protocol`]}
-            onChange={(protocol) =>
-              onChange({ protocol: protocol as FavoriteConnection['protocol'] })
-            }
-          />
+                onClick={onAddProvider}
+              >
+                {t('favorites.addProvider')}
+              </Button>
+            ) : null}
+          </div>
+          <div>
+            <FormField
+              id={`${connection.id}-model`}
+              label={t('favorites.modelPicker')}
+              hint={t('favorites.modelPickerHint')}
+              error={fieldErrors[`${connection.id}-model`]}
+            >
+              {(control) => (
+                <CreatableCombobox
+                  key={`${connection.providerId}/${connection.endpointKey}`}
+                  {...control}
+                  value={connection.requestModelId}
+                  options={[...new Set([...(modelHints ?? []), ...(catalog?.models ?? [])])]}
+                  disabled={disabled}
+                  onChange={(requestModelId) => onChange({ requestModelId })}
+                  placeholder={t('favorites.modelPlaceholder')}
+                  searchLabel={t('favorites.modelSearch')}
+                  emptyHint={t('favorites.modelEmpty')}
+                  customLabel={(value) => t('favorites.modelCustom', { value })}
+                />
+              )}
+            </FormField>
+          </div>
         </div>
         {loading ? (
           <p role="status" className="flex items-center gap-1.5 text-muted-foreground text-xs">
@@ -204,14 +162,21 @@ export function ConnectionCard({
             {t('favorites.catalogLoading')}
           </p>
         ) : failed || (catalog && catalog.ok === false) ? (
-          <p role="status" className="flex items-center gap-2 text-muted-foreground text-xs">
-            {t('favorites.catalogAutoFailed')}
+          <p
+            role="status"
+            className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs"
+          >
+            {t(
+              modelHints?.length
+                ? 'favorites.catalogFallbackAvailable'
+                : 'favorites.catalogAutoFailed',
+            )}
             <Button
               variant="ghost"
               size="sm"
               className="h-6 px-1.5 text-primary text-xs"
               disabled={disabled || loading}
-              onClick={() => void fetchCatalog()}
+              onClick={() => void retry()}
             >
               {t('favorites.catalogRetry')}
             </Button>
@@ -223,6 +188,12 @@ export function ConnectionCard({
               : t('favorites.noCatalogManual')}
           </p>
         ) : null}
+        <ConnectionSettings
+          connection={connection}
+          endpoint={provider?.endpoints.find((endpoint) => endpoint.key === connection.endpointKey)}
+          fieldErrors={fieldErrors}
+          onChange={onChange}
+        />
       </fieldset>
     </Card>
   );

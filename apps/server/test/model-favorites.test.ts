@@ -179,6 +179,44 @@ test('references prevent deleting unused provider endpoints and linked favorites
   );
 });
 
+test('detaching an active profile preserves its configuration and activation, then allows template deletion', async () => {
+  const { app, favorite, plan } = await setup();
+  const prepared = await plan('pi', false, 'activate');
+  await app.postJson(`/api/model-favorite-plans/${prepared.id}/apply`, { requestId: randomUUID() });
+  const profiles = app.services.get(IProfileService);
+  const before = profiles.get('pi', 'daily')!;
+  expect(before.modelFavorite?.favoriteId).toBe(favorite.id);
+  const activeBefore = app.services.get(IActivationService).getActive('pi');
+  const files = app.services.get(IFileService);
+  const nativeWrites: string[] = [];
+  files.writeUserFile = (path) => {
+    nativeWrites.push(path);
+  };
+  files.writeUserSecretFile = (path) => {
+    nativeWrites.push(path);
+  };
+  const { data: source } = await app.json<{ data: { sourceFingerprint: string } }>(
+    '/api/model-favorites/source/pi/daily',
+  );
+  const detached = await app.post('/api/model-favorites/source/pi/daily/detach', source);
+  expect(detached.status).toBe(200);
+  const after = profiles.get('pi', 'daily')!;
+  expect(after.modelFavorite).toBeUndefined();
+  expect(after).toEqual({ ...before, updatedAt: after.updatedAt, modelFavorite: undefined });
+  expect(app.services.get(IActivationService).getActive('pi')).toEqual(activeBefore);
+  expect(nativeWrites).toEqual([]);
+  expect(app.services.get(IModelFavoriteService).list()[0]!.references).toEqual([]);
+  const removed = await app.request(`/api/model-favorites/${favorite.id}`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expectedRevision: favorite.revision }),
+  });
+  expect(removed.status).toBe(200);
+  expect(profiles.get('pi', 'daily')).toEqual(after);
+  expect(app.services.get(IActivationService).getActive('pi')).toEqual(activeBefore);
+  expect(nativeWrites).toEqual([]);
+});
+
 test('revision and live changes invalidate plans without writes', async () => {
   const { app, favorite, plan } = await setup();
   const prepared = await plan();

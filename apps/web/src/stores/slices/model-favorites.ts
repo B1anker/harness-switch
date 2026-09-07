@@ -11,7 +11,9 @@ import type {
   ProbeResult,
   UpdateFavoriteRequest,
 } from '@seaveyon/harness-switch-shared';
+import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import {
+  ApiError,
   api,
   favoriteApplyPath,
   favoriteBackupPreviewPath,
@@ -53,7 +55,11 @@ export type FavoriteSlice = {
   >;
   loadFavoriteTargets(id: string): Promise<void>;
   favoriteCatalogs: Record<string, ProbeResult>;
-  loadFavoriteCatalog(providerId: string, endpointKey: string): Promise<ProbeResult>;
+  loadFavoriteCatalog(
+    providerId: string,
+    endpointKey: string,
+    signal?: AbortSignal,
+  ): Promise<ProbeResult>;
   favorites: FavoriteListItem[] | null;
   favoritesLoading: boolean;
   favoritesError: MessageLine | null;
@@ -71,7 +77,7 @@ export type FavoriteSlice = {
     linkSource: boolean,
   ): Promise<void>;
   planFavorite(request: FavoritePlanRequest): Promise<void>;
-  applyFavorite(requestId: string): Promise<void>;
+  applyFavorite(requestId: string): Promise<FavoriteOperation | undefined>;
   detachFavorite(harness: HarnessId, name: string): Promise<void>;
   clearFavoritePlan(): void;
 };
@@ -136,21 +142,30 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => {
       }
     },
     favoriteCatalogs: {},
-    loadFavoriteCatalog: async (providerId, endpointKey) => {
+    loadFavoriteCatalog: async (providerId, endpointKey, signal) => {
       const user = get().currentUser;
-      const result = await api<{ result: ProbeResult }>(providerProbePath(providerId), {
-        method: 'POST',
-        body: JSON.stringify({ endpoint: endpointKey, completion: false }),
-      });
-      if (get().currentUser === user) {
-        set({
-          favoriteCatalogs: {
-            ...get().favoriteCatalogs,
-            [`${providerId}/${endpointKey}`]: result.result,
-          },
+      const timeout = new AbortController();
+      const timer = setTimeout(() => timeout.abort(), 25_000);
+      const requestSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
+      try {
+        const result = await api<{ result: ProbeResult }>(providerProbePath(providerId), {
+          method: 'POST',
+          body: JSON.stringify({ endpoint: endpointKey, completion: false }),
+          signal: requestSignal,
         });
+        requestSignal.throwIfAborted();
+        if (get().currentUser === user) {
+          set({
+            favoriteCatalogs: {
+              ...get().favoriteCatalogs,
+              [`${providerId}/${endpointKey}`]: result.result,
+            },
+          });
+        }
+        return result.result;
+      } finally {
+        clearTimeout(timer);
       }
-      return result.result;
     },
     favorites: null,
     favoritesLoading: false,
@@ -221,22 +236,84 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => {
     applyFavorite: async (requestId) => {
       const plan = get().favoritePlan;
       const user = get().currentUser;
+      const sequence = planRequest;
       if (!plan) {
         return;
       }
-      const result = await api<{ data: FavoriteOperation }>(favoriteApplyPath(plan.id), {
-        method: 'POST',
-        body: JSON.stringify({ requestId }),
-      });
-      if (user !== get().currentUser) {
+      const submit = () =>
+        api<{ data: FavoriteOperation }>(favoriteApplyPath(plan.id), {
+          method: 'POST',
+          body: JSON.stringify({ requestId }),
+        });
+      let result: { data: FavoriteOperation };
+      try {
+        result = await submit();
+      } catch (error) {
+        if (user !== get().currentUser || sequence !== planRequest) {
+          return;
+        }
+        // A stale fingerprint can be detected after earlier tools were written. Reuse
+        // the request to recover their receipts before allowing a fresh preview.
+        if (error instanceof ApiError && error.code === ERROR_CODES.favoritePlanStale) {
+          result = await submit();
+        } else {
+          throw error;
+        }
+      }
+      if (user !== get().currentUser || sequence !== planRequest) {
         return;
       }
+      const operation: FavoriteOperation = {
+        requestId: result.data.requestId,
+        items: plan.items.map(
+          (item) =>
+            result.data.items.find((entry) => entry.harness === item.harness) ?? {
+              harness: item.harness,
+              profile: item.profile,
+              status: 'skipped',
+            },
+        ),
+      };
+      const saved = operation.items.filter(
+        (item) =>
+          item.status === 'applied' &&
+          plan.items.find((entry) => entry.harness === item.harness)?.mode === 'save',
+      ).length;
+      const activated = operation.items.filter(
+        (item) =>
+          item.status === 'applied' &&
+          plan.items.find((entry) => entry.harness === item.harness)?.mode === 'activate',
+      ).length;
+      const counts = [
+        ['favorites.resultNoticeSaved', saved],
+        ['favorites.resultNoticeActivated', activated],
+        [
+          'favorites.resultNoticeUnchanged',
+          operation.items.filter((item) => item.status === 'unchanged').length,
+        ],
+        [
+          'favorites.resultNoticeFailed',
+          operation.items.filter((item) => item.status === 'failed').length,
+        ],
+        [
+          'favorites.resultNoticeSkipped',
+          operation.items.filter((item) => item.status === 'skipped').length,
+        ],
+      ] as const;
       set({
-        favoriteOperation: result.data,
-        favoriteOperationHistory: [...get().favoriteOperationHistory, result.data].slice(-10),
-        notice: [{ key: 'favorites.appliedToast', params: { count: result.data.items.length } }],
+        favoriteOperation: operation,
+        favoriteOperationHistory: [
+          ...get().favoriteOperationHistory.filter((entry) => entry.requestId !== requestId),
+          operation,
+        ].slice(-10),
+        notice: counts
+          .filter(([, count]) => count > 0)
+          .map(([key, count]) => ({ key, params: { count } })),
       });
       await Promise.all([get().loadFavorites(), get().loadHarnesses()]);
+      if (user === get().currentUser && sequence === planRequest) {
+        return operation;
+      }
     },
     detachFavorite: async (harness, name) => {
       const source = await api<{ data: { sourceFingerprint: string } }>(

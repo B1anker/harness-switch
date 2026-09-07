@@ -10,19 +10,20 @@ import { useEffect, useState } from 'react';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Disclosure } from '@/components/ui/disclosure';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
-import { errorLine, lineText } from '@/lib/messages';
+import { lineText } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 import { CaptureFavorite } from './capture';
 import { FavoriteCreateDialog } from './create-dialog';
+import { NEW_TEMPLATE_FACTS } from './draft-facts';
 import { FavoriteEditor } from './editor';
+import { FavoriteManagement } from './management';
+import { FavoriteNextStep } from './next-step';
 import { FavoriteRelationships } from './relationships';
-import { SUGGESTED_FACTS } from './suggested-defaults';
 
 type EditingState =
   | { kind: 'new' }
@@ -41,7 +42,6 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
   const loadError = useAppStore((state) => state.favoritesError);
   const load = useAppStore((state) => state.loadFavorites);
   const loadProviders = useAppStore((state) => state.loadProviders);
-  const remove = useAppStore((state) => state.deleteFavorite);
   const clear = useAppStore((state) => state.clearFavoritePlan);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(initialSelectedId);
@@ -49,27 +49,15 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
   const [creating, setCreating] = useState(false);
   const [applying, setApplying] = useState<FavoritePlanRequest['items'] | null>(null);
   const [capturing, setCapturing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   useEffect(() => {
     void load();
     void loadProviders();
   }, [load, loadProviders]);
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
-    setError('');
-    try {
-      await action();
-    } catch (cause) {
-      setError(lineText(t, errorLine(cause)));
-    } finally {
-      setBusy(false);
-    }
-  };
   const startFromPreset = (
     preset: ProviderPreset,
     provider: ProviderPublic,
     endpointKey: string,
+    protocol: FavoriteInput['connections'][number]['protocol'],
   ) => {
     setCreating(false);
     setEditing({
@@ -77,7 +65,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
       draft: {
         name: '',
         notes: '',
-        defaults: preset.defaultFacts ?? { ...SUGGESTED_FACTS },
+        defaults: { ...NEW_TEMPLATE_FACTS },
         preferences: {},
         connections: [
           {
@@ -85,7 +73,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
             label: '',
             providerId: provider.id,
             endpointKey,
-            protocol: preset.protocols[0]!,
+            protocol,
             requestModelId: '',
             factOverrides: {},
             preferenceOverrides: {},
@@ -154,15 +142,14 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
       </div>
       {loading ? <p role="status">{t('favorites.loading')}</p> : null}
       {loadError ? <Alert>{lineText(t, loadError)}</Alert> : null}
-      {error ? <Alert>{error}</Alert> : null}
       {!favorites?.length && !loading && !loadError ? (
         <section className="workspace-surface space-y-4 p-8 sm:p-12">
           <Star className="size-10 text-primary" />
           <h3 className="text-xl font-semibold">{t('workspace.startTitle')}</h3>
           <p className="max-w-xl text-sm leading-7 text-muted-foreground">
-            {t('workspace.startHint')}
+            {t('favorites.onboarding.startHint')}
           </p>
-          <Button onClick={() => setCapturing(true)}>{t('favorites.capture')}</Button>
+          <Button onClick={() => setCreating(true)}>{t('favorites.onboarding.createFirst')}</Button>
         </section>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
@@ -210,7 +197,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
                 <span className="text-sm text-muted-foreground">
                   {selected.notes || t('workspace.favoriteDetail')}
                 </span>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="ghost" size="sm" onClick={() => cloneFavorite(selected)}>
                     <Copy />
                     {t('favorites.clone.action')}
@@ -233,38 +220,35 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
                   </Button>
                 </div>
               </div>
+              <FavoriteNextStep
+                favorite={selected}
+                onConfigure={() => {
+                  clear();
+                  setApplying([]);
+                }}
+                onConnect={() => setEditing({ kind: 'edit', favorite: selected })}
+                onApply={(items) => {
+                  clear();
+                  setApplying(items);
+                }}
+              />
               <FavoriteRelationships
                 key={selected.id + '/' + selected.revision}
+                favorite={selected}
+                onEditConnections={() => setEditing({ kind: 'edit', favorite: selected })}
+                onApply={(items) => {
+                  clear();
+                  setApplying(items);
+                }}
+              />
+              <FavoriteManagement
+                key={selected.id}
                 favorite={selected}
                 onApply={(items) => {
                   clear();
                   setApplying(items);
                 }}
               />
-              <Disclosure title={t('workspace.manageLinks')}>
-                <div className="space-y-3">
-                  {selected.references.map((ref) => (
-                    <div
-                      key={ref.harness + '/' + ref.name}
-                      className="flex flex-wrap items-center justify-between gap-3 border-b py-3"
-                    >
-                      <p className="min-w-0 break-all text-sm">
-                        {ref.harness} / {ref.name}{' '}
-                        {ref.needsUpdate ? t('favorites.needsUpdate') : ''}{' '}
-                        {ref.diverged ? t('favorites.diverged') : ''}
-                      </p>
-                    </div>
-                  ))}
-                  <Button
-                    variant="ghost"
-                    className="text-destructive"
-                    disabled={busy || !!selected.references.length}
-                    onClick={() => void run(() => remove(selected))}
-                  >
-                    {t('favorites.delete')}
-                  </Button>
-                </div>
-              </Disclosure>
             </article>
           ) : null}
         </div>
@@ -291,6 +275,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
           hintFacts={editing.kind === 'draft' ? editing.hintFacts : undefined}
           onClose={() => setEditing(null)}
           onSaved={(saved, next) => {
+            setSearch('');
             setSelectedId(saved.id);
             if (next === 'configure') {
               clear();
@@ -299,13 +284,25 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
           }}
         />
       ) : null}
-      {capturing ? <CaptureFavorite onClose={() => setCapturing(false)} /> : null}
+      {capturing ? (
+        <CaptureFavorite
+          onClose={() => setCapturing(false)}
+          onCreate={() => {
+            setCapturing(false);
+            setCreating(true);
+          }}
+        />
+      ) : null}
       {applying && selected ? (
         <ModelFavoriteApplyDialog
           favorite={selected}
           initialItems={applying}
-          initialMode={applying.length ? 'activate' : 'save'}
+          initialMode={applying.some((item) => item.mode === 'activate') ? 'activate' : 'save'}
           onClose={() => setApplying(null)}
+          onEditConnections={() => {
+            setApplying(null);
+            setEditing({ kind: 'edit', favorite: selected });
+          }}
         />
       ) : null}
     </main>

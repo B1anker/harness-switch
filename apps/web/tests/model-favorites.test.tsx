@@ -92,7 +92,7 @@ test('selection and review are separate steps, and going back preserves choices 
   fireEvent.click(screen.getByRole('checkbox', { name: 'Pi' }));
   fireEvent.click(screen.getByRole('button', { name: '生成预览' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: '确认保存到 1 个工具' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: '保存 1 份备用配置' })).toBeEnabled(),
   );
   expect(screen.queryByRole('checkbox', { name: 'Pi' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '查看保存档案的变更' }));
@@ -144,10 +144,10 @@ test('save mode uses mutually exclusive radio options and sends the selected act
   });
   const actions = stubStoreActions(['loadFavoriteTargets', 'planFavorite']);
   renderWithI18n(<ModelFavoriteApplyDialog favorite={favorite} onClose={() => undefined} />);
-  expect(screen.getByRole('radio', { name: '仅保存' })).toBeChecked();
-  fireEvent.click(screen.getByRole('radio', { name: '保存并激活' }));
-  expect(screen.getByRole('radio', { name: '仅保存' })).toHaveAttribute('aria-checked', 'false');
-  expect(screen.getByRole('radio', { name: '保存并激活' })).toBeChecked();
+  expect(screen.getByRole('radio', { name: '保存备用' })).toBeChecked();
+  fireEvent.click(screen.getByRole('radio', { name: '保存并立即切换' }));
+  expect(screen.getByRole('radio', { name: '保存备用' })).toHaveAttribute('aria-checked', 'false');
+  expect(screen.getByRole('radio', { name: '保存并立即切换' })).toBeChecked();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Pi' }));
   fireEvent.click(screen.getByRole('button', { name: '生成预览' }));
   await waitFor(() => expect(actions.planFavorite).toHaveLength(1));
@@ -160,7 +160,7 @@ test('model capability fields are optional and hidden until advanced settings ar
   setStoreState({ providers: [] });
   renderWithI18n(<FavoriteEditor onClose={() => undefined} />);
   expect(screen.queryByRole('spinbutton')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /能力与备注/ }));
+  fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   expect(screen.getAllByRole('spinbutton').length).toBeGreaterThan(0);
 });
 
@@ -239,5 +239,5 @@ test('linked profiles show updates and cannot be deleted with their favorite', (
   fireEvent.click(screen.getByRole('button', { name: '管理已生成配置与收藏' }));
   expect(screen.getByRole('button', { name: '删除模板' })).toBeDisabled();
   expect(screen.getByText(/pi \/ main/)).toHaveTextContent('有本地分歧');
-  expect(screen.queryByRole('button', { name: '解除关联，保留配置' })).toBeNull();
+  expect(screen.getByRole('button', { name: '解除关联，保留配置' })).toBeInTheDocument();
 });
