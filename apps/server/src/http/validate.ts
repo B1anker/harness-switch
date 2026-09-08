@@ -1,4 +1,9 @@
-import { ERROR_CODES, formatSchemaError } from '@seaveyon/harness-switch-shared';
+import {
+  ERROR_CODES,
+  isValidationCode,
+  schemaFields,
+  schemaIssues,
+} from '@seaveyon/harness-switch-shared';
 import type { Context } from 'hono';
 import type { ZodType } from 'zod';
 import { HttpError } from '../common/errors';
@@ -29,9 +34,14 @@ export async function readOptionalJsonBody<T>(c: Context, schema: ZodType<T>): P
 export function parseWith<T>(schema: ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw new HttpError(400, formatSchemaError(result.error), {
-      code: ERROR_CODES.invalidRequest,
-      params: { fields: result.error.issues.map((issue) => issue.path.join('.')).join(', ') },
+    const issues = schemaIssues(result.error);
+    const first = issues[0];
+    // The generic "invalid request" names the fields; the first field's own reason is the
+    // more useful sentence, so it becomes the code whenever the schema supplied one.
+    const code = first && isValidationCode(first.code) ? first.code : ERROR_CODES.invalidRequest;
+    throw new HttpError(400, `invalid request: ${first?.path || 'body'}`, {
+      code,
+      params: { fields: schemaFields(result.error), count: issues.length },
     });
   }
   return result.data;

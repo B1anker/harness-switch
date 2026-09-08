@@ -25,6 +25,8 @@ type EnvironmentFiles = {
   github: string;
   /** Cached completion-probe outcomes, keyed by harness and profile. Disposable. */
   probeCache: string;
+  /** Append-only trail of security-relevant events. */
+  audit: string;
 };
 
 export interface IEnvironmentService {
@@ -38,7 +40,7 @@ export interface IEnvironmentService {
   readonly sessionTtlMs: number;
   readonly cookieName: string;
   readonly files: EnvironmentFiles;
-  readonly managerFiles: Pick<EnvironmentFiles, 'password' | 'sessions'>;
+  readonly managerFiles: Pick<EnvironmentFiles, 'password' | 'sessions' | 'audit'>;
   readonly backupsDir: string;
   readonly backupRetainCount: number;
   readonly journalDir: string;
@@ -81,6 +83,9 @@ export class EnvironmentService implements IEnvironmentService {
   readonly managerFiles = {
     password: join(this.managerDataDir, 'web_password'),
     sessions: join(this.managerDataDir, 'sessions.json'),
+    // The trail records who signed in to the manager, which is one service-wide fact
+    // rather than a per-user one, so it stays beside the password it guards.
+    audit: join(this.managerDataDir, 'audit.jsonl'),
   };
 
   private readonly userContext = new AsyncLocalStorage<LocalUser>();
@@ -114,6 +119,7 @@ export class EnvironmentService implements IEnvironmentService {
       favorites: join(dataDir, 'model-favorites.json'),
       github: join(dataDir, 'github.json'),
       probeCache: join(dataDir, 'probe-cache.json'),
+      audit: join(dataDir, 'audit.jsonl'),
     };
   }
 

@@ -8,6 +8,7 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { HttpError } from '../../common/errors';
 import type { InstantiationService } from '../../di';
+import { AUDIT_EVENTS, IAuditService } from '../../services/audit';
 import { IAuthService } from '../../services/auth';
 import { IEnvironmentService } from '../../services/environment';
 import { IUserAccessService } from '../../services/user-access';
@@ -23,6 +24,7 @@ export function createUserRoutes(services: InstantiationService): Hono {
   const users = services.get(IUserService);
   const access = services.get(IUserAccessService);
   const sync = services.get(IUserSyncService);
+  const audit = services.get(IAuditService);
 
   app.get('/', (c) => {
     const current = environment.currentUser.username;
@@ -78,6 +80,7 @@ export function createUserRoutes(services: InstantiationService): Hono {
       });
     }
     auth.selectUser(token, user.username);
+    audit.record(AUDIT_EVENTS.userSelected, { target: user.username });
     return c.json({ currentUser: user.username });
   });
 

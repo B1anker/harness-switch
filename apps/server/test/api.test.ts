@@ -158,6 +158,7 @@ describe('rest api', () => {
       'probe',
       'doctor',
       'drift',
+      'audit',
     ];
 
     for (const prefix of guarded) {

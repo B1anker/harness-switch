@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { LIMITS } from '@seaveyon/harness-switch-shared';
 import { createDecorator, inject } from '../di';
 import { ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
@@ -24,6 +25,12 @@ type SessionStore = {
 
 const STORE_VERSION = 1;
 
+/** Rejected until this many ms have passed, after too many wrong guesses. */
+export type LockoutState = {
+  lockedUntil: number;
+  retryAfterSeconds: number;
+};
+
 export interface IAuthService {
   readonly _serviceBrand: undefined;
   ensurePassword(): string;
@@ -32,7 +39,33 @@ export interface IAuthService {
   isAuthenticated(token: string | undefined): boolean;
   userForToken(token: string | undefined): string | undefined;
   selectUser(token: string | undefined, username: string): void;
+  /**
+   * The active lockout, when guesses are currently refused. Checked before `login` so a
+   * throttled caller is told to wait instead of having the password compared at all.
+   */
+  lockout(): LockoutState | undefined;
+  /**
+   * Replaces the stored password and invalidates every session but the caller's.
+   * Returns false when `currentPassword` does not match.
+   */
+  changePassword(currentPassword: string, newPassword: string, token: string | undefined): boolean;
 }
+
+/** The shortest password the manager will accept on rotation. Shared with the web form. */
+export const MIN_PASSWORD_LENGTH = LIMITS.minPassword;
+
+/**
+ * Failed-guess budget before the next attempt is refused.
+ *
+ * The manager binds to loopback by default but the README encourages reaching it over an
+ * SSH tunnel, so the login endpoint is worth throttling: `timingSafeEqual` stops an
+ * attacker learning the password one character at a time, not one guessing in bulk. The
+ * counter is per-process and global rather than per-IP — there is exactly one password,
+ * so there is nothing to isolate, and a shared counter cannot be sidestepped by rotating
+ * source addresses.
+ */
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_MS = 60_000;
 
 export const IAuthService = createDecorator<IAuthService>('authService');
 
@@ -42,6 +75,8 @@ export class AuthService implements IAuthService {
 
   private sessions: Map<string, Session> | undefined;
   private fingerprint = '';
+  private failedAttempts = 0;
+  private lockedUntil = 0;
 
   constructor(
     private readonly environment: IEnvironmentService,
@@ -64,11 +99,55 @@ export class AuthService implements IAuthService {
     return password;
   }
 
+  lockout(): LockoutState | undefined {
+    const remaining = this.lockedUntil - Date.now();
+    if (remaining <= 0) {
+      return undefined;
+    }
+    return { lockedUntil: this.lockedUntil, retryAfterSeconds: Math.ceil(remaining / 1000) };
+  }
+
   login(password: string): string | null {
-    const expected = this.ensurePassword();
-    if (!this.crypto.timingSafeEqual(password, expected)) {
+    if (this.lockout()) {
       return null;
     }
+    const expected = this.ensurePassword();
+    if (!this.crypto.timingSafeEqual(password, expected)) {
+      this.failedAttempts += 1;
+      if (this.failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        this.lockedUntil = Date.now() + LOCKOUT_MS;
+        this.failedAttempts = 0;
+        // Worth a line in the log: on a single-password service this is the only
+        // signal that someone is guessing, and it names no secret.
+        this.log.warn(`web login locked for ${LOCKOUT_MS / 1000}s after repeated failures`);
+      }
+      return null;
+    }
+    this.failedAttempts = 0;
+    return this.issue();
+  }
+
+  changePassword(currentPassword: string, newPassword: string, token: string | undefined): boolean {
+    if (!this.crypto.timingSafeEqual(currentPassword, this.ensurePassword())) {
+      return false;
+    }
+    const survivor = token ? this.load().get(digest('session', token)) : undefined;
+    this.files.writeSecure(this.environment.managerFiles.password, `${newPassword}\n`);
+
+    // The table is keyed to a fingerprint of the password that issued it, so rewriting
+    // the file already invalidates every session. Rebuild it around the caller's own so
+    // the operator who just rotated the password is not logged out by their own action.
+    this.fingerprint = digest('password', newPassword);
+    const sessions = new Map<string, Session>();
+    if (token && survivor) {
+      sessions.set(digest('session', token), survivor);
+    }
+    this.sessions = sessions;
+    this.persist();
+    return true;
+  }
+
+  private issue(): string {
     const token = randomBytes(32).toString('base64url');
     this.load().set(digest('session', token), {
       expires: Date.now() + this.environment.sessionTtlMs,

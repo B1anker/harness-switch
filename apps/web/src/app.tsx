@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { FeedbackButton } from '@/components/feedback-button';
 import { useTranslation } from '@/lib/i18n';
 import { DashboardPage } from '@/pages/dashboard-page';
 import { LoginPage } from '@/pages/login-page';
@@ -22,5 +23,10 @@ export function App() {
     );
   }
 
-  return authenticated ? <DashboardPage /> : <LoginPage />;
+  return (
+    <>
+      {authenticated ? <DashboardPage /> : <LoginPage />}
+      <FeedbackButton />
+    </>
+  );
 }

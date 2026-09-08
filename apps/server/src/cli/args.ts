@@ -1,3 +1,5 @@
+import { cliText } from './i18n';
+
 export type CliFlags = Record<string, string | boolean>;
 
 export type ParsedArgs = {
@@ -44,30 +46,30 @@ export function parseArgs(argv: string[]): ParsedArgs {
     } else if (/^-[^-]$/.test(arg)) {
       const name = SHORT_FLAGS[arg.slice(1)];
       if (!name) {
-        throw new CliError(`未知选项：${arg}`);
+        throw new CliError(cliText('cli.error.unknownShortOption', { option: arg }));
       }
       flags[name] = true;
     } else if (arg.startsWith('--')) {
       const body = arg.slice(2);
       if (!body) {
-        throw new CliError('无效选项：--');
+        throw new CliError(cliText('cli.error.invalidOption'));
       }
       const separator = body.indexOf('=');
       if (separator !== -1) {
         const name = body.slice(0, separator);
         const value = body.slice(separator + 1);
         if (!VALUE_FLAGS.has(name)) {
-          throw new CliError(`选项 --${name} 不接受值`);
+          throw new CliError(cliText('cli.error.optionTakesNoValue', { option: name }));
         }
         if (!value) {
-          throw new CliError(`选项 --${name} 需要一个值`);
+          throw new CliError(cliText('cli.error.optionNeedsValue', { option: name }));
         }
         flags[name] = value;
       } else {
         const next = argv[index + 1];
         if (VALUE_FLAGS.has(body)) {
           if (!next || next.startsWith('-')) {
-            throw new CliError(`选项 --${body} 需要一个值`);
+            throw new CliError(cliText('cli.error.optionNeedsValue', { option: body }));
           }
           flags[body] = next;
           index++;
@@ -95,7 +97,7 @@ export function validateFlags(flags: CliFlags, allowed: readonly string[]): void
   const accepted = new Set(['json', 'user', ...allowed]);
   const unknown = Object.keys(flags).find((name) => !accepted.has(name));
   if (unknown) {
-    throw new CliError(`未知选项：--${unknown}`);
+    throw new CliError(cliText('cli.error.unknownOption', { option: unknown }));
   }
 }
 
@@ -106,14 +108,14 @@ export function validatePositionals(
   usage: string,
 ): void {
   if (positional.length < min || positional.length > max) {
-    throw new CliError(`用法：harness-switch ${usage}`);
+    throw new CliError(cliText('cli.error.usage', { usage }));
   }
 }
 
 export function requirePositional(positional: string[], index: number, what: string): string {
   const value = positional[index];
   if (!value) {
-    throw new CliError(`缺少参数：${what}`);
+    throw new CliError(cliText('cli.error.missingArgument', { what }));
   }
   return value;
 }

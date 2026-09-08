@@ -31,6 +31,25 @@
     "signOut": "Sign out",
     "switchHarness": "Switch harness"
   },
+  "account": {
+    "password": {
+      "title": "Change password",
+      "intro": "Update the shared web password. Every other signed-in session is ended.",
+      "current": "Current password",
+      "next": "New password",
+      "confirm": "Confirm new password",
+      "hint_one": "At least {{count}} character.",
+      "hint_other": "At least {{count}} characters.",
+      "mismatch": "The two passwords do not match",
+      "changed": "Password changed",
+      "submit": "Change password",
+      "submitting": "Saving…"
+    }
+  },
+  "feedback": {
+    "label": "Feedback",
+    "hint": "Report an issue on GitHub"
+  },
   "harness": {
     "field": {
       "toggle": {
@@ -561,7 +580,12 @@
       "crossOriginDenied": "Cross-origin request denied"
     },
     "auth": {
-      "invalidPassword": "Incorrect password"
+      "invalidPassword": "Incorrect password",
+      "passwordChangeRejected": "The current password is incorrect",
+      "passwordTooShort_one": "The new password must be at least {{count}} character",
+      "passwordTooShort_other": "The new password must be at least {{count}} characters",
+      "passwordUnchanged": "The new password matches the current one",
+      "tooManyAttempts": "Too many failed attempts. Try again in {{seconds}}s"
     },
     "github": {
       "notConnected": "Connect GitHub before continuing",
@@ -1431,5 +1455,77 @@
     "protection": "Your current state is backed up before restoring.",
     "currentDescription": "These are your tools' active configurations. Save a manual checkpoint or choose a historical recovery point.",
     "selectHint": "Select a recovery point to review files that will be replaced, deleted, or created."
+  },
+  "validation": {
+    "nameRequired": "The name cannot be empty",
+    "nameTooLong": "The name is too long",
+    "nameSlash": "The name cannot contain slashes",
+    "passwordRequired": "The password cannot be empty",
+    "endpointKeyRequired": "The endpoint key cannot be empty",
+    "endpointKeyTooLong": "The endpoint key is too long",
+    "endpointKeySlash": "The endpoint key cannot contain slashes",
+    "endpointKeyDuplicate": "Endpoint keys must be unique",
+    "endpointBaseUrlRequired": "The endpoint needs a base URL",
+    "apiKeyRequired": "The API key cannot be empty",
+    "sourceUserRequired": "The source user cannot be empty",
+    "providerIdSlash": "The provider ID cannot contain slashes",
+    "providerIdReserved": "That provider ID is reserved",
+    "selectionRequired": "Select at least one configuration",
+    "baseUrlRequired": "The base URL cannot be empty",
+    "tokenRequired": "The token cannot be empty"
+  },
+  "cli": {
+    "error": {
+      "unknownShortOption": "Unknown option: {{option}}",
+      "invalidOption": "Invalid option: --",
+      "optionTakesNoValue": "Option --{{option}} does not take a value",
+      "optionNeedsValue": "Option --{{option}} needs a value",
+      "unknownOption": "Unknown option: --{{option}}",
+      "usage": "Usage: harness-switch {{usage}}",
+      "missingArgument": "Missing argument: {{what}}",
+      "loginNoSession": "Sign-in failed: the server returned no session",
+      "loginFailed": "Sign-in failed: {{reason}}",
+      "requestFailed": "Request failed: HTTP {{status}}",
+      "serviceUnreachable": "Cannot reach the local service at {{url}}. Start it first (harness-switch daemon or server)",
+      "passwordFileMissing": "{{file}} not found. Run the service once (harness-switch daemon or server) to generate the password, then use the CLI.",
+      "syncNeedsUsers": "sync needs --from <source user> and --to <target user>",
+      "importNeedsId": "import needs at least one candidate id; run harness-switch scan to list them",
+      "nameSingleImportOnly": "--name only applies to a single import",
+      "apiKeyConflict": "--api-key and --api-key-env cannot be used together",
+      "envVarUnset": "Environment variable {{name}} is unset or empty",
+      "confirmNeedsTty": "A non-interactive terminal needs --yes to confirm this operation",
+      "unknownCommand": "Unknown command: {{command}}"
+    },
+    "output": {
+      "officialLogin": "Official login",
+      "notSwitchable": "not switchable",
+      "syncDone": "Synced from {{source}} to {{target}}",
+      "syncCounts": "added={{imported}} overwritten={{overwritten}} skipped={{skipped}} credentials={{providers}} codexLoginCache={{cache}}",
+      "migrated": "migrated",
+      "notMigrated": "not migrated",
+      "created": "Created {{harness}}/{{profile}}",
+      "deleted": "Deleted {{harness}}/{{profile}}",
+      "confirmDelete": "Delete {{harness}}/{{profile}}? [y/N] ",
+      "confirmActivate": "Activate {{harness}}/{{profile}}? [y/N] ",
+      "confirmOfficial": "Return {{harness}} to its official login? [y/N] ",
+      "cancelled": "Cancelled",
+      "activated": "Activated {{harness}}/{{profile}}",
+      "undone": "Reverted {{kind}} {{harness}}/{{profile}}",
+      "importCounts": "imported={{imported}} skipped={{skipped}} newVaultEntries={{providers}}",
+      "importNote": "The tools' own configuration files were not modified; run activate to apply.",
+      "willWrite": "will write",
+      "noChange": "no change",
+      "planNote": "The content includes API keys; view it only on a trusted terminal.",
+      "sourceMissing": "missing",
+      "sourceRead": "read",
+      "sourceUnparsable": "unparsable",
+      "candidateActive": "in use",
+      "candidateKeyManual": "key=fill in manually",
+      "candidateInVault": "already in vault: {{provider}}",
+      "noBaseUrl": "(no base url)",
+      "scanNote": "Use harness-switch import <id>... to import; neither scanning nor importing changes the tools' own configuration.",
+      "undoable": "undoable",
+      "notUndoable": "not undoable"
+    }
   }
 }

@@ -126,6 +126,7 @@ export const authPath = {
   session: '/api/auth/session',
   login: '/api/auth/login',
   logout: '/api/auth/logout',
+  password: '/api/auth/password',
 } as const;
 
 export function usersPath(): string {

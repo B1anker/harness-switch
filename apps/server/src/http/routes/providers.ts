@@ -10,6 +10,7 @@ import {
 } from '@seaveyon/harness-switch-shared';
 import { Hono } from 'hono';
 import type { InstantiationService } from '../../di';
+import { AUDIT_EVENTS, IAuditService } from '../../services/audit';
 import { IProviderService } from '../../services/provider';
 import { IVaultService } from '../../services/vault';
 import { param } from '../params';
@@ -19,6 +20,7 @@ export function createProviderRoutes(services: InstantiationService): Hono {
   const app = new Hono();
   const vault = services.get(IVaultService);
   const providers = services.get(IProviderService);
+  const audit = services.get(IAuditService);
 
   app.get('/', (c) => c.json({ items: vault.list() } satisfies ProvidersResponse));
 
@@ -35,8 +37,13 @@ export function createProviderRoutes(services: InstantiationService): Hono {
     const id = param(c, 'id');
     // Resolve through `get` first so an unknown id is a 404 before anything decrypts.
     vault.get(id);
+    const apiKey = vault.decrypt(id);
+    // Record only that a reveal happened and for which entry — never the value itself,
+    // which `audit.record` would strip regardless. This is the one route that hands a
+    // plaintext key back, so it is the one worth a durable line.
+    audit.record(AUDIT_EVENTS.credentialRevealed, { provider: id });
     c.header('Cache-Control', 'no-store');
-    return c.json({ apiKey: vault.decrypt(id) });
+    return c.json({ apiKey });
   });
 
   app.post('/', async (c) => {

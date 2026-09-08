@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { daemonDataDir } from '../daemon';
 import { CliError } from './args';
+import { cliText, resolveCliLanguage } from './i18n';
 
 export type ApiErrorPayload = {
   msg?: unknown;
@@ -38,10 +39,10 @@ export class CliClient {
     const match = /hsw_session=([^;]+)/.exec(setCookie);
     if (!response.ok || !match) {
       if (response.ok) {
-        throw new CliError('登录失败：服务端未返回会话');
+        throw new CliError(cliText('cli.error.loginNoSession'));
       }
       const error = await responseError(response);
-      throw new CliError(`登录失败：${error.message}`, error);
+      throw new CliError(cliText('cli.error.loginFailed', { reason: error.message }), error);
     }
     this.cookie = match[1]!;
   }
@@ -82,7 +83,9 @@ export class CliClient {
     if (!response.ok) {
       const params = payload ? messageParams(payload) : undefined;
       throw new CliError(
-        typeof payload?.msg === 'string' ? payload.msg : `请求失败：HTTP ${response.status}`,
+        typeof payload?.msg === 'string'
+          ? payload.msg
+          : cliText('cli.error.requestFailed', { status: response.status }),
         {
           status: response.status,
           ...(payload && typeof payload.code === 'string' ? { code: payload.code } : {}),
@@ -94,12 +97,14 @@ export class CliClient {
   }
 
   private async fetch(path: string, init: RequestInit): Promise<Response> {
+    // The server resolves its `msg` against this header, so an error surfaces in the same
+    // language as the CLI's own prose rather than always in the server default.
+    const headers = new Headers(init.headers);
+    headers.set('Accept-Language', resolveCliLanguage());
     try {
-      return await fetch(`${this.baseUrl}${path}`, init);
+      return await fetch(`${this.baseUrl}${path}`, { ...init, headers });
     } catch {
-      throw new CliError(
-        `无法连接本地服务 ${this.baseUrl}，请先启动服务（harness-switch daemon 或 server）`,
-      );
+      throw new CliError(cliText('cli.error.serviceUnreachable', { url: this.baseUrl }));
     }
   }
 }
@@ -113,9 +118,7 @@ export function readWebPassword(): string {
   try {
     return readFileSync(file, 'utf8').trim();
   } catch {
-    throw new CliError(
-      `未找到 ${file}。请先运行一次服务（harness-switch daemon 或 server）生成密码，再使用 CLI。`,
-    );
+    throw new CliError(cliText('cli.error.passwordFileMissing', { file }));
   }
 }
 
