@@ -23,7 +23,7 @@ const MAX_EXTRA_VALUE = 4096;
 /** An override is a whole config file the user took over, so it needs real headroom. */
 const MAX_OVERRIDE = 1024 * 1024;
 /** The shortest password a rotation will accept; the server enforces the same floor. */
-const MIN_PASSWORD = 12;
+const MIN_PASSWORD = 10;
 
 /**
  * The same limits, for the forms that collect these values.
