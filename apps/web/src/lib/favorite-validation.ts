@@ -16,6 +16,8 @@ export type LocatedFavoriteIssues = {
 const CUSTOM_ISSUE_KEYS: Record<string, string> = {
   favoriteInvalidFacts: 'favorites.validation.invalidFacts',
   favoriteDuplicateConnection: 'favorites.validation.duplicateConnection',
+  favoriteDefaultRequired: 'favorites.scheme.defaultRemoved',
+  favoriteInvalidBinding: 'favorites.scheme.invalidBinding',
 };
 
 const factControl = (field: string) => (field === 'reasoningSupported' ? 'reasoning' : field);
@@ -45,6 +47,8 @@ export function locateFavoriteIssues(
       located.fields['favorite-name'] = key;
     } else if (head === 'notes') {
       located.fields['favorite-notes'] = key;
+    } else if (head === 'defaultConnectionId') {
+      located.fields['favorite-default-model'] = key;
     } else if (head === 'defaults') {
       // Cross-field rule: point at the reasoning declaration it constrains.
       located.fields[

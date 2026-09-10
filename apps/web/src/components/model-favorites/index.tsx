@@ -5,6 +5,7 @@ import type {
   ProviderPreset,
   ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
+import { remapFavoriteConnections } from '@seaveyon/harness-switch-shared';
 import { ArrowDownToLine, Box, Copy, Plus, Star } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
@@ -97,18 +98,18 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
   const cloneFavorite = (source: FavoriteListItem) =>
     setEditing({
       kind: 'draft',
-      draft: {
-        name: t('favorites.clone.name', { name: source.name }),
-        notes: source.notes,
-        defaults: { ...source.defaults },
-        preferences: { ...source.preferences },
-        connections: source.connections.map((connection) => ({
-          ...connection,
-          id: crypto.randomUUID(),
-          factOverrides: { ...connection.factOverrides },
-          preferenceOverrides: { ...connection.preferenceOverrides },
-        })),
-      },
+      draft: remapFavoriteConnections(
+        {
+          name: t('favorites.clone.name', { name: source.name }),
+          notes: source.notes,
+          defaults: { ...source.defaults },
+          preferences: { ...source.preferences },
+          connections: structuredClone(source.connections),
+          defaultConnectionId: source.defaultConnectionId,
+          toolBindings: structuredClone(source.toolBindings),
+        },
+        () => crypto.randomUUID(),
+      ),
     });
   const filtered =
     favorites?.filter((favorite) =>

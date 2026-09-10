@@ -1358,7 +1358,49 @@
     "effortPreferenceHint": "从已声明的档位中选择；不指定时沿用工具或服务商的默认行为。",
     "effortUnknownHint": "尚未声明支持的档位，先沿用默认行为；确认档位后再指定偏好。",
     "followDefault": "不指定，沿用默认",
-    "changeProtocol": "更改协议"
+    "changeProtocol": "更改协议",
+    "scheme": {
+      "modelMulti": "模型（可多选）",
+      "defaultModel": "默认模型",
+      "chooseDefault": "选择默认模型",
+      "defaultHint": "首次选择第一个模型；之后由你决定默认模型。",
+      "defaultRemoved": "默认模型已移除，请重新选择。",
+      "toolSettings": "工具适配",
+      "toolHint": "保存各工具的使用方式。",
+      "useConnection": "使用连接",
+      "noCompatible": "请先添加此工具支持的连接和模型。",
+      "default": "统一使用默认模型",
+      "tiers": "按档位分配",
+      "chooseModel": "选择模型",
+      "sameConnection": "同一连接内分配，可重复选择模型。",
+      "allDefault": "全部使用默认模型",
+      "availableModels": "可用模型",
+      "startModel": "启动默认模型",
+      "followTemplate": "跟随模板默认模型",
+      "defaultIncompatible": "默认模型不在可用模型中，请明确选择。",
+      "followModel": "跟随模型设置",
+      "tools": {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "kimi": "Kimi",
+        "dsh": "DSH",
+        "pi": "Pi"
+      },
+      "tier": {
+        "opus": "Opus",
+        "sonnet": "Sonnet",
+        "haiku": "Haiku"
+      },
+      "collectionApplyHint": "将应用模板中为此工具选中的模型，并保留其他模板管理的模型。",
+      "modelSettings": "设置 {{model}} 的参数",
+      "editorHint": "管理连接、模型与各工具的使用方式。",
+      "toggleConnection": "展开或收起连接：{{name}}",
+      "selectedCount": "{{count}} 个模型",
+      "invalidBinding": "工具配置中的模型未选全、已移除或不属于所选连接，请重新选择。",
+      "saveDraft": "保存待应用配置",
+      "draftSaved": "待应用配置已保存，工具当前配置未改变。",
+      "reasoningEffort": "推理强度"
+    }
   },
   "favorite": {
     "result": "操作完成"

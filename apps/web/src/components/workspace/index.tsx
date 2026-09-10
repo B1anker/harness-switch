@@ -2,7 +2,6 @@ import type { HarnessId } from '@seaveyon/harness-switch-shared';
 import { ArrowRight, History, Settings2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { HarnessTabs } from '@/components/harness-tabs';
-import { ToolModels } from '@/components/tool-models';
 import { Button } from '@/components/ui/button';
 import { TabPanel } from '@/components/ui/tabs';
 import { useI18n, useTranslation } from '@/lib/i18n';
@@ -61,9 +60,6 @@ export function Workspace({
               </Button>
             </div>
             <CurrentConfigurationPath harness={harness} />
-            {harness.id === 'kimi' || harness.id === 'dsh' ? (
-              <ToolModels key={harness.id} harness={harness.id} />
-            ) : null}
           </TabPanel>
         ) : (
           <p>{t('workspace.noTools')}</p>

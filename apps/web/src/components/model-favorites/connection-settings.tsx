@@ -30,7 +30,7 @@ export function ConnectionSettings({
   return (
     <div className="space-y-3 border-t pt-3">
       <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
           {!showEditor ? (
             <p className="text-xs font-medium">
               {t(`favorites.protocolOptions.${PROTOCOL_LABEL_KEYS[connection.protocol]}`)}

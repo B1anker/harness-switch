@@ -372,7 +372,12 @@ export class ToolModelsService implements IToolModelsService {
         preferenceOverrides: { ...connection.preferenceOverrides, ...item.preferenceOverrides },
       };
       if (
-        !createFavoriteRequestSchema.safeParse({ ...favorite, connections: [effective] }).success
+        !createFavoriteRequestSchema.safeParse({
+          ...favorite,
+          connections: favorite.connections.map((entry) =>
+            entry.id === effective.id ? effective : entry,
+          ),
+        }).success
       ) {
         throw new HttpError(400, ERROR_CODES.toolModelsFactsInvalid, {
           code: ERROR_CODES.toolModelsFactsInvalid,

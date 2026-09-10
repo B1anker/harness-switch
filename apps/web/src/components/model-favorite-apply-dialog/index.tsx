@@ -14,10 +14,24 @@ import { ApplyFooter } from './apply-footer';
 import { OperationResult } from './operation-result';
 import { PreviewTabs } from './preview-tabs';
 import { QuickPreview } from './quick-preview';
+import { SchemeApply } from './scheme-apply';
 import { ToolSelection } from './tool-selection';
 import { type ApplyDialogProps, useApplyWorkflow } from './use-apply-workflow';
 
 export function ModelFavoriteApplyDialog(props: ApplyDialogProps) {
+  if (
+    props.favorite.defaultConnectionId ||
+    props.favorite.toolBindings ||
+    props.favorite.connections.some((entry) => entry.groupId)
+  ) {
+    return (
+      <SchemeApply props={props} renderSingle={(next) => <SingleFavoriteApplyDialog {...next} />} />
+    );
+  }
+  return <SingleFavoriteApplyDialog {...props} />;
+}
+
+function SingleFavoriteApplyDialog(props: ApplyDialogProps) {
   const { favorite, quickHarness, onEditConnections } = props;
   const { t } = useTranslation();
   const flow = useApplyWorkflow(props);

@@ -1358,7 +1358,49 @@
     "effortPreferenceHint": "Choose a declared level, or leave unspecified to use the tool or provider default.",
     "effortUnknownHint": "Supported levels are not declared. Keep the default behavior until the levels are confirmed.",
     "followDefault": "Unspecified; use default",
-    "changeProtocol": "Change protocol"
+    "changeProtocol": "Change protocol",
+    "scheme": {
+      "modelMulti": "Models (multiple)",
+      "defaultModel": "Default model",
+      "chooseDefault": "Choose a default model",
+      "defaultHint": "The first model is selected initially; later changes are your choice.",
+      "defaultRemoved": "The default model was removed. Choose a replacement.",
+      "toolSettings": "Tool settings",
+      "toolHint": "Save how each tool uses this template.",
+      "useConnection": "Connection",
+      "noCompatible": "Add a compatible connection and model first.",
+      "default": "Use the default model for all tiers",
+      "tiers": "Assign models by tier",
+      "chooseModel": "Choose a model",
+      "sameConnection": "Choose within one connection. Models can be reused.",
+      "allDefault": "Use default for all tiers",
+      "availableModels": "Available models",
+      "startModel": "Startup model",
+      "followTemplate": "Follow template default",
+      "defaultIncompatible": "The default is not available. Choose a model explicitly.",
+      "followModel": "Follow model settings",
+      "tools": {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "kimi": "Kimi",
+        "dsh": "DSH",
+        "pi": "Pi"
+      },
+      "tier": {
+        "opus": "Opus",
+        "sonnet": "Sonnet",
+        "haiku": "Haiku"
+      },
+      "collectionApplyHint": "Apply this template’s selected models and retain models managed by other templates.",
+      "modelSettings": "Settings for {{model}}",
+      "editorHint": "Manage connections, models, and how each tool uses them.",
+      "toggleConnection": "Expand or collapse connection: {{name}}",
+      "selectedCount": "{{count}} models",
+      "invalidBinding": "Tool model assignments are incomplete, removed, or outside the selected connection. Choose again.",
+      "saveDraft": "Save pending configuration",
+      "draftSaved": "Pending configuration saved. The active tool configuration is unchanged.",
+      "reasoningEffort": "Reasoning effort"
+    }
   },
   "favorite": {
     "result": "Operation completed"

@@ -68,7 +68,7 @@ test('an existing account still offers adding a provider without losing the temp
   fireEvent.keyDown(vault, { key: 'Escape', code: 'Escape' });
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '凭据库' })).toBeNull());
   expect(screen.getByLabelText('模板名称')).toHaveValue('keep my draft');
-  expect(screen.getByRole('combobox', { name: '模型' })).toHaveTextContent('model');
+  expect(screen.getByRole('checkbox', { name: 'model' })).toBeChecked();
 });
 
 test('selecting a known endpoint changes its protocol together and keeps the exact model ID', async () => {
@@ -99,7 +99,9 @@ test('selecting a known endpoint changes its protocol together and keeps the exa
   expect(patches).toEqual([
     { providerId: 'kimi', endpointKey: 'messages', protocol: 'anthropic-messages' },
   ]);
-  expect(screen.getByRole('combobox', { name: '模型' })).toHaveTextContent('Vendor/Exact:ID');
+  expect(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ })).toHaveTextContent(
+    'Vendor/Exact:ID',
+  );
 });
 
 test('invalid per-connection capability remains editable and exposes its field error', async () => {
@@ -137,7 +139,7 @@ test('a failed catalog explains that preset candidates and manual IDs are still 
     />,
   );
   expect(screen.getByText('暂时无法获取列表，可使用预设或手动输入。')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('combobox', { name: '模型' }));
+  fireEvent.click(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ }));
   expect(await screen.findByRole('option', { name: 'preset/model' })).toBeInTheDocument();
 });
 

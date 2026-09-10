@@ -160,7 +160,7 @@ test('a preset without a vault entry creates it inline and adopts curated model 
     },
   ]);
   // Curated candidates are offered without a live catalog, and choosing one adopts its facts.
-  fireEvent.click(await screen.findByRole('combobox', { name: '模型' }));
+  fireEvent.click(await screen.findByRole('combobox', { name: /^模型(?:（可多选）)?$/ }));
   fireEvent.click(await screen.findByRole('option', { name: 'deepseek-reasoner' }));
   fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   const overrides = within(screen.getByRole('region', { name: '按连接单独设置' }));

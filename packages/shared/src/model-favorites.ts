@@ -30,6 +30,7 @@ export const modelFactsSchema = z.object({
 const preferencesSchema = z.object({ reasoningEffort: favoriteEffortSchema.optional() });
 export const favoriteConnectionSchema = z.object({
   id: z.uuid(),
+  groupId: z.uuid().optional(),
   label: z.string().trim().min(1).max(120),
   providerId: z.string().min(1).max(120),
   endpointKey: z.string().min(1).max(60),
@@ -47,16 +48,71 @@ export const favoriteConnectionSchema = z.object({
     .object({ reasoningEffort: favoriteEffortSchema.nullable().optional() })
     .default({}),
 });
+const toolBindingSchema = z.object({
+  connectionId: z.uuid().optional(),
+  modelIds: z.array(z.uuid()).max(50).optional(),
+  defaultModelId: z.uuid().optional(),
+  mode: z.enum(['default', 'tiers']).optional(),
+  tiers: z
+    .object({ opus: z.uuid().optional(), sonnet: z.uuid().optional(), haiku: z.uuid().optional() })
+    .optional(),
+  reasoningEffort: favoriteEffortSchema.optional(),
+});
 const favoriteFields = z.object({
   name: z.string().trim().min(1).max(120),
   notes: z.string().max(4096).default(''),
   defaults: modelFactsSchema.default({}),
   preferences: preferencesSchema.default({}),
   connections: z.array(favoriteConnectionSchema).max(50).default([]),
+  defaultConnectionId: z.uuid().optional(),
+  toolBindings: z.partialRecord(z.enum(HARNESS_IDS), toolBindingSchema).optional(),
 });
 export type ModelFacts = z.infer<typeof modelFactsSchema>;
 export type FavoriteConnection = z.infer<typeof favoriteConnectionSchema>;
 export type FavoriteInput = z.infer<typeof favoriteFields>;
+export function remapFavoriteConnections<T extends FavoriteInput>(
+  favorite: T,
+  createId: (id: string) => string,
+): T {
+  const ids = new Map<string, string>();
+  const map = (id: string) => {
+    const value = ids.get(id) ?? createId(id);
+    ids.set(id, value);
+    return value;
+  };
+  return {
+    ...favorite,
+    defaultConnectionId: favorite.defaultConnectionId
+      ? map(favorite.defaultConnectionId)
+      : undefined,
+    connections: favorite.connections.map((connection) => ({
+      ...connection,
+      id: map(connection.id),
+      groupId: connection.groupId ? map(connection.groupId) : undefined,
+    })),
+    toolBindings: favorite.toolBindings
+      ? Object.fromEntries(
+          Object.entries(favorite.toolBindings).map(([tool, binding]) => [
+            tool,
+            {
+              ...binding,
+              connectionId: binding.connectionId ? map(binding.connectionId) : undefined,
+              defaultModelId: binding.defaultModelId ? map(binding.defaultModelId) : undefined,
+              modelIds: binding.modelIds?.map(map),
+              tiers: binding.tiers
+                ? Object.fromEntries(
+                    Object.entries(binding.tiers).map(([tier, id]) => [
+                      tier,
+                      id ? map(id) : undefined,
+                    ]),
+                  )
+                : undefined,
+            },
+          ]),
+        )
+      : undefined,
+  };
+}
 export type ResolvedFavorite = {
   facts: ModelFacts;
   preferences: z.infer<typeof preferencesSchema>;
@@ -142,6 +198,72 @@ function validateFavorite(value: FavoriteInput, ctx: z.RefinementCtx): void {
     const resolved = resolveFavorite(value, connection);
     check(resolved.facts, resolved.preferences, ['connections', index]);
   });
+  if (value.defaultConnectionId && !ids.has(value.defaultConnectionId)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['defaultConnectionId'],
+      message: 'favoriteDefaultRequired',
+    });
+  }
+  const groups = new Map<string, FavoriteConnection>();
+  for (const connection of value.connections) {
+    const key = connection.groupId ?? connection.id;
+    const first = groups.get(key);
+    if (
+      first &&
+      ['providerId', 'endpointKey', 'protocol', 'label'].some(
+        (field) =>
+          first[field as keyof FavoriteConnection] !==
+          connection[field as keyof FavoriteConnection],
+      )
+    ) {
+      ctx.addIssue({ code: 'custom', path: ['connections'], message: 'favoriteInvalidGroup' });
+    }
+    groups.set(key, connection);
+  }
+  for (const [harness, binding] of Object.entries(value.toolBindings ?? {})) {
+    const defaultModel = value.connections.find((entry) => entry.id === value.defaultConnectionId);
+    const effectiveDefault = value.connections.find(
+      (entry) => entry.id === (binding.defaultModelId ?? value.defaultConnectionId),
+    );
+    if (binding.reasoningEffort && effectiveDefault) {
+      check(
+        resolveFavorite(value, effectiveDefault).facts,
+        { reasoningEffort: binding.reasoningEffort },
+        ['toolBindings', harness],
+      );
+    }
+    const selected = binding.connectionId ? groups.get(binding.connectionId) : defaultModel;
+    const references = [
+      binding.defaultModelId,
+      ...(binding.modelIds ?? []),
+      ...Object.values(binding.tiers ?? {}),
+    ].filter((id): id is string => !!id);
+    if (
+      (binding.connectionId && !selected) ||
+      (harness === 'claude' &&
+        binding.mode === 'tiers' &&
+        ['opus', 'sonnet', 'haiku'].some(
+          (tier) => !binding.tiers?.[tier as keyof NonNullable<typeof binding.tiers>],
+        )) ||
+      references.some((id) => {
+        const model = value.connections.find((entry) => entry.id === id);
+        return (
+          !model ||
+          (selected &&
+            !['kimi', 'dsh', 'pi'].includes(harness) &&
+            (model.groupId ?? model.id) !== (selected.groupId ?? selected.id))
+        );
+      }) ||
+      (binding.modelIds && new Set(binding.modelIds).size !== binding.modelIds.length)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['toolBindings', harness],
+        message: 'favoriteInvalidBinding',
+      });
+    }
+  }
 }
 export const createFavoriteRequestSchema = favoriteFields.superRefine(validateFavorite);
 export const modelFavoriteSchema = favoriteFields
@@ -165,6 +287,8 @@ export const updateFavoriteRequestSchema = z.object({
   defaults: modelFactsSchema.optional(),
   preferences: preferencesSchema.optional(),
   connections: z.array(favoriteConnectionSchema).max(50).optional(),
+  defaultConnectionId: favoriteFields.shape.defaultConnectionId,
+  toolBindings: favoriteFields.shape.toolBindings,
   expectedRevision: z.number().int().positive().optional(),
 });
 export const favoriteRevisionRequestSchema = z.object({
@@ -181,13 +305,17 @@ const ownedExtraSchema = z.enum([
   'reasoningEfforts',
   'reasoningEffort',
   'effortLevel',
+  'opusModel',
+  'sonnetModel',
+  'haikuModel',
+  'modelCatalog',
 ]);
 export const favoriteProjectionSchema = z.object({
   harness: z.enum(HARNESS_IDS),
   model: z.string().max(120),
   providerId: z.string().max(120),
   providerEndpoint: z.string().max(60),
-  extras: z.partialRecord(ownedExtraSchema, z.string().max(4096).nullable()),
+  extras: z.partialRecord(ownedExtraSchema, z.string().max(65536).nullable()),
 });
 export type FavoriteProjection = z.infer<typeof favoriteProjectionSchema>;
 export const modelFavoriteLinkSchema = z.object({

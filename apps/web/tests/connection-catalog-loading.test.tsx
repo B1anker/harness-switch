@@ -81,7 +81,7 @@ test('a stalled catalog times out and can be retried while manual model input re
     });
     expect(screen.queryByText('正在获取模型列表…')).toBeNull();
     expect(screen.getByText('暂时无法获取列表，可手动输入模型 ID。')).toBeVisible();
-    expect(screen.getByRole('combobox', { name: '模型' })).toBeEnabled();
+    expect(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ })).toBeEnabled();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '重试' }));
     });

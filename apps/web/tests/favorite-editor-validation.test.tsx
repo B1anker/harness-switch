@@ -26,7 +26,10 @@ test('validation errors land on the channel fields instead of one generic line',
       'true',
     ),
   );
-  expect(screen.getByRole('combobox', { name: '模型' })).toHaveAttribute('aria-invalid', 'true');
+  expect(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ })).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
   expect(screen.getAllByText('请填写此项。').length).toBeGreaterThanOrEqual(2);
   expect(screen.queryByText('请检查名称、渠道和能力声明是否完整且一致。')).toBeNull();
   expect(actions.saveFavorite).toHaveLength(0);
@@ -68,7 +71,8 @@ test('selecting a provider endpoint loads the model catalog automatically', asyn
   });
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
   await waitFor(() => expect(loads).toEqual([['openrouter', 'main']]));
-  expect(await screen.findByText(/目录中有 1 个模型/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ }));
+  expect(await screen.findByRole('option', { name: 'a/b' })).toBeInTheDocument();
 });
 
 test('a failed catalog load degrades to manual entry with a non-blocking hint', async () => {
@@ -84,15 +88,15 @@ test('a failed catalog load degrades to manual entry with a non-blocking hint', 
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
   expect(await screen.findByText('暂时无法获取列表，可手动输入模型 ID。')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
-  expect((screen.getByRole('combobox', { name: '模型' }) as HTMLButtonElement).disabled).toBe(
-    false,
-  );
-  fireEvent.click(screen.getByRole('combobox', { name: '模型' }));
+  expect(
+    (screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+  fireEvent.click(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ }));
   fireEvent.change(screen.getByRole('combobox', { name: '搜索或输入模型 ID' }), {
     target: { value: 'Private/Model' },
   });
   fireEvent.click(await screen.findByRole('option', { name: '使用「Private/Model」' }));
-  expect(screen.getByRole('combobox', { name: '模型' })).toHaveTextContent('Private/Model');
+  expect(screen.getByRole('checkbox', { name: 'Private/Model' })).toBeChecked();
 });
 
 test('saving a new template toasts a primary action that opens the next step', async () => {
@@ -115,7 +119,7 @@ test('saving a new template toasts a primary action that opens the next step', a
   fireEvent.click(screen.getByRole('button', { name: '添加模型连接' }));
   fireEvent.click(screen.getByRole('combobox', { name: '服务商账号' }));
   fireEvent.click(await screen.findByRole('option', { name: 'OpenRouter · 主入口' }));
-  fireEvent.click(screen.getByRole('combobox', { name: '模型' }));
+  fireEvent.click(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ }));
   fireEvent.change(screen.getByRole('combobox', { name: '搜索或输入模型 ID' }), {
     target: { value: 'Vendor/Model:Exact' },
   });

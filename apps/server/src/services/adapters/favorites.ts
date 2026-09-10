@@ -31,6 +31,10 @@ export function projectFavorite(
   const { id } = adapter;
   const resolved = resolveFavorite(favorite, connection);
   const { facts, preferences } = resolved;
+  const binding = favorite.toolBindings?.[id];
+  if (binding?.reasoningEffort) {
+    preferences.reasoningEffort = binding.reasoningEffort;
+  }
   const extras: FavoriteProjection['extras'] = {};
   const represented = new Set<string>();
   const put = (key: keyof FavoriteProjection['extras'], field: keyof typeof facts) => {
@@ -61,6 +65,13 @@ export function projectFavorite(
   };
   if (!(FAVORITE_SUPPORT[id] as readonly string[]).includes(connection.protocol)) {
     result.blockers.push({ code: ERROR_CODES.favoriteProtocolUnsupported });
+  }
+  if (
+    (id === 'claude' || id === 'codex') &&
+    binding?.connectionId &&
+    binding.connectionId !== (connection.groupId ?? connection.id)
+  ) {
+    result.blockers.push({ code: ERROR_CODES.favoriteProjectionUnsupported });
   }
   if (id === 'kimi') {
     extras.providerType = {
@@ -126,6 +137,39 @@ export function projectFavorite(
     if (!represented.has(field)) {
       result.notRepresented.push(field);
     }
+  }
+  if (id === 'claude' && (binding || favorite.defaultConnectionId)) {
+    for (const tier of ['opus', 'sonnet', 'haiku'] as const) {
+      const modelId = binding?.mode === 'tiers' ? binding.tiers?.[tier] : connection.id;
+      const model = favorite.connections.find((entry) => entry.id === modelId);
+      if (!model || (model.groupId ?? model.id) !== (connection.groupId ?? connection.id)) {
+        result.blockers.push({ code: ERROR_CODES.favoriteProjectionUnsupported });
+      } else {
+        extras[`${tier}Model`] = model.requestModelId;
+      }
+    }
+  }
+  if (id === 'codex' && (binding || favorite.defaultConnectionId)) {
+    const models = favorite.connections.filter(
+      (entry) =>
+        (entry.groupId ?? entry.id) === (connection.groupId ?? connection.id) &&
+        (!binding?.modelIds || binding.modelIds.includes(entry.id)),
+    );
+    if (!models.some((entry) => entry.id === connection.id)) {
+      result.blockers.push({ code: ERROR_CODES.favoriteProjectionUnsupported });
+    }
+    extras.modelCatalog = JSON.stringify(
+      models.map((entry) => {
+        const resolvedModel = resolveFavorite(favorite, entry);
+        return {
+          model: entry.requestModelId,
+          facts: resolvedModel.facts,
+          preferences: resolvedModel.preferences,
+        };
+      }),
+    );
+  } else if (previous?.extras.modelCatalog) {
+    extras.modelCatalog = null;
   }
   for (const field of adapter.fields) {
     if (

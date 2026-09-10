@@ -34,13 +34,19 @@ export function favoriteSelection(
   );
   const existing = current ?? (linked.length === 1 ? linked[0] : undefined);
   const remembered = existing?.modelFavorite?.connectionId;
+  const preferred =
+    favorite.toolBindings?.[harness.id]?.defaultModelId ?? favorite.defaultConnectionId;
   return {
     harness: harness.id,
-    connectionId: connections.some((connection) => connection.id === remembered)
-      ? remembered!
-      : connections.length === 1
-        ? connections[0]!.id
-        : '',
+    connectionId: preferred
+      ? connections.some((connection) => connection.id === preferred)
+        ? preferred
+        : ''
+      : connections.some((connection) => connection.id === remembered)
+        ? remembered!
+        : connections.length === 1
+          ? connections[0]!.id
+          : '',
     existing: !!existing,
     profile: existing?.name,
     mode,

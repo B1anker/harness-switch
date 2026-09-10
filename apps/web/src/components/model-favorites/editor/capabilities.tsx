@@ -18,6 +18,7 @@ export function FavoriteCapabilities({
   inferredFacts,
   fieldErrors,
   cardErrors,
+  focusConnectionId,
 }: {
   draft: FavoriteInput;
   setDraft: Dispatch<SetStateAction<FavoriteInput>>;
@@ -25,6 +26,7 @@ export function FavoriteCapabilities({
   inferredFacts: InferredFacts;
   fieldErrors: Record<string, string>;
   cardErrors: Record<string, string>;
+  focusConnectionId?: string;
 }) {
   const { t } = useTranslation();
   return (
@@ -92,7 +94,7 @@ export function FavoriteCapabilities({
                   summary={t(
                     hasOverrides ? 'favorites.overriddenValue' : 'favorites.inheritedValue',
                   )}
-                  forceOpen={hasError}
+                  forceOpen={hasError || connection.id === focusConnectionId}
                   triggerClassName="h-auto max-w-full flex-wrap justify-start whitespace-normal px-0 text-left"
                 >
                   <p className="break-all font-mono text-xs text-muted-foreground">

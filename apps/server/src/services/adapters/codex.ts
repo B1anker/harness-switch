@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { CompletionProtocol, FieldSpec, HarnessMode } from '@seaveyon/harness-switch-shared';
 import { BaseAdapter } from './base';
+import { codexCatalog } from './codex-catalog';
 import {
   providerId as baseProviderId,
   compact,
@@ -29,6 +30,7 @@ import type {
 } from './types';
 
 const CONFIG = 'config';
+const CATALOG = 'modelCatalog';
 /** Exported so the login-cache service can plan a write against the same target. */
 export const CODEX_AUTH_TARGET = 'auth';
 const AUTH = CODEX_AUTH_TARGET;
@@ -138,6 +140,12 @@ export class CodexAdapter extends BaseAdapter implements HarnessAdapter {
         path: join(this.environment.harnessHomes.codex, 'auth.json'),
         format: 'json',
       },
+      {
+        key: CATALOG,
+        label: 'harness-switch-models.json',
+        path: join(this.environment.harnessHomes.codex, 'harness-switch-models.json'),
+        format: 'json',
+      },
     ];
   }
 
@@ -165,6 +173,8 @@ export class CodexAdapter extends BaseAdapter implements HarnessAdapter {
     const effort = profile.extras.reasoningEffort;
     if (effort) {
       config.model_reasoning_effort = effort;
+    } else if (profile.favoriteManaged) {
+      delete config.model_reasoning_effort;
     }
 
     const providers = ensureObject(config, 'model_providers');
@@ -188,7 +198,15 @@ export class CodexAdapter extends BaseAdapter implements HarnessAdapter {
       provider.requires_openai_auth = true;
     }
 
-    const rendered: RenderedFiles = { [CONFIG]: stringifyToml(config) };
+    const rendered: RenderedFiles = {};
+    const catalogPath = join(this.environment.harnessHomes.codex, 'harness-switch-models.json');
+    if (profile.extras.modelCatalog) {
+      rendered[CATALOG] = stringifyJson(codexCatalog(profile.extras.modelCatalog));
+      config.model_catalog_json = catalogPath;
+    } else if (config.model_catalog_json === catalogPath) {
+      delete config.model_catalog_json;
+    }
+    rendered[CONFIG] = stringifyToml(config);
     if (mode === 'openai_auth') {
       const auth = parseJsonObject(current[AUTH]);
       auth[DEFAULT_ENV_KEY] = profile.apiKey;
@@ -206,6 +224,12 @@ export class CodexAdapter extends BaseAdapter implements HarnessAdapter {
     delete config.model;
     delete config.model_reasoning_effort;
     delete config.model_providers;
+    if (
+      config.model_catalog_json ===
+      join(this.environment.harnessHomes.codex, 'harness-switch-models.json')
+    ) {
+      delete config.model_catalog_json;
+    }
 
     const rendered: RenderedFiles = { [CONFIG]: stringifyToml(config) };
     if (current[AUTH] !== undefined) {
