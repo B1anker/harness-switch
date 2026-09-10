@@ -12,6 +12,7 @@ import { TabList, TabPanel } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { FavoriteSelect } from '../fields';
 import { modelGroups } from './model-groups';
+import { ToolConnectionPicker } from './tool-connection-picker';
 
 export function ToolBindings({
   draft,
@@ -78,27 +79,31 @@ export function ToolBindings({
       </TabList>
       <TabPanel idPrefix="template-tools" value={tool} className="space-y-5">
         {!multi ? (
-          <FavoriteSelect
-            id={`binding-${tool}-connection`}
-            label={t('favorites.scheme.useConnection')}
-            value={groupId}
-            options={groups.map(([first]) => ({
-              value: first!.groupId ?? first!.id,
-              label: first!.label || first!.requestModelId,
-            }))}
-            placeholder={t('favorites.chooseProvider')}
-            onChange={(connectionId) =>
+          <ToolConnectionPicker
+            draft={draft}
+            setDraft={setDraft}
+            tool={tool}
+            groupId={groupId}
+            onChange={(connectionId) => {
+              const selectedGroup =
+                groups.find(([first]) => (first?.groupId ?? first?.id) === connectionId) ?? [];
               change({
                 connectionId,
-                defaultModelId: undefined,
+                defaultModelId: selectedGroup.some(
+                  (entry) => entry.id === draft.defaultConnectionId,
+                )
+                  ? undefined
+                  : selectedGroup.find((entry) => entry.requestModelId)?.id,
                 modelIds: undefined,
                 tiers: undefined,
-              })
-            }
+              });
+            }}
           />
         ) : null}
         {!candidates.length ? (
-          <p className="text-sm text-muted-foreground">{t('favorites.scheme.noCompatible')}</p>
+          groups.length ? (
+            <p className="text-sm text-muted-foreground">{t('favorites.scheme.noCompatible')}</p>
+          ) : null
         ) : (
           <>
             {tool === 'claude' ? (

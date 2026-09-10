@@ -75,6 +75,36 @@ test('PATCH preserves omitted notes, facts and connections', async () => {
   expect(data.defaults.contextWindow).toBe(123000);
 });
 
+test('ignoring a template revision preserves profiles and resumes reminders for the next revision', async () => {
+  const { app, favorite, plan } = await setup();
+  const preview = await plan('claude');
+  await app.post(`/api/model-favorite-plans/${preview.id}/apply`, { requestId: randomUUID() });
+  const profiles = app.services.get(IProfileService);
+  const before = profiles.get('claude', 'daily')!;
+  const favorites = app.services.get(IModelFavoriteService);
+  const apply = app.services.get(IModelFavoriteApplyService);
+  const updated = favorites.update(favorite.id, {
+    expectedRevision: favorite.revision,
+    connections: favorite.connections.map((entry) => ({ ...entry, requestModelId: 'next-model' })),
+  });
+  expect(apply.state(before).needsUpdate).toBe(true);
+  const stale = await app.post(`/api/model-favorites/${favorite.id}/ignore-updates`, {
+    expectedRevision: favorite.revision,
+  });
+  expect(stale.status).toBe(409);
+  const response = await app.post(`/api/model-favorites/${favorite.id}/ignore-updates`, {
+    expectedRevision: updated.revision,
+  });
+  expect(response.status).toBe(200);
+  const ignored = profiles.get('claude', 'daily')!;
+  expect(ignored.model).toBe(before.model);
+  expect(ignored.modelFavorite?.baseline).toEqual(before.modelFavorite?.baseline);
+  expect(ignored.modelFavorite?.favoriteId).toBe(favorite.id);
+  expect(apply.state(ignored).needsUpdate).toBe(false);
+  favorites.update(favorite.id, { expectedRevision: updated.revision, notes: 'new revision' });
+  expect(apply.state(profiles.get('claude', 'daily')!).needsUpdate).toBe(true);
+});
+
 test('Codex login-cache writes require a specific plan approval and previews redact credentials', async () => {
   const { app, provider } = await setup();
   const profiles = app.services.get(IProfileService);

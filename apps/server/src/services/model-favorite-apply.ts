@@ -117,6 +117,7 @@ export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
       connectionMissing: !!link && !connection,
       needsUpdate:
         !!link &&
+        link.ignoredRevision !== favorite?.revision &&
         !!projected &&
         (link.projectionVersion !== projected.projectionVersion ||
           hash(link.baseline) !== hash(projected.projection)),

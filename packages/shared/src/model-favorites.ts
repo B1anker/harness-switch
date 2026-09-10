@@ -328,6 +328,7 @@ export const modelFavoriteLinkSchema = z.object({
   favoriteId: z.uuid(),
   connectionId: z.uuid(),
   appliedRevision: z.number().int().positive(),
+  ignoredRevision: z.number().int().positive().optional(),
   projectionVersion: z.number().int().positive(),
   baseline: favoriteProjectionSchema,
 });

@@ -76,11 +76,7 @@ export function QuickPreview({
           >
             {(item) => item.label}
           </TabList>
-          <TabPanel
-            idPrefix="quick-preview"
-            value={reviewTab}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-          >
+          <TabPanel idPrefix="quick-preview" value={reviewTab} className="min-h-80 shrink-0">
             {reviewTab === 'route' ? (
               <SwitchMap
                 connection={connection}

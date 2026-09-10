@@ -20,9 +20,12 @@ import { type ApplyDialogProps, useApplyWorkflow } from './use-apply-workflow';
 
 export function ModelFavoriteApplyDialog(props: ApplyDialogProps) {
   if (
-    props.favorite.defaultConnectionId ||
-    props.favorite.toolBindings ||
-    props.favorite.connections.some((entry) => entry.groupId)
+    (!props.quickHarness || ['kimi', 'dsh'].includes(props.quickHarness.id)) &&
+    (!props.initialItems?.length ||
+      props.initialItems.every((item) => ['kimi', 'dsh'].includes(item.harness))) &&
+    (props.favorite.defaultConnectionId ||
+      props.favorite.toolBindings ||
+      props.favorite.connections.some((entry) => entry.groupId))
   ) {
     return (
       <SchemeApply props={props} renderSingle={(next) => <SingleFavoriteApplyDialog {...next} />} />
@@ -55,9 +58,7 @@ function SingleFavoriteApplyDialog(props: ApplyDialogProps) {
           height:
             step === 2
               ? `min(${Math.max(400, 270 + flow.results.length * 150)}px, 90dvh)`
-              : quickHarness && reviewTab === 'route' && step === 1
-                ? 'min(580px, 90dvh)'
-                : 'min(820px, 90dvh)',
+              : 'min(820px, 90dvh)',
         }}
         className="flex h-[min(720px,90dvh)] max-w-4xl flex-col gap-0 overflow-hidden p-0 data-[state=open]:animate-none data-[state=closed]:animate-none"
         onEscapeKeyDown={(event) => busy && event.preventDefault()}
@@ -165,7 +166,7 @@ function SingleFavoriteApplyDialog(props: ApplyDialogProps) {
                 aria-label={t('favorites.reviewChanges')}
                 aria-hidden={step !== 1}
                 inert={step !== 1 || busy || flow.uncertain}
-                className="flex h-full w-1/2 shrink-0 flex-col gap-4 overflow-hidden bg-muted/20 p-6 sm:px-8"
+                className="flex h-full w-1/2 shrink-0 flex-col gap-4 overflow-y-auto overscroll-contain bg-muted/20 p-6 sm:px-8"
               >
                 <p className="shrink-0 text-sm text-muted-foreground">
                   {t(`favorites.modeHint.${mode}`)}

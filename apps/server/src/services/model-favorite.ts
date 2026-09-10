@@ -37,6 +37,7 @@ export interface IModelFavoriteService {
   capture(input: FavoriteCapture): ModelFavorite;
   sourceFingerprint(harness: HarnessId, name: string): string;
   detach(harness: HarnessId, name: string, fingerprint: string): void;
+  ignoreUpdates(id: string, revision: number): void;
 }
 export const IModelFavoriteService = createDecorator<IModelFavoriteService>('modelFavoriteService');
 
@@ -243,6 +244,23 @@ export class ModelFavoriteService implements IModelFavoriteService {
       action: 'detach',
       name,
       tools: [harness],
+    });
+  }
+
+  ignoreUpdates(id: string, revision: number): void {
+    const favorite = this.store.get(id);
+    if (favorite.revision !== revision) {
+      throw new HttpError(409, ERROR_CODES.favoritePlanStale, {
+        code: ERROR_CODES.favoritePlanStale,
+      });
+    }
+    this.backups.protect('change', () => {
+      for (const ref of this.references(id)) {
+        this.profiles.setFavoriteLink(ref.harness, ref.name, {
+          ...ref.link,
+          ignoredRevision: revision,
+        });
+      }
     });
   }
 

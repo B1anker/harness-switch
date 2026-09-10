@@ -9,7 +9,7 @@ export function ModelsPreview({
   onApply,
 }: {
   preview: ToolModelsPreview;
-  onApply(): void;
+  onApply?(): void;
 }) {
   const { t } = useTranslation();
   const selected = preview.items.find((item) => item.id === preview.defaultItemId);
@@ -69,7 +69,7 @@ export function ModelsPreview({
           </div>
         ))}
       </Disclosure>
-      <Button onClick={onApply}>{t('toolModels.apply')}</Button>
+      {onApply ? <Button onClick={onApply}>{t('toolModels.apply')}</Button> : null}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
+import { IgnoreUpdates } from './ignore-updates';
 
 export function FavoriteNextStep({
   favorite,
@@ -86,6 +87,7 @@ export function FavoriteNextStep({
           {t('favorites.onboarding.reviewUpdates', { count: updates.length })}
         </Button>
       ) : null}
+      {updateCount ? <IgnoreUpdates favorite={favorite} /> : null}
     </div>
   );
 }

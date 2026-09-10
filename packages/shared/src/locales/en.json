@@ -1304,7 +1304,9 @@
       "connectNext": "Next: add a model connection",
       "savedHint": "Your template is saved and currently has no linked tool profiles. Choose tools and preview to save for later or switch now.",
       "connectedHint": "Template changes do not update linked profiles automatically. Preview and confirm to sync them.",
-      "reviewUpdates": "Preview pending updates ({{count}})"
+      "reviewUpdates": "Preview pending updates ({{count}})",
+      "ignoreUpdates": "Ignore this update",
+      "ignoreUpdatesHint": "Keep the current configuration and template link. Future template changes will still notify you."
     },
     "relationships": {
       "chooseConnection": "Choose a model connection",
@@ -1399,7 +1401,12 @@
       "invalidBinding": "Tool model assignments are incomplete, removed, or outside the selected connection. Choose again.",
       "saveDraft": "Save pending configuration",
       "draftSaved": "Pending configuration saved. The active tool configuration is unchanged.",
-      "reasoningEffort": "Reasoning effort"
+      "reasoningEffort": "Reasoning effort",
+      "chooseConnection": "Choose a model connection",
+      "protocolRequired": "{{tool}} requires {{protocol}}; existing connections use another protocol.",
+      "addProtocolConnection": "Add a {{tool}} connection from {{name}}",
+      "protocolConnectionHint": "Reuse the account and models in a separate connection. Confirm provider support for this protocol and check the new connection URL.",
+      "reviewTool": "Selected {{tool}}. Next, review the configuration, resolve conflicts, and confirm saving or switching."
     }
   },
   "favorite": {

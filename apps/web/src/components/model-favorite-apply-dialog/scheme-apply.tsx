@@ -1,12 +1,5 @@
-import type {
-  HarnessId,
-  ToolModelsHarness,
-  ToolModelsRequest,
-} from '@seaveyon/harness-switch-shared';
-import { type ReactNode, useEffect, useState } from 'react';
-import { FavoriteSelect } from '@/components/model-favorites/fields';
-import { ModelsPreview } from '@/components/tool-models/preview';
-import { Alert } from '@/components/ui/alert';
+import type { HarnessId } from '@seaveyon/harness-switch-shared';
+import { type ReactNode, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,9 +8,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { TabList, TabPanel } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
-import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
+import { CollectionApply } from './collection-apply';
 import type { ApplyDialogProps } from './use-apply-workflow';
 
 export function SchemeApply({
@@ -30,16 +25,18 @@ export function SchemeApply({
   const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
   const [tool, setTool] = useState<HarnessId | ''>(
-    props.quickHarness?.id ?? props.initialItems?.[0]?.harness ?? '',
+    props.quickHarness?.id ?? props.initialItems?.[0]?.harness ?? 'claude',
   );
   const [single, setSingle] = useState(false);
+  const [mode, setMode] = useState(props.initialMode ?? 'save');
   const [busy, setBusy] = useState(false);
   if (single && tool) {
     return renderSingle({
       ...props,
+      initialMode: mode,
       quickHarness: harnesses.find((entry) => entry.id === tool),
       initialItems: props.initialItems?.filter((entry) => entry.harness === tool),
-      onClose: props.quickHarness ? props.onClose : () => setSingle(false),
+      onClose: props.onClose,
     });
   }
   return (
@@ -52,7 +49,8 @@ export function SchemeApply({
       }}
     >
       <DialogContent
-        className="flex max-h-[90dvh] max-w-3xl flex-col overflow-hidden"
+        className="flex max-h-[90dvh] max-w-3xl flex-col gap-0 overflow-hidden p-0"
+        style={{ height: tool === 'kimi' || tool === 'dsh' ? 'min(760px,90dvh)' : undefined }}
         onEscapeKeyDown={(event) => {
           if (busy) {
             event.preventDefault();
@@ -64,191 +62,59 @@ export function SchemeApply({
           }
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="shrink-0 border-b p-6 pr-12">
           <DialogTitle>{t('favorites.configure')}</DialogTitle>
           <DialogDescription>{props.favorite.name}</DialogDescription>
         </DialogHeader>
-        <fieldset disabled={busy} className="min-w-0 space-y-5 overflow-y-auto">
-          <FavoriteSelect
-            id="scheme-tool"
+        <fieldset disabled={busy} className="shrink-0 border-b px-6 py-3">
+          <TabList
+            idPrefix="scheme-apply-tools"
             label={t('favorites.targetTools')}
+            items={harnesses.map((entry) => ({ id: entry.id }))}
             value={tool}
-            options={harnesses.map((entry) => ({
-              value: entry.id,
-              label: t(`favorites.scheme.tools.${entry.id}`),
-            }))}
             onChange={(value) => setTool(value as HarnessId)}
-          />
+            className="flex flex-wrap gap-2"
+            tabClassName="px-3 py-2 text-sm"
+          >
+            {(item) => t(`favorites.scheme.tools.${item.id}`)}
+          </TabList>
+        </fieldset>
+        <TabPanel
+          idPrefix="scheme-apply-tools"
+          value={tool}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           {tool === 'kimi' || tool === 'dsh' ? (
             <CollectionApply key={tool} harness={tool} onBusyChange={setBusy} {...props} />
           ) : tool ? (
-            <Button onClick={() => setSingle(true)}>{t('favorites.reviewChanges')}</Button>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="space-y-4 p-6">
+                <p className="text-sm text-muted-foreground">
+                  {t('favorites.scheme.reviewTool', { tool: t(`favorites.scheme.tools.${tool}`) })}
+                </p>
+                <RadioGroup
+                  aria-label={t('favorites.mode')}
+                  value={mode}
+                  onValueChange={(value) => setMode(value === 'activate' ? 'activate' : 'save')}
+                >
+                  {(['save', 'activate'] as const).map((value) => (
+                    <label key={value} className="flex items-center gap-2 text-sm">
+                      <RadioGroupItem value={value} />
+                      {t(`favorites.modeLabel.${value}`)}
+                    </label>
+                  ))}
+                </RadioGroup>
+              </div>
+              <div className="flex shrink-0 justify-between gap-3 border-t p-6">
+                <Button variant="outline" onClick={props.onClose}>
+                  {t('common.cancel')}
+                </Button>
+                <Button onClick={() => setSingle(true)}>{t('favorites.reviewChanges')}</Button>
+              </div>
+            </div>
           ) : null}
-        </fieldset>
+        </TabPanel>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function CollectionApply({
-  harness,
-  favorite,
-  onApplied,
-  onBusyChange,
-}: ApplyDialogProps & { harness: ToolModelsHarness; onBusyChange(busy: boolean): void }) {
-  const { t } = useTranslation();
-  const load = useAppStore((state) => state.loadToolModels);
-  const preview = useAppStore((state) => state.toolModelsPreview);
-  const makePreview = useAppStore((state) => state.previewToolModels);
-  const apply = useAppStore((state) => state.applyToolModels);
-  const save = useAppStore((state) => state.saveToolModels);
-  const clear = useAppStore((state) => state.clearToolModelsPreview);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const binding = favorite.toolBindings?.[harness];
-  const candidates = favorite.connections.filter(
-    (entry) => entry.requestModelId && (!binding?.modelIds || binding.modelIds.includes(entry.id)),
-  );
-  const [defaultId, setDefaultId] = useState(
-    binding?.defaultModelId ?? favorite.defaultConnectionId ?? '',
-  );
-  useEffect(() => {
-    clear();
-    return clear;
-  }, [clear]);
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
-    onBusyChange(true);
-    setError('');
-    try {
-      await action();
-    } catch (cause) {
-      setError(lineText(t, errorLine(cause)));
-    } finally {
-      setBusy(false);
-      onBusyChange(false);
-    }
-  };
-  const prepare = async () => {
-    await load(harness);
-    const state = useAppStore
-      .getState()
-      .toolModels.find((entry) => entry.harness === harness)?.state;
-    if (!state || useAppStore.getState().toolModelsError) {
-      setError(t('toolModels.retry'));
-      return;
-    }
-    // Applying one template keeps models managed by other templates or standalone profiles.
-    const retained = state.draft.items.filter(
-      (item) => item.source.kind !== 'favorite' || item.source.favoriteId !== favorite.id,
-    );
-    const items = candidates.map((entry) => {
-      const existing = state.draft.items.find(
-        (item) =>
-          item.source.kind === 'favorite' &&
-          item.source.favoriteId === favorite.id &&
-          item.source.connectionId === entry.id,
-      );
-      return {
-        id: existing?.id ?? entry.id,
-        source: { kind: 'favorite' as const, favoriteId: favorite.id, connectionId: entry.id },
-        factOverrides: {},
-        preferenceOverrides: binding?.reasoningEffort
-          ? { reasoningEffort: binding.reasoningEffort }
-          : {},
-      };
-    });
-    const request: ToolModelsRequest = {
-      expectedRevision: state.revision,
-      draft: {
-        items: [...retained, ...items],
-        defaultItemId: items.find((item) => item.source.connectionId === defaultId)?.id ?? null,
-      },
-    };
-    return request;
-  };
-  return (
-    <fieldset disabled={busy || done} className="min-w-0 space-y-4">
-      <p className="text-sm text-muted-foreground">{t('favorites.scheme.collectionApplyHint')}</p>
-      {candidates.map((entry) => (
-        <p key={entry.id} className="break-all font-mono text-sm">
-          {entry.label} / {entry.requestModelId}
-        </p>
-      ))}
-      <FavoriteSelect
-        id="scheme-apply-default"
-        label={t('favorites.scheme.startModel')}
-        value={defaultId}
-        options={candidates.map((entry) => ({
-          value: entry.id,
-          label: `${entry.label} / ${entry.requestModelId}`,
-        }))}
-        onChange={(value) => {
-          setDefaultId(value);
-          setSaved(false);
-          clear();
-        }}
-        error={
-          !candidates.some((entry) => entry.id === defaultId)
-            ? t('favorites.scheme.defaultIncompatible')
-            : undefined
-        }
-      />
-      {error ? <Alert>{error}</Alert> : null}
-      <p role="status" className="min-h-5 text-sm">
-        {busy
-          ? t('toolModels.loading')
-          : done
-            ? t('toolModels.applied')
-            : saved
-              ? t('favorites.scheme.draftSaved')
-              : ''}
-      </p>
-      {!preview ? (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            disabled={!candidates.some((entry) => entry.id === defaultId)}
-            onClick={() =>
-              void run(async () => {
-                const request = await prepare();
-                if (request) {
-                  await save(harness, request);
-                  setSaved(true);
-                }
-              })
-            }
-          >
-            {t('favorites.scheme.saveDraft')}
-          </Button>
-          <Button
-            disabled={!candidates.some((entry) => entry.id === defaultId)}
-            onClick={() =>
-              void run(async () => {
-                const request = await prepare();
-                if (request) {
-                  await makePreview(harness, request);
-                }
-              })
-            }
-          >
-            {t('toolModels.preview')}
-          </Button>
-        </div>
-      ) : (
-        <ModelsPreview
-          preview={preview}
-          onApply={() =>
-            void run(async () => {
-              await apply(harness, preview.id);
-              setDone(true);
-              onApplied?.();
-            })
-          }
-        />
-      )}
-    </fieldset>
   );
 }
