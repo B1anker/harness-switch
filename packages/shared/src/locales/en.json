@@ -746,7 +746,11 @@
     "favoriteCredentialConsentRequired": "Favorite credential consent required.",
     "favoriteBackupInvalid": "The backup is invalid, damaged or belongs to different configuration paths. Nothing was restored.",
     "favoriteBackupRecoveryFailed": "Restore rollback is incomplete. Configuration operations are paused to protect data. Check file permissions and retry.",
-    "favoriteBackupStale": "Configuration changed after preview. Check the restore impact again."
+    "favoriteBackupStale": "Configuration changed after preview. Check the restore impact again.",
+    "toolModelsInvalid": "The model collection file is invalid. Restore it before editing.",
+    "toolModelsDefaultRequired": "Choose a replacement default before removing or changing the current default model.",
+    "toolModelsConflict": "The model conflicts with an existing entry. Manage collection models from the tool model list.",
+    "toolModelsFactsInvalid": "Model reasoning settings conflict. Check reasoning support, supported levels and the selected effort, or restore inheritance."
   },
   "warning": {
     "activation": {
@@ -1526,6 +1530,53 @@
       "scanNote": "Use harness-switch import <id>... to import; neither scanning nor importing changes the tools' own configuration.",
       "undoable": "undoable",
       "notUndoable": "not undoable"
+    }
+  },
+  "toolModels": {
+    "title": "Available models",
+    "hint": "Combine model templates for this tool and choose a default independently.",
+    "manage": "Manage models",
+    "loading": "Loading model collection…",
+    "retry": "Reload",
+    "missing": "Missing template or connection",
+    "remove": "Remove",
+    "connection": "Connection",
+    "settings": "Settings for this tool",
+    "inheritHint": "Values follow this template and connection. Only fields you edit are overridden for this tool.",
+    "reset": "Follow template and connection",
+    "previewTitle": "Review model changes",
+    "previewCount": "Write {{count}} models; remove {{removed}} previous entries.",
+    "defaultChanged": "Default: {{name}} · {{model}}",
+    "keepDefault": "Keep the current default",
+    "notRepresented": "This tool cannot write these settings: {{fields}}",
+    "fileChanges": "Native file changes (credentials hidden)",
+    "changed": "Changed",
+    "unchanged": "Unchanged",
+    "before": "Before",
+    "after": "After",
+    "apply": "Apply these changes",
+    "empty": "No models selected. Add templates below.",
+    "add": "Add from templates (select multiple)",
+    "noTemplates": "Create a model template with a connection first.",
+    "default": "Default model after applying",
+    "scope": {
+      "kimi": "Models are written to Kimi Code. Restart or reload the tool to read the new configuration.",
+      "dsh": "The default applies to new DSH sessions; an existing session keeps its own model selection."
+    },
+    "save": "Save draft only",
+    "preview": "Preview application",
+    "saving": "Saving draft…",
+    "previewing": "Preparing preview…",
+    "applying": "Writing model configuration…",
+    "saved": "Draft saved. Native configuration has not changed.",
+    "applied": "Model configuration applied.",
+    "appliedCount": "{{count}} models last applied",
+    "draftHint": "Saved draft; preview to compare it with the native configuration.",
+    "nativeStatus": {
+      "unknown": "No applied models to compare yet.",
+      "in-sync": "Applied models match the native configuration.",
+      "drifted": "Native models differ from the last application. Review changes before applying again.",
+      "invalid": "Unable to compare native configuration. Check the files and preview again."
     }
   }
 }

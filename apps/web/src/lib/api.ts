@@ -204,3 +204,5 @@ export const favoriteBackupPreviewPath = (id: string) =>
   `${favoritesPath('backups')}/${encodeURIComponent(id)}/preview`;
 export const favoriteApplyPath = (id: string) =>
   `${favoritePlansPath()}/${encodeURIComponent(id)}/apply`;
+export const toolModelsPath = (harness: string, action?: 'preview' | 'apply') =>
+  `/api/tool-models/${encodeURIComponent(harness)}${action ? `/${action}` : ''}`;

@@ -93,6 +93,7 @@ export {
   updateProviderRequestSchema,
   userSyncRequestSchema,
 } from './schemas';
+export * from './tool-models';
 export type {
   ActivateResponse,
   ActivePublic,

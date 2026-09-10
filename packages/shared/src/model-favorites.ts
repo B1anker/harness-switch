@@ -191,6 +191,12 @@ export const favoriteProjectionSchema = z.object({
 });
 export type FavoriteProjection = z.infer<typeof favoriteProjectionSchema>;
 export const modelFavoriteLinkSchema = z.object({
+  collectionOverrides: z
+    .object({
+      factOverrides: favoriteConnectionSchema.shape.factOverrides,
+      preferenceOverrides: favoriteConnectionSchema.shape.preferenceOverrides,
+    })
+    .optional(),
   favoriteId: z.uuid(),
   connectionId: z.uuid(),
   appliedRevision: z.number().int().positive(),

@@ -7,6 +7,10 @@
  * know yet. Renaming a code is a breaking change; add a new one instead.
  */
 export const ERROR_CODES = {
+  toolModelsFactsInvalid: 'toolModelsFactsInvalid',
+  toolModelsInvalid: 'toolModelsInvalid',
+  toolModelsDefaultRequired: 'toolModelsDefaultRequired',
+  toolModelsConflict: 'toolModelsConflict',
   favoriteNotFound: 'favoriteNotFound',
   favoriteRevisionRequired: 'favoriteRevisionRequired',
   favoriteRevisionConflict: 'favoriteRevisionConflict',
