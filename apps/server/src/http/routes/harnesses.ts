@@ -9,6 +9,7 @@ import {
 import { Hono } from 'hono';
 import type { InstantiationService } from '../../di';
 import { IActivationService } from '../../services/activation';
+import { AUDIT_EVENTS, IAuditService } from '../../services/audit';
 import { IHarnessService } from '../../services/harness';
 import { IModelFavoriteService } from '../../services/model-favorite';
 import { IProbeProfileService } from '../../services/probe-profile';
@@ -24,6 +25,7 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
   const profiles = services.get(IProfileService);
   const activation = services.get(IActivationService);
   const profileProbe = services.get(IProbeProfileService);
+  const audit = services.get(IAuditService);
   app.post('/:harnessId/profiles/:name/detach-favorite', async (c) => {
     const body = await readJsonBody(c, favoriteDetachRequestSchema);
     services
@@ -79,12 +81,16 @@ export function createHarnessRoutes(services: InstantiationService): Hono {
 
   app.post('/:harnessId/profiles/:name/activate', (c) => {
     const harnessId = registry.require(c.req.param('harnessId'));
-    const result = activation.activate(harnessId, param(c, 'name'));
+    const name = param(c, 'name');
+    const result = activation.activate(harnessId, name);
+    audit.record(AUDIT_EVENTS.profileActivated, { harness: harnessId, profile: name });
     return c.json({ ok: true, envFile: result.envFile, warnings: result.warnings });
   });
 
   app.post('/:harnessId/official/activate', (c) => {
-    const result = activation.activateOfficial(registry.require(c.req.param('harnessId')));
+    const harnessId = registry.require(c.req.param('harnessId'));
+    const result = activation.activateOfficial(harnessId);
+    audit.record(AUDIT_EVENTS.officialActivated, { harness: harnessId });
     return c.json({ ok: true, envFile: result.envFile, warnings: result.warnings });
   });
 

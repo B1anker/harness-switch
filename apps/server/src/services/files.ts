@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
+  appendFileSync,
   chmodSync,
   chownSync,
   existsSync,
@@ -69,6 +70,14 @@ export interface IFileService {
   writeUserSecretFile(file: string, text: string): void;
   readJson<T>(file: string, fallback: T): T;
   writeJson(file: string, value: unknown): void;
+  /**
+   * Appends to a 0600 file, creating it when absent.
+   *
+   * The append-only counterpart to {@link IFileService.writeSecure}, for the audit trail:
+   * rewriting the whole document to add one line would both lose entries under concurrent
+   * writes and make the log trivially rewritable.
+   */
+  appendSecure(file: string, text: string): void;
   /**
    * Puts a file back to a snapshot taken with {@link IFileService.readOptional}, where
    * `undefined` means it did not exist. Used to unwind a partially applied multi-file
@@ -214,6 +223,17 @@ export class FileService implements IFileService {
 
   writeJson(file: string, value: unknown): void {
     this.writeSecure(file, `${JSON.stringify(value, null, 2)}\n`);
+  }
+
+  appendSecure(file: string, text: string): void {
+    this.assertManaged(file);
+    this.ensureDir(dirname(file));
+    const owner = this.ownerOf(file);
+    const existed = existsSync(file);
+    appendFileSync(file, text, { encoding: 'utf8', mode: 0o600 });
+    if (!existed) {
+      this.applyOwner(file, owner.uid, owner.gid);
+    }
   }
 
   restore(file: string, snapshot: string | undefined): void {

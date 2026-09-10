@@ -8,6 +8,7 @@ export {
   type ErrorCode,
   FAVORITE_CODES,
   isMessageCode,
+  isValidationCode,
   type LocalizedMessage,
   type MessageParams,
   PROBE_CODES,
@@ -16,6 +17,8 @@ export {
   type ScanNoteCode,
   USER_BLOCK_CODES,
   type UserBlockCode,
+  VALIDATION_CODES,
+  type ValidationCode,
   WARNING_CODES,
   type WarningCode,
 } from './errors';
@@ -36,6 +39,7 @@ export * from './model-favorites';
 export type { ProviderPreset } from './provider-presets';
 export { PROVIDER_PRESETS, providerPresetById, providerPresetSchema } from './provider-presets';
 export type {
+  ChangePasswordRequest,
   CompletionProtocol,
   CreateProfileRequest,
   CreateProviderRequest,
@@ -51,6 +55,7 @@ export type {
   ProviderEndpointRequest,
   ScanImportRequest,
   ScanImportSelection,
+  SchemaIssue,
   TransferExportRequest,
   TransferImportRequest,
   UpdateProfileRequest,
@@ -58,11 +63,11 @@ export type {
   UserSyncRequest,
 } from './schemas';
 export {
+  changePasswordRequestSchema,
   completionProtocolSchema,
   createProfileRequestSchema,
   createProviderRequestSchema,
   extrasSchema,
-  formatSchemaError,
   gitHubDeviceCodeRequestSchema,
   gitHubDevicePollRequestSchema,
   gitHubPullPreviewRequestSchema,
@@ -79,6 +84,8 @@ export {
   providerEndpointRequestSchema,
   scanImportRequestSchema,
   scanImportSelectionSchema,
+  schemaFields,
+  schemaIssues,
   transferEnvelopeSchema,
   transferExportRequestSchema,
   transferImportRequestSchema,
@@ -91,6 +98,8 @@ export type {
   ActivePublic,
   AdoptRequest,
   ApproveDriftRequest,
+  AuditEntry,
+  AuditResponse,
   BackupDetail,
   BackupEntry,
   BackupFileDetail,

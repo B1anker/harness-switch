@@ -9,6 +9,7 @@ import type {
   ProviderPublic,
   ScanHarnessResult,
 } from '@seaveyon/harness-switch-shared';
+import { cliText } from './i18n';
 
 export type OutputMode = 'human' | 'json';
 
@@ -19,7 +20,11 @@ export function printJson(value: unknown): void {
 export function printListHuman(payload: HarnessesResponse): void {
   console.log(`env file: ${payload.envFile}`);
   for (const item of payload.items) {
-    const active = item.active ? (item.active.official ? '官方登录' : item.active.name) : '-';
+    const active = item.active
+      ? item.active.official
+        ? cliText('cli.output.officialLogin')
+        : item.active.name
+      : '-';
     console.log(
       `${item.id.padEnd(8)} ${item.label.padEnd(14)} ${item.mode.padEnd(9)} active=${active} profiles=${item.profiles.length}`,
     );
@@ -89,11 +94,15 @@ export function printPlanHuman(harness: string, profile: string, targets: Previe
   console.log(`plan ${harness}/${profile}:`);
   for (const target of targets) {
     const changed = target.content !== target.currentContent;
-    const marker = target.overridden ? ' (override)' : changed ? ' (将写入)' : ' (无变更)';
+    const marker = target.overridden
+      ? ' (override)'
+      : changed
+        ? ` (${cliText('cli.output.willWrite')})`
+        : ` (${cliText('cli.output.noChange')})`;
     console.log(`- ${target.path}${marker}`);
   }
   console.log('');
-  console.log('内容包含 API key，请仅在可信终端查看。');
+  console.log(cliText('cli.output.planNote'));
 }
 
 export function printActivateHuman(
@@ -101,7 +110,7 @@ export function printActivateHuman(
   profile: string,
   result: { envFile: string; warnings: LocalizedMessage[] },
 ): void {
-  console.log(`已激活 ${harness}/${profile}`);
+  console.log(cliText('cli.output.activated', { harness, profile }));
   console.log(`env: ${result.envFile}`);
   for (const warning of result.warnings) {
     console.log(`warning: ${warningText(warning)}`);
@@ -113,7 +122,11 @@ export function printScanHuman(items: ScanHarnessResult[]): void {
     console.log('');
     console.log(`${item.label} (${item.harness}):`);
     for (const source of item.sources) {
-      const state = !source.exists ? '缺失' : source.parsable ? '已读取' : '无法解析';
+      const state = !source.exists
+        ? cliText('cli.output.sourceMissing')
+        : source.parsable
+          ? cliText('cli.output.sourceRead')
+          : cliText('cli.output.sourceUnparsable');
       console.log(`  · ${source.path} [${state}]`);
     }
     if (item.candidates.length === 0) {
@@ -122,18 +135,22 @@ export function printScanHuman(items: ScanHarnessResult[]): void {
     }
     for (const candidate of item.candidates) {
       const marks = [
-        candidate.active ? '使用中' : '',
-        candidate.apiKeyPresent ? `key=${candidate.apiKeyPreview}` : 'key=需手动填写',
-        candidate.matchesProvider ? `已在 Vault：${candidate.matchesProvider}` : '',
+        candidate.active ? cliText('cli.output.candidateActive') : '',
+        candidate.apiKeyPresent
+          ? `key=${candidate.apiKeyPreview}`
+          : cliText('cli.output.candidateKeyManual'),
+        candidate.matchesProvider
+          ? cliText('cli.output.candidateInVault', { provider: candidate.matchesProvider })
+          : '',
       ].filter(Boolean);
       console.log(`  [${candidate.id}] ${candidate.suggestedName}  ${marks.join('  ')}`);
       console.log(
-        `      ${candidate.baseUrl || '(无 base url)'}  ${candidate.model || ''}`.trimEnd(),
+        `      ${candidate.baseUrl || cliText('cli.output.noBaseUrl')}  ${candidate.model || ''}`.trimEnd(),
       );
     }
   }
   console.log('');
-  console.log('用 harness-switch import <id>... 导入；扫描和导入都不会改动工具本身的配置。');
+  console.log(cliText('cli.output.scanNote'));
 }
 
 export function printOperationsHuman(items: OperationReceipt[]): void {
@@ -142,7 +159,9 @@ export function printOperationsHuman(items: OperationReceipt[]): void {
     return;
   }
   for (const receipt of items) {
-    const undo = receipt.undoable ? '可撤销' : '不可撤销';
+    const undo = receipt.undoable
+      ? cliText('cli.output.undoable')
+      : cliText('cli.output.notUndoable');
     console.log(
       `${receipt.id}  ${receipt.state.padEnd(18)} ${receipt.kind.padEnd(17)} ${receipt.harness}/${receipt.profile}  user=${receipt.user}  ${undo}`,
     );

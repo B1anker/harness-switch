@@ -17,6 +17,7 @@ import {
 import { useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
 import { BrandMark } from '@/components/brand-mark';
+import { ChangePasswordDialog } from '@/components/change-password-dialog';
 import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
 import { DoctorPanel } from '@/components/doctor-panel';
 import { HarnessTabs } from '@/components/harness-tabs';
@@ -235,83 +236,99 @@ function UserMenu() {
   const currentUser = useAppStore((state) => state.currentUser);
   const usersLoading = useAppStore((state) => state.usersLoading);
   const switchUser = useAppStore((state) => state.switchUser);
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   return (
-    <DropdownMenu
-      label={t('nav.currentLocalUser')}
-      trigger={
-        <Button
-          variant="outline"
-          size="sm"
-          className="group"
-          aria-label={t('nav.currentLocalUser')}
-          disabled={usersLoading}
-        >
-          <UserRound />
-          <span className="max-w-28 truncate">{currentUser || t('nav.localUser')}</span>
-          <ChevronDown className="transition-transform group-aria-expanded:rotate-180" />
-        </Button>
-      }
-    >
-      {(close) => (
-        <>
-          <DropdownMenuLabel>{t('nav.currentLocalUser')}</DropdownMenuLabel>
-          {users.map((user) => {
-            // An account this process cannot write to is shown but not offered: the
-            // server refuses the switch anyway, so the reason belongs next to the name
-            // rather than in an error after a click that was never going to work.
-            const blocked = user.manageable === false;
-            // Kept short and path-free: the menu is only as wide as a username, so an
-            // interpolated path would wrap to three lines. The directory travels as data
-            // and is appended in the tooltip instead.
-            const reason = blocked
-              ? lineText(t, {
-                  key: user.blockCode ? catalogKey(user.blockCode) : 'error.user.notSwitchable',
-                  params: user.blockData,
-                })
-              : '';
-            const blockedPath = user.blockData?.path ?? user.blockData?.home;
-            return (
-              <DropdownMenuItem
-                key={user.username}
-                role="menuitemradio"
-                aria-checked={user.username === currentUser}
-                disabled={usersLoading || user.username === currentUser || blocked}
-                title={blocked ? [reason, blockedPath].filter(Boolean).join(' — ') : undefined}
-                className="flex-col items-start"
-                onClick={() => {
-                  // The store owns the translated error state; a failure leaves the menu
-                  // open for a retry.
-                  void switchUser(user.username).then(close, () => {});
-                }}
-              >
-                <span className="flex w-full items-center gap-1.5">
-                  {blocked ? <Lock className="size-3 shrink-0" aria-hidden /> : null}
-                  <span className="truncate">{user.username}</span>
-                </span>
-                {blocked ? (
-                  <span className="mt-0.5 text-xs leading-snug text-muted-foreground">
-                    {reason}
-                  </span>
-                ) : null}
-              </DropdownMenuItem>
-            );
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            role="menuitem"
-            destructive
+    <>
+      <DropdownMenu
+        label={t('nav.currentLocalUser')}
+        trigger={
+          <Button
+            variant="outline"
+            size="sm"
+            className="group"
+            aria-label={t('nav.currentLocalUser')}
             disabled={usersLoading}
-            className="gap-2"
-            // Keep the session menu available if the server could not end the session.
-            onClick={() => void logout().then(close, () => {})}
           >
-            <LogOut className="size-4" />
-            {t('nav.signOut')}
-          </DropdownMenuItem>
-        </>
-      )}
-    </DropdownMenu>
+            <UserRound />
+            <span className="max-w-28 truncate">{currentUser || t('nav.localUser')}</span>
+            <ChevronDown className="transition-transform group-aria-expanded:rotate-180" />
+          </Button>
+        }
+      >
+        {(close) => (
+          <>
+            <DropdownMenuLabel>{t('nav.currentLocalUser')}</DropdownMenuLabel>
+            {users.map((user) => {
+              // An account this process cannot write to is shown but not offered: the
+              // server refuses the switch anyway, so the reason belongs next to the name
+              // rather than in an error after a click that was never going to work.
+              const blocked = user.manageable === false;
+              // Kept short and path-free: the menu is only as wide as a username, so an
+              // interpolated path would wrap to three lines. The directory travels as data
+              // and is appended in the tooltip instead.
+              const reason = blocked
+                ? lineText(t, {
+                    key: user.blockCode ? catalogKey(user.blockCode) : 'error.user.notSwitchable',
+                    params: user.blockData,
+                  })
+                : '';
+              const blockedPath = user.blockData?.path ?? user.blockData?.home;
+              return (
+                <DropdownMenuItem
+                  key={user.username}
+                  role="menuitemradio"
+                  aria-checked={user.username === currentUser}
+                  disabled={usersLoading || user.username === currentUser || blocked}
+                  title={blocked ? [reason, blockedPath].filter(Boolean).join(' — ') : undefined}
+                  className="flex-col items-start"
+                  onClick={() => {
+                    // The store owns the translated error state; a failure leaves the menu
+                    // open for a retry.
+                    void switchUser(user.username).then(close, () => {});
+                  }}
+                >
+                  <span className="flex w-full items-center gap-1.5">
+                    {blocked ? <Lock className="size-3 shrink-0" aria-hidden /> : null}
+                    <span className="truncate">{user.username}</span>
+                  </span>
+                  {blocked ? (
+                    <span className="mt-0.5 text-xs leading-snug text-muted-foreground">
+                      {reason}
+                    </span>
+                  ) : null}
+                </DropdownMenuItem>
+              );
+            })}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              role="menuitem"
+              disabled={usersLoading}
+              className="gap-2"
+              onClick={() => {
+                close();
+                setPasswordOpen(true);
+              }}
+            >
+              <KeyRound className="size-4" />
+              {t('account.password.title')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              role="menuitem"
+              destructive
+              disabled={usersLoading}
+              className="gap-2"
+              // Keep the session menu available if the server could not end the session.
+              onClick={() => void logout().then(close, () => {})}
+            >
+              <LogOut className="size-4" />
+              {t('nav.signOut')}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenu>
+      <ChangePasswordDialog open={passwordOpen} onOpenChange={setPasswordOpen} />
+    </>
   );
 }
 

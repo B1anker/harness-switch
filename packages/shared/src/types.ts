@@ -625,6 +625,28 @@ export type OperationUndoResponse = {
 };
 
 /* ------------------------------------------------------------------ */
+/* Audit trail                                                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One line of the security audit trail: who did what, and when.
+ *
+ * `detail` carries identifiers only — a harness id, a provider id, a username — never
+ * credential material. The event string is a stable dotted key (`auth.login.succeeded`),
+ * so a reader can group by it without matching prose.
+ */
+export type AuditEntry = {
+  at: string;
+  event: string;
+  user: string;
+  detail?: Record<string, string | number | boolean>;
+};
+
+export type AuditResponse = {
+  items: AuditEntry[];
+};
+
+/* ------------------------------------------------------------------ */
 /* Doctor                                                              */
 /* ------------------------------------------------------------------ */
 

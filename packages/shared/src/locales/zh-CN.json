@@ -31,6 +31,25 @@
     "signOut": "退出",
     "switchHarness": "切换 Harness"
   },
+  "account": {
+    "password": {
+      "title": "修改密码",
+      "intro": "更新共享的网页密码。其他所有已登录会话都会被结束。",
+      "current": "当前密码",
+      "next": "新密码",
+      "confirm": "确认新密码",
+      "hint_one": "至少 {{count}} 个字符。",
+      "hint_other": "至少 {{count}} 个字符。",
+      "mismatch": "两次输入的密码不一致",
+      "changed": "密码已修改",
+      "submit": "修改密码",
+      "submitting": "保存中…"
+    }
+  },
+  "feedback": {
+    "label": "反馈",
+    "hint": "在 GitHub 上反馈问题"
+  },
   "harness": {
     "field": {
       "toggle": {
@@ -561,7 +580,12 @@
       "crossOriginDenied": "跨域请求被拒绝"
     },
     "auth": {
-      "invalidPassword": "密码错误"
+      "invalidPassword": "密码错误",
+      "passwordChangeRejected": "当前密码不正确",
+      "passwordTooShort_one": "新密码至少需要 {{count}} 个字符",
+      "passwordTooShort_other": "新密码至少需要 {{count}} 个字符",
+      "passwordUnchanged": "新密码与当前密码相同",
+      "tooManyAttempts": "失败次数过多，请在 {{seconds}} 秒后重试"
     },
     "github": {
       "notConnected": "请先连接 GitHub",
@@ -1431,5 +1455,77 @@
     "protection": "恢复前会自动保存当前状态。",
     "currentDescription": "这里展示当前生效的工具配置。可以先手动备份，也可以从时间线选择一个历史恢复点。",
     "selectHint": "选择左侧恢复点，即可查看覆盖、删除和新增的文件。"
+  },
+  "validation": {
+    "nameRequired": "名称不能为空",
+    "nameTooLong": "名称过长",
+    "nameSlash": "名称不能包含斜杠",
+    "passwordRequired": "密码不能为空",
+    "endpointKeyRequired": "endpoint key 不能为空",
+    "endpointKeyTooLong": "endpoint key 过长",
+    "endpointKeySlash": "endpoint key 不能包含斜杠",
+    "endpointKeyDuplicate": "endpoint key 不能重复",
+    "endpointBaseUrlRequired": "endpoint 需要 baseUrl",
+    "apiKeyRequired": "API key 不能为空",
+    "sourceUserRequired": "来源用户不能为空",
+    "providerIdSlash": "provider id 不能包含斜杠",
+    "providerIdReserved": "provider id 不合法",
+    "selectionRequired": "请至少选择一条配置",
+    "baseUrlRequired": "baseUrl 不能为空",
+    "tokenRequired": "Token 不能为空"
+  },
+  "cli": {
+    "error": {
+      "unknownShortOption": "未知选项：{{option}}",
+      "invalidOption": "无效选项：--",
+      "optionTakesNoValue": "选项 --{{option}} 不接受值",
+      "optionNeedsValue": "选项 --{{option}} 需要一个值",
+      "unknownOption": "未知选项：--{{option}}",
+      "usage": "用法：harness-switch {{usage}}",
+      "missingArgument": "缺少参数：{{what}}",
+      "loginNoSession": "登录失败：服务端未返回会话",
+      "loginFailed": "登录失败：{{reason}}",
+      "requestFailed": "请求失败：HTTP {{status}}",
+      "serviceUnreachable": "无法连接本地服务 {{url}}，请先启动服务（harness-switch daemon 或 server）",
+      "passwordFileMissing": "未找到 {{file}}。请先运行一次服务（harness-switch daemon 或 server）生成密码，再使用 CLI。",
+      "syncNeedsUsers": "sync 需要 --from <来源用户> 和 --to <目标用户>",
+      "importNeedsId": "import 需要至少一个候选 id，可先运行 harness-switch scan 查看",
+      "nameSingleImportOnly": "--name 只能用于单条导入",
+      "apiKeyConflict": "--api-key 与 --api-key-env 不能同时使用",
+      "envVarUnset": "环境变量 {{name}} 未设置或为空",
+      "confirmNeedsTty": "非交互式终端需要 --yes 确认此操作",
+      "unknownCommand": "未知命令：{{command}}"
+    },
+    "output": {
+      "officialLogin": "官方登录",
+      "notSwitchable": "不可切换",
+      "syncDone": "已从 {{source}} 同步到 {{target}}",
+      "syncCounts": "新增={{imported}} 覆盖={{overwritten}} 跳过={{skipped}} 凭据={{providers}} Codex登录缓存={{cache}}",
+      "migrated": "已迁移",
+      "notMigrated": "未迁移",
+      "created": "已创建 {{harness}}/{{profile}}",
+      "deleted": "已删除 {{harness}}/{{profile}}",
+      "confirmDelete": "确认删除 {{harness}}/{{profile}}？[y/N] ",
+      "confirmActivate": "确认激活 {{harness}}/{{profile}}？[y/N] ",
+      "confirmOfficial": "确认让 {{harness}} 恢复官方登录？[y/N] ",
+      "cancelled": "已取消",
+      "activated": "已激活 {{harness}}/{{profile}}",
+      "undone": "已撤销 {{kind}} {{harness}}/{{profile}}",
+      "importCounts": "导入={{imported}} 跳过={{skipped}} 新建Vault条目={{providers}}",
+      "importNote": "工具本身的配置文件未被修改；需要生效请再执行 activate。",
+      "willWrite": "将写入",
+      "noChange": "无变更",
+      "planNote": "内容包含 API key，请仅在可信终端查看。",
+      "sourceMissing": "缺失",
+      "sourceRead": "已读取",
+      "sourceUnparsable": "无法解析",
+      "candidateActive": "使用中",
+      "candidateKeyManual": "key=需手动填写",
+      "candidateInVault": "已在 Vault：{{provider}}",
+      "noBaseUrl": "(无 base url)",
+      "scanNote": "用 harness-switch import <id>... 导入；扫描和导入都不会改动工具本身的配置。",
+      "undoable": "可撤销",
+      "notUndoable": "不可撤销"
+    }
   }
 }

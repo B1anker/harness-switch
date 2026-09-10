@@ -40,6 +40,10 @@ export const ERROR_CODES = {
   authenticationRequired: 'http.authenticationRequired',
   crossOriginDenied: 'http.crossOriginDenied',
   invalidPassword: 'auth.invalidPassword',
+  passwordChangeRejected: 'auth.passwordChangeRejected',
+  passwordTooShort: 'auth.passwordTooShort',
+  passwordUnchanged: 'auth.passwordUnchanged',
+  tooManyAttempts: 'auth.tooManyAttempts',
   missingArgument: 'cli.missingArgument',
   invalidConflictPolicy: 'sync.invalidConflictPolicy',
 
@@ -141,7 +145,48 @@ export const ERROR_CODES = {
   storageCorruptQuarantined: 'storage.corruptQuarantined',
 } as const;
 
-export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+/**
+ * Every code the error contract can carry. Validation codes are part of it: the HTTP
+ * boundary promotes a rejected field's reason to the response `code`.
+ */
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES] | ValidationCode;
+
+/**
+ * Why one field of a request body was rejected.
+ *
+ * A validation failure is as user-facing as any other error, so the reason travels as a
+ * code rather than as prose. The schemas in `schemas.ts` carry these as their Zod
+ * messages, and the HTTP boundary promotes the first one to the response's `code` — which
+ * is why they are `ErrorCode`s too, and why they share the `validation.` namespace rather
+ * than hanging off `error.`.
+ */
+export const VALIDATION_CODES = {
+  nameRequired: 'validation.nameRequired',
+  nameTooLong: 'validation.nameTooLong',
+  nameSlash: 'validation.nameSlash',
+  passwordRequired: 'validation.passwordRequired',
+  endpointKeyRequired: 'validation.endpointKeyRequired',
+  endpointKeyTooLong: 'validation.endpointKeyTooLong',
+  endpointKeySlash: 'validation.endpointKeySlash',
+  endpointKeyDuplicate: 'validation.endpointKeyDuplicate',
+  endpointBaseUrlRequired: 'validation.endpointBaseUrlRequired',
+  apiKeyRequired: 'validation.apiKeyRequired',
+  sourceUserRequired: 'validation.sourceUserRequired',
+  providerIdSlash: 'validation.providerIdSlash',
+  providerIdReserved: 'validation.providerIdReserved',
+  selectionRequired: 'validation.selectionRequired',
+  baseUrlRequired: 'validation.baseUrlRequired',
+  tokenRequired: 'validation.tokenRequired',
+} as const;
+
+export type ValidationCode = (typeof VALIDATION_CODES)[keyof typeof VALIDATION_CODES];
+
+/** Whether a Zod message is one of the codes above rather than Zod's own built-in prose. */
+export function isValidationCode(value: string): value is ValidationCode {
+  return VALIDATION_CODE_SET.has(value);
+}
+
+const VALIDATION_CODE_SET: ReadonlySet<string> = new Set(Object.values(VALIDATION_CODES));
 
 /**
  * Values a localized message interpolates. Deliberately primitive: params travel
@@ -315,7 +360,13 @@ export function catalogKey(code: string): string {
 }
 
 export const FAVORITE_CODES = { result: 'favorite.result' } as const;
-const DIRECT_NAMESPACES = ['warning.', 'doctor.check.', 'scan.note.', 'favorite.'] as const;
+const DIRECT_NAMESPACES = [
+  'warning.',
+  'doctor.check.',
+  'scan.note.',
+  'favorite.',
+  'validation.',
+] as const;
 
 /**
  * Whether a string is one of the codes this contract defines.
@@ -332,6 +383,7 @@ const MESSAGE_CODES: ReadonlySet<string> = new Set(
   [
     ERROR_CODES,
     FAVORITE_CODES,
+    VALIDATION_CODES,
     WARNING_CODES,
     DOCTOR_CODES,
     SCAN_NOTE_CODES,

@@ -18,6 +18,7 @@ export type SessionSlice = {
   loadSession: () => Promise<void>;
   login: (password: string) => Promise<void>;
   logout: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   loadUsers: () => Promise<void>;
   switchUser: (username: string) => Promise<void>;
 };
@@ -92,6 +93,15 @@ export const createSessionSlice: Slice<SessionSlice> = (set, get) => ({
   logout: async () => {
     await api(authPath.logout, { method: 'POST' });
     set({ authenticated: false, currentUser: '', users: [], ...USER_SCOPED });
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    // The server re-issues this session's cookie, so nothing here is invalidated and no
+    // reload is needed. The dialog owns the form state; it surfaces the thrown error.
+    await api(authPath.password, {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
   },
 
   loadUsers: async () => {

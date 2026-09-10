@@ -25,6 +25,7 @@ import {
 } from './args';
 import { CliClient, readWebPassword, resolveBaseUrl } from './client';
 import { runFavoriteCli } from './favorites';
+import { cliText } from './i18n';
 import {
   cliUsage,
   OutputMode,
@@ -110,7 +111,7 @@ export async function runCli(
         return await cmdUndo(client, positional, json);
       default:
         console.error(cliUsage());
-        throw new CliError(`unknown command: ${command}`);
+        throw new CliError(cliText('cli.error.unknownCommand', { command }));
     }
   } catch (error) {
     return fail(error, json);
@@ -205,7 +206,10 @@ async function cmdUsers(client: CliClient, json: OutputMode): Promise<number> {
     for (const user of payload.items) {
       // An unmanageable account is listed but annotated: `--user` on it would be
       // refused, so the reason is more useful than a bare name.
-      const note = user.manageable === false ? `  (${user.blockMsg ?? '不可切换'})` : '';
+      const note =
+        user.manageable === false
+          ? `  (${user.blockMsg ?? cliText('cli.output.notSwitchable')})`
+          : '';
       console.log(`${user.current ? '*' : ' '} ${user.username.padEnd(20)} ${user.homeDir}${note}`);
     }
   }
@@ -216,7 +220,7 @@ async function cmdSync(client: CliClient, flags: CliFlags, json: OutputMode): Pr
   const source = flagValue(flags, 'from');
   const target = flagValue(flags, 'to') || flagValue(flags, 'user');
   if (!source || !target) {
-    throw new CliError('sync 需要 --from <来源用户> 和 --to <目标用户>');
+    throw new CliError(cliText('cli.error.syncNeedsUsers'));
   }
   await selectUser(client, target);
   const conflictPolicy = hasFlag(flags, 'overwrite') ? 'overwrite' : 'skip';
@@ -229,9 +233,17 @@ async function cmdSync(client: CliClient, flags: CliFlags, json: OutputMode): Pr
   if (json === 'json') {
     printJson(payload);
   } else {
-    console.log(`已从 ${source} 同步到 ${target}`);
+    console.log(cliText('cli.output.syncDone', { source, target }));
     console.log(
-      `新增=${payload.imported} 覆盖=${payload.overwritten} 跳过=${payload.skipped} 凭据=${payload.providersCopied} Codex登录缓存=${payload.codexLoginCacheMigrated ? '已迁移' : '未迁移'}`,
+      cliText('cli.output.syncCounts', {
+        imported: payload.imported,
+        overwritten: payload.overwritten,
+        skipped: payload.skipped,
+        providers: payload.providersCopied,
+        cache: cliText(
+          payload.codexLoginCacheMigrated ? 'cli.output.migrated' : 'cli.output.notMigrated',
+        ),
+      }),
     );
   }
   return 0;
@@ -287,7 +299,7 @@ async function cmdCreate(
   if (json === 'json') {
     printJson(payload);
   } else {
-    console.log(`已创建 ${payload.harness}/${payload.name}`);
+    console.log(cliText('cli.output.created', { harness: payload.harness, profile: payload.name }));
   }
   return 0;
 }
@@ -300,7 +312,9 @@ async function cmdDelete(
 ): Promise<number> {
   const harness = requirePositional(positional, 0, 'harness');
   const profile = requirePositional(positional, 1, 'profile');
-  if (!(await confirmMutation(`确认删除 ${harness}/${profile}？[y/N] `, flags, json))) {
+  if (
+    !(await confirmMutation(cliText('cli.output.confirmDelete', { harness, profile }), flags, json))
+  ) {
     return 0;
   }
   const payload = await client.delete(
@@ -309,7 +323,7 @@ async function cmdDelete(
   if (json === 'json') {
     printJson({ harness, profile, ...(payload as object) });
   } else {
-    console.log(`已删除 ${harness}/${profile}`);
+    console.log(cliText('cli.output.deleted', { harness, profile }));
   }
   return 0;
 }
@@ -381,7 +395,13 @@ async function cmdActivate(
     if (json === 'human') {
       printPlanHuman(harness, profile, preview.targets);
     }
-    if (!(await confirmMutation(`确认激活 ${harness}/${profile}？[y/N] `, flags, json))) {
+    if (
+      !(await confirmMutation(
+        cliText('cli.output.confirmActivate', { harness, profile }),
+        flags,
+        json,
+      ))
+    ) {
       return 0;
     }
   }
@@ -404,7 +424,7 @@ async function cmdOfficial(
   json: OutputMode,
 ): Promise<number> {
   const harness = requirePositional(positional, 0, 'harness');
-  if (!(await confirmMutation(`确认让 ${harness} 恢复官方登录？[y/N] `, flags, json))) {
+  if (!(await confirmMutation(cliText('cli.output.confirmOfficial', { harness }), flags, json))) {
     return 0;
   }
   const payload = (await client.post(
@@ -435,12 +455,12 @@ async function cmdImport(
   json: OutputMode,
 ): Promise<number> {
   if (positional.length === 0) {
-    throw new CliError('import 需要至少一个候选 id，可先运行 harness-switch scan 查看');
+    throw new CliError(cliText('cli.error.importNeedsId'));
   }
   const target = hasFlag(flags, 'vault') ? 'vault' : 'profile';
   const name = flagValue(flags, 'name');
   if (name && positional.length > 1) {
-    throw new CliError('--name 只能用于单条导入');
+    throw new CliError(cliText('cli.error.nameSingleImportOnly'));
   }
   const apiKey = credentialFromFlags(flags);
   const overwrite = hasFlag(flags, 'overwrite');
@@ -458,12 +478,16 @@ async function cmdImport(
     printJson(payload);
   } else {
     console.log(
-      `导入=${payload.imported} 跳过=${payload.skipped} 新建Vault条目=${payload.providersCreated}`,
+      cliText('cli.output.importCounts', {
+        imported: payload.imported,
+        skipped: payload.skipped,
+        providers: payload.providersCreated,
+      }),
     );
     for (const warning of payload.warnings) {
       console.log(`warning: ${warningText(warning)}`);
     }
-    console.log('工具本身的配置文件未被修改；需要生效请再执行 activate。');
+    console.log(cliText('cli.output.importNote'));
   }
   return payload.skipped > 0 && payload.imported === 0 ? 1 : 0;
 }
@@ -472,14 +496,14 @@ function credentialFromFlags(flags: CliFlags): string {
   const inline = flagValue(flags, 'api-key');
   const envName = flagValue(flags, 'api-key-env');
   if (inline && envName) {
-    throw new CliError('--api-key 与 --api-key-env 不能同时使用');
+    throw new CliError(cliText('cli.error.apiKeyConflict'));
   }
   if (!envName) {
     return inline;
   }
   const value = process.env[envName];
   if (!value) {
-    throw new CliError(`环境变量 ${envName} 未设置或为空`);
+    throw new CliError(cliText('cli.error.envVarUnset', { name: envName }));
   }
   return value;
 }
@@ -493,7 +517,7 @@ async function confirmMutation(
     return true;
   }
   if (!stdin.isTTY) {
-    throw new CliError('非交互式终端需要 --yes 确认此操作');
+    throw new CliError(cliText('cli.error.confirmNeedsTty'));
   }
   const readline = createInterface({ input: stdin, output: stdout });
   const answer = (await readline.question(prompt)).trim().toLowerCase();
@@ -504,7 +528,7 @@ async function confirmMutation(
   if (json === 'json') {
     printJson({ cancelled: true });
   } else {
-    console.log('已取消');
+    console.log(cliText('cli.output.cancelled'));
   }
   return false;
 }
@@ -528,7 +552,13 @@ async function cmdUndo(client: CliClient, positional: string[], json: OutputMode
     printJson(payload);
   } else {
     const { receipt } = payload;
-    console.log(`已撤销 ${receipt.kind} ${receipt.harness}/${receipt.profile}`);
+    console.log(
+      cliText('cli.output.undone', {
+        kind: receipt.kind,
+        harness: receipt.harness,
+        profile: receipt.profile,
+      }),
+    );
   }
   return 0;
 }

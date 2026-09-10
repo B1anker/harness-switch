@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { VALIDATION_CODES } from './errors';
 import { HARNESS_IDS } from './harnesses';
 import { modelFavoriteLinkSchema, modelFavoriteSchema } from './model-favorites';
 
@@ -21,6 +22,8 @@ const MAX_KEY = 4096;
 const MAX_EXTRA_VALUE = 4096;
 /** An override is a whole config file the user took over, so it needs real headroom. */
 const MAX_OVERRIDE = 1024 * 1024;
+/** The shortest password a rotation will accept; the server enforces the same floor. */
+const MIN_PASSWORD = 10;
 
 /**
  * The same limits, for the forms that collect these values.
@@ -34,15 +37,16 @@ export const LIMITS = {
   url: MAX_URL,
   notes: MAX_NOTES,
   apiKey: MAX_KEY,
+  minPassword: MIN_PASSWORD,
 } as const;
 
 /** Names become object keys in the store and slugs in backup directory names. */
 const entityName = z
   .string()
   .trim()
-  .min(1, '名称不能为空')
-  .max(MAX_NAME, `名称不能超过 ${MAX_NAME} 个字符`)
-  .refine((value) => !value.includes('/') && !value.includes('\\'), '名称不能包含斜杠');
+  .min(1, VALIDATION_CODES.nameRequired)
+  .max(MAX_NAME, VALIDATION_CODES.nameTooLong)
+  .refine((value) => !value.includes('/') && !value.includes('\\'), VALIDATION_CODES.nameSlash);
 
 const optionalText = (max: number) => z.string().max(max);
 
@@ -69,7 +73,16 @@ export const completionProtocolSchema = z.enum([
 ]);
 
 export const loginRequestSchema = z.object({
-  password: z.string().trim().min(1, 'password 不能为空').max(MAX_KEY),
+  password: z.string().trim().min(1, VALIDATION_CODES.passwordRequired).max(MAX_KEY),
+});
+
+/**
+ * A password rotation. The current password is required even though the caller already
+ * holds a session: a borrowed cookie must not be enough to lock the real owner out.
+ */
+export const changePasswordRequestSchema = z.object({
+  currentPassword: z.string().min(1, VALIDATION_CODES.passwordRequired).max(MAX_KEY),
+  newPassword: z.string().min(1, VALIDATION_CODES.passwordRequired).max(MAX_KEY),
 });
 
 export const createProfileRequestSchema = z.object({
@@ -93,12 +106,15 @@ export const providerEndpointRequestSchema = z.object({
   key: z
     .string()
     .trim()
-    .min(1, 'endpoint key 不能为空')
-    .max(MAX_ENDPOINT_KEY, 'endpoint key 过长')
-    .refine((value) => !value.includes('/') && !value.includes('\\'), 'endpoint key 不能包含斜杠'),
+    .min(1, VALIDATION_CODES.endpointKeyRequired)
+    .max(MAX_ENDPOINT_KEY, VALIDATION_CODES.endpointKeyTooLong)
+    .refine(
+      (value) => !value.includes('/') && !value.includes('\\'),
+      VALIDATION_CODES.endpointKeySlash,
+    ),
   /** Falls back to the key when absent, which is what the vault service does. */
   label: optionalText(MAX_NAME).optional(),
-  baseUrl: z.string().trim().min(1, 'endpoint 需要 baseUrl').max(MAX_URL),
+  baseUrl: z.string().trim().min(1, VALIDATION_CODES.endpointBaseUrlRequired).max(MAX_URL),
 });
 
 /** Endpoint keys are referenced by profiles, so a duplicate would be unresolvable. */
@@ -107,12 +123,12 @@ const endpointListSchema = z
   .max(50)
   .refine(
     (endpoints) => new Set(endpoints.map((endpoint) => endpoint.key)).size === endpoints.length,
-    'endpoint key 不能重复',
+    VALIDATION_CODES.endpointKeyDuplicate,
   );
 
 export const createProviderRequestSchema = z.object({
   name: entityName,
-  apiKey: z.string().min(1, 'apiKey 不能为空').max(MAX_KEY),
+  apiKey: z.string().min(1, VALIDATION_CODES.apiKeyRequired).max(MAX_KEY),
   endpoints: endpointListSchema.optional(),
   notes: optionalText(MAX_NOTES).optional(),
 });
@@ -126,7 +142,7 @@ export const updateProviderRequestSchema = z.object({
 });
 
 export const userSyncRequestSchema = z.object({
-  sourceUser: z.string().trim().min(1, '来源用户不能为空').max(MAX_NAME),
+  sourceUser: z.string().trim().min(1, VALIDATION_CODES.sourceUserRequired).max(MAX_NAME),
   conflictPolicy: conflictPolicySchema.optional(),
   overwriteHarnesses: z.array(harnessIdSchema).optional(),
   migrateCodexLoginCache: z.boolean().optional(),
@@ -174,8 +190,14 @@ const portableProviderId = z
   .string()
   .min(1)
   .max(64)
-  .refine((value) => !value.includes('/') && !value.includes('\\'), 'provider id 不能包含斜杠')
-  .refine((value) => value !== '__proto__' && value !== 'constructor', 'provider id 不合法');
+  .refine(
+    (value) => !value.includes('/') && !value.includes('\\'),
+    VALIDATION_CODES.providerIdSlash,
+  )
+  .refine(
+    (value) => value !== '__proto__' && value !== 'constructor',
+    VALIDATION_CODES.providerIdReserved,
+  );
 
 const portableProviderSchema = z.object({
   id: portableProviderId,
@@ -254,7 +276,10 @@ export const scanImportSelectionSchema = z.object({
 });
 
 export const scanImportRequestSchema = z.object({
-  selections: z.array(scanImportSelectionSchema).min(1, '请至少选择一条配置').max(200),
+  selections: z
+    .array(scanImportSelectionSchema)
+    .min(1, VALIDATION_CODES.selectionRequired)
+    .max(200),
 });
 
 /**
@@ -263,7 +288,7 @@ export const scanImportRequestSchema = z.object({
  * to be saved before it can be tested.
  */
 export const probeRequestSchema = z.object({
-  baseUrl: z.string().trim().min(1, 'baseUrl 不能为空').max(MAX_URL),
+  baseUrl: z.string().trim().min(1, VALIDATION_CODES.baseUrlRequired).max(MAX_URL),
   apiKey: optionalText(MAX_KEY).optional(),
   providerId: optionalText(MAX_NAME).optional(),
   /** Also send one minimal completion, which is the only proof a model really answers. */
@@ -296,7 +321,7 @@ export const gitHubDevicePollRequestSchema = z.object({
 });
 
 export const gitHubTokenAuthRequestSchema = z.object({
-  token: z.string().trim().min(1, 'Token 不能为空').max(500),
+  token: z.string().trim().min(1, VALIDATION_CODES.tokenRequired).max(500),
 });
 
 export const gitHubPushRequestSchema = z.object({
@@ -318,6 +343,7 @@ export const gitHubPullRequestSchema = z.object({
 });
 
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
+export type ChangePasswordRequest = z.infer<typeof changePasswordRequestSchema>;
 export type CreateProfileRequest = z.infer<typeof createProfileRequestSchema>;
 export type UpdateProfileRequest = z.infer<typeof updateProfileRequestSchema>;
 export type ProviderEndpointRequest = z.infer<typeof providerEndpointRequestSchema>;
@@ -338,15 +364,33 @@ export type GitHubPushRequestSchemaType = z.infer<typeof gitHubPushRequestSchema
 export type GitHubPullPreviewRequestSchemaType = z.infer<typeof gitHubPullPreviewRequestSchema>;
 export type GitHubPullRequestSchemaType = z.infer<typeof gitHubPullRequestSchema>;
 
+/** One rejected field: where it was and which catalog code says why. */
+export type SchemaIssue = {
+  /** Dotted path to the field, empty for a whole-body failure. */
+  path: string;
+  /** A `VALIDATION_CODES` entry when the schema set one, else Zod's own prose. */
+  code: string;
+};
+
 /**
- * Flattens a failure into one line naming the offending fields, which is what both the
- * CLI and the toast in the web UI show.
+ * The offending fields, as codes rather than prose.
+ *
+ * Both clients render this, so the reason has to survive translation. Zod's built-in
+ * messages (a type mismatch, an unparsable literal) have no code of their own and pass
+ * through as-is: they name a shape the UI never offers, so they only ever reach a
+ * developer holding a hand-written request.
  */
-export function formatSchemaError(error: z.ZodError): string {
-  const parts = error.issues.slice(0, 3).map((issue) => {
-    const path = issue.path.join('.');
-    return path ? `${path}: ${issue.message}` : issue.message;
-  });
-  const suffix = error.issues.length > parts.length ? ` 等 ${error.issues.length} 处` : '';
-  return `请求数据无效（${parts.join('；')}${suffix}）`;
+export function schemaIssues(error: z.ZodError): SchemaIssue[] {
+  return error.issues.map((issue) => ({
+    path: issue.path.join('.'),
+    code: issue.message,
+  }));
+}
+
+/** The dotted field paths of a failure, for the `fields` interpolation. */
+export function schemaFields(error: z.ZodError): string {
+  return schemaIssues(error)
+    .map((issue) => issue.path)
+    .filter(Boolean)
+    .join(', ');
 }

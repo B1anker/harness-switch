@@ -4,6 +4,7 @@ import { registerAssetRoutes } from './http/assets';
 import { registerErrorHandlers } from './http/error-handler';
 import { createLocalizeMiddleware } from './http/localize';
 import { createAuthGuard, createOriginGuard } from './http/middleware';
+import { createAuditRoutes } from './http/routes/audit';
 import { createAuthRoutes } from './http/routes/auth';
 import { createBackupRoutes } from './http/routes/backups';
 import { createDoctorRoutes } from './http/routes/doctor';
@@ -75,6 +76,7 @@ export function createApp(services: InstantiationService): Hono {
   guarded('/probe', createProbeRoutes(services));
   guarded('/doctor', createDoctorRoutes(services));
   guarded('/drift', createDriftRoutes(services));
+  guarded('/audit', createAuditRoutes(services));
   app.route('/api', api);
 
   registerAssetRoutes(app, environment.publicDir);

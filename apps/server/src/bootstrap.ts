@@ -1,6 +1,7 @@
 import { InstantiationService, ServiceCollection, SyncDescriptor } from './di';
 import { ActivationService, IActivationService } from './services/activation';
 import { AdapterRegistry, IAdapterRegistry } from './services/adapters';
+import { AuditService, IAuditService } from './services/audit';
 import { AuthService, IAuthService } from './services/auth';
 import { BackupService, IBackupService } from './services/backup';
 import { CodexLoginCacheService, ICodexLoginCacheService } from './services/codex-login-cache';
@@ -51,6 +52,8 @@ export function createServices(): InstantiationService {
   collection.set(ICryptoService, new SyncDescriptor(CryptoService));
   collection.set(IHttpClient, new SyncDescriptor(HttpClient));
   collection.set(IVersionService, new SyncDescriptor(VersionService));
+  // Written from the login path, so it cannot wait for a first guarded request.
+  collection.set(IAuditService, new SyncDescriptor(AuditService));
 
   // Identity: the session guard runs ahead of every guarded route, so auth and the user
   // list stay eager. Provisioning and cross-account sync are their own routes.

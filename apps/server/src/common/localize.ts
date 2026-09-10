@@ -27,9 +27,6 @@ export function localizeMessage(language: Language, code: string, data?: Message
   );
 }
 
-/** @deprecated Use {@link localizeMessage}; kept for the error-handler call sites. */
-export const localizeError = localizeMessage;
-
 function getPath(value: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((current, key) => {
     if (typeof current !== 'object' || current === null || Array.isArray(current)) {
