@@ -1,5 +1,5 @@
 import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
-import { ChevronDown, Loader2, Network, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { ChevronDown, Network, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { ConnectionCatalogStatus } from './connection-catalog-status';
 import { ConnectionSettings } from './connection-settings';
 import { FavoriteSelect } from './fields';
 import { presetProtocolForUrl } from './preset-connections';
@@ -202,6 +203,14 @@ export function ConnectionCard({
                 />
               )}
             </FormField>
+            <ConnectionCatalogStatus
+              catalog={catalog}
+              loading={loading}
+              failed={failed}
+              disabled={disabled || !provider || !connection.endpointKey}
+              hasHints={!!modelHints?.length}
+              onRefresh={() => void retry()}
+            />
             {models?.some((model) => model.requestModelId) ? (
               <div className="mt-3 rounded-lg bg-primary/[0.035] p-2">
                 {models
@@ -244,38 +253,6 @@ export function ConnectionCard({
             ) : null}
           </div>
         </div>
-        {loading ? (
-          <p role="status" className="flex items-center gap-1.5 text-muted-foreground text-xs">
-            <Loader2 className="size-3.5 animate-spin" />
-            {t('favorites.catalogLoading')}
-          </p>
-        ) : failed || (catalog && catalog.ok === false) ? (
-          <p
-            role="status"
-            className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs"
-          >
-            {t(
-              modelHints?.length
-                ? 'favorites.catalogFallbackAvailable'
-                : 'favorites.catalogAutoFailed',
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-1.5 text-primary text-xs"
-              disabled={disabled || loading}
-              onClick={() => void retry()}
-            >
-              {t('favorites.catalogRetry')}
-            </Button>
-          </p>
-        ) : catalog && !models ? (
-          <p role="status" className="text-muted-foreground text-xs">
-            {catalog.models?.length
-              ? t('favorites.catalogCount', { count: catalog.models.length })
-              : t('favorites.noCatalogManual')}
-          </p>
-        ) : null}
         <ConnectionSettings
           connection={connection}
           endpoint={provider?.endpoints.find((endpoint) => endpoint.key === connection.endpointKey)}

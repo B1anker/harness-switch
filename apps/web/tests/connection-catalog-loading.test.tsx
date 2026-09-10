@@ -18,6 +18,42 @@ function setup() {
   return connection;
 }
 
+test('multi-model picker refreshes a cached remote catalog without replacing selected models', async () => {
+  const connection = setup();
+  const onModelsChange = rs.fn();
+  setStoreState({
+    favoriteCatalogs: { 'openrouter/main': { ok: true, models: ['cached/model'] } },
+  });
+  const requests: unknown[] = [];
+  stubFetch((_url, init) => {
+    requests.push(JSON.parse(init.body as string));
+    return { result: { ok: true, models: ['remote/one', 'remote/two'] } };
+  });
+  renderWithI18n(
+    <ConnectionCard
+      connection={connection}
+      models={[connection]}
+      index={0}
+      disabled={false}
+      onChange={() => undefined}
+      onModelsChange={onModelsChange}
+      onRemove={() => undefined}
+    />,
+  );
+  expect(requests).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: '刷新模型列表' }));
+  await screen.findByText(/目录中有 2 个模型/);
+  expect(requests).toEqual([{ endpoint: 'main', completion: false }]);
+  expect(onModelsChange).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('combobox', { name: '模型（可多选）' }));
+  expect(await screen.findByRole('option', { name: 'remote/one' })).toBeVisible();
+  expect(screen.getByRole('option', { name: 'remote/two' })).toBeVisible();
+  expect(screen.getByRole('option', { name: connection.requestModelId })).toBeVisible();
+  expect(screen.queryByRole('option', { name: 'cached/model' })).toBeNull();
+  fireEvent.click(screen.getByRole('option', { name: 'remote/two' }));
+  expect(onModelsChange).toHaveBeenCalledWith([connection.requestModelId, 'remote/two']);
+});
+
 test('StrictMode cleanup does not leave the catalog loading after the next request succeeds', async () => {
   const connection = setup();
   const signals: AbortSignal[] = [];

@@ -1255,7 +1255,7 @@
     "modelEmpty": "Enter a model ID to add it, or load the provider catalog first.",
     "modelCustom": "Use “{{value}}”",
     "catalogLoad": "Load catalog",
-    "catalogRefresh": "Refresh catalog",
+    "catalogRefresh": "Refresh model list",
     "catalogLoading": "Loading model list…",
     "catalogCount": "{{count}} catalog models available to search above.",
     "noCatalogManual": "No catalog available. You can still enter a model ID.",
