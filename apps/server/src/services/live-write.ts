@@ -91,7 +91,7 @@ export class LiveWriteService implements ILiveWriteService {
   }
 
   transaction<T>(plan: OperationPlan, operation: () => T): T {
-    if (plan.metadata?.includes('favorites')) {
+    if (plan.metadata?.includes('favorites') || plan.metadata?.includes('toolModels')) {
       return this.favoriteBackups.protect('change', () => this.execute(plan, operation));
     }
     return this.execute(plan, operation);

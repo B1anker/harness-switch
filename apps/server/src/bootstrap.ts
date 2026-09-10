@@ -30,6 +30,7 @@ import { IProfileService, ProfileService } from './services/profiles';
 import { IProviderService, ProviderService } from './services/provider';
 import { HarnessRegistry, IHarnessRegistry } from './services/registry';
 import { IScanService, ScanService } from './services/scan';
+import { IToolModelsService, ToolModelsService } from './services/tool-models';
 import { ITransferService, TransferService } from './services/transfer';
 import { IUpdateService, UpdateService } from './services/update';
 import { IUserAccessService, UserAccessService } from './services/user-access';
@@ -84,6 +85,7 @@ export function createServices(): InstantiationService {
     new SyncDescriptor(ModelFavoriteApplyService, [], DELAYED),
   );
   collection.set(IModelFavoriteStore, new SyncDescriptor(ModelFavoriteStore, [], DELAYED));
+  collection.set(IToolModelsService, new SyncDescriptor(ToolModelsService, [], DELAYED));
   collection.set(IFavoriteBackupService, new SyncDescriptor(FavoriteBackupService, [], DELAYED));
 
   // Orchestration: multi-service workflows, each behind a single route family.

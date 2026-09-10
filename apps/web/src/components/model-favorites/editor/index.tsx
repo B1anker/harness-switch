@@ -8,14 +8,8 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { TabList, TabPanel } from '@/components/ui/tabs';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { TabPanel } from '@/components/ui/tabs';
 import { isCrossFieldIssue, locateFavoriteIssues } from '@/lib/favorite-validation';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
@@ -24,6 +18,8 @@ import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 import { DiscardDraftDialog } from '../discard-draft-dialog';
 import { FavoriteCapabilities } from './capabilities';
 import { FavoriteConnections } from './connections';
+import { EditorHeader } from './header';
+import { ToolBindings } from './tool-bindings';
 
 import { useFavoriteDraft } from './use-favorite-draft';
 
@@ -76,10 +72,12 @@ export function FavoriteEditor({
     openVault,
     addConnection,
     update,
+    selectModels,
     inferredFacts,
     dirty,
   } = useFavoriteDraft(favorite ?? initialDraft, modelHints, hintFacts);
   const [tab, setTab] = useState('connections');
+  const [modelSettings, setModelSettings] = useState<string>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -141,14 +139,19 @@ export function FavoriteEditor({
             ),
         ) || Object.values(all.cards).includes('favorites.validation.duplicateConnection');
       setTab(
-        connectionError || all.fields['favorite-name'] || all.fields['favorite-notes']
+        connectionError ||
+          all.fields['favorite-name'] ||
+          all.fields['favorite-notes'] ||
+          result.error.issues.some((issue) =>
+            ['defaultConnectionId', 'toolBindings'].includes(String(issue.path[0])),
+          )
           ? 'connections'
           : 'capabilities',
       );
       setError(
         Object.keys(all.fields).length || Object.keys(all.cards).length
           ? ''
-          : t('favorites.invalid'),
+          : t(all.global[0] ?? 'favorites.invalid'),
       );
       return;
     }
@@ -181,39 +184,45 @@ export function FavoriteEditor({
   return (
     <>
       <Dialog open onOpenChange={(open) => !open && requestClose()}>
-        <DialogContent className="flex h-[min(820px,90dvh)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="shrink-0 border-b px-6 py-5 pr-12">
-            <DialogTitle>{t(favorite ? 'favorites.edit' : 'favorites.add')}</DialogTitle>
-            <DialogDescription>{t('favorites.declared')}</DialogDescription>
-          </DialogHeader>
-          <TabList
-            idPrefix="favorite-editor"
-            label={t('favorites.editorSections')}
-            items={[{ id: 'connections' }, { id: 'capabilities' }]}
-            value={tab}
-            onChange={setTab}
-            className="flex shrink-0 gap-2 border-b px-6 py-3"
-            tabClassName="px-4 py-2 text-sm font-medium"
-          >
-            {(item) =>
-              t(item.id === 'connections' ? 'favorites.connectionTab' : 'favorites.capabilitiesTab')
-            }
-          </TabList>
+        <DialogContent className="flex h-[min(960px,94dvh)] w-[96vw] max-w-7xl flex-col gap-0 overflow-hidden p-0">
+          <EditorHeader
+            editing={!!favorite}
+            draft={draft}
+            setDraft={setDraft}
+            tab={tab}
+            setTab={setTab}
+            busy={busy}
+            error={fieldErrors['favorite-name']}
+          />
           <fieldset disabled={busy} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5">
             <div hidden={tab !== 'connections'}>
-              <TabPanel idPrefix="favorite-editor" value="connections" className="space-y-5">
-                <FavoriteConnections
-                  draft={draft}
-                  setDraft={setDraft}
-                  providers={providers}
-                  busy={busy}
-                  fieldErrors={fieldErrors}
-                  cardErrors={cardErrors}
-                  modelHints={modelHints}
-                  openVault={openVault}
-                  update={update}
-                  addConnection={addConnection}
-                />
+              <TabPanel
+                idPrefix="favorite-editor"
+                value="connections"
+                className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]"
+              >
+                <div className="min-w-0 space-y-3">
+                  <FavoriteConnections
+                    draft={draft}
+                    setDraft={setDraft}
+                    providers={providers}
+                    busy={busy}
+                    fieldErrors={fieldErrors}
+                    cardErrors={cardErrors}
+                    modelHints={modelHints}
+                    openVault={openVault}
+                    update={update}
+                    addConnection={addConnection}
+                    selectModels={selectModels}
+                    onModelSettings={(id) => {
+                      setModelSettings(id);
+                      setTab('capabilities');
+                    }}
+                  />
+                </div>
+                <div className="min-w-0 border-t pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+                  <ToolBindings draft={draft} setDraft={setDraft} />
+                </div>
               </TabPanel>
             </div>
             <div hidden={tab !== 'capabilities'}>
@@ -225,11 +234,12 @@ export function FavoriteEditor({
                   inferredFacts={inferredFacts}
                   fieldErrors={fieldErrors}
                   cardErrors={cardErrors}
+                  focusConnectionId={modelSettings}
                 />
               </TabPanel>
             </div>
           </fieldset>
-          <div className="shrink-0 space-y-3 border-t bg-muted/20 px-6 py-4">
+          <div className="shrink-0 space-y-3 border-t bg-muted/20 px-6 py-3">
             {error ? (
               <p role="alert" className="text-destructive">
                 {error}

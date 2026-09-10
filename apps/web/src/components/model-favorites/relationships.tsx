@@ -23,7 +23,9 @@ export function FavoriteRelationships({
   const harnesses = useAppStore((state) => state.harnesses);
   const providers = useAppStore((state) => state.providers);
   const { targets, loading, error } = useFavoriteTargets(favorite);
-  const [channel, setChannel] = useState(favorite.connections[0]?.id);
+  const [channel, setChannel] = useState(
+    favorite.defaultConnectionId ?? favorite.connections[0]?.id,
+  );
   const [mode, setMode] = useState<'save' | 'activate'>('activate');
   const connection = favorite.connections.find((entry) => entry.id === channel);
   const status = (harness: HarnessSummary) => {
@@ -56,12 +58,13 @@ export function FavoriteRelationships({
       flowNode(entry.id, 24, middle - ((favorite.connections.length - 1) * 88) / 2 + index * 88, {
         kind: 'source',
         label: entry.label,
-        value:
-          providers?.find((provider) => provider.id === entry.providerId)?.name ??
-          t('workspace.missingProvider'),
+        value: entry.groupId
+          ? entry.requestModelId
+          : (providers?.find((provider) => provider.id === entry.providerId)?.name ??
+            t('workspace.missingProvider')),
         selected: entry.id === channel,
         action: () => setChannel(entry.id),
-        actionLabel: entry.label + ' · ' + entry.protocol,
+        actionLabel: entry.label + ' · ' + (entry.groupId ? entry.requestModelId : entry.protocol),
       }),
     ),
     flowNode('model', 260, middle, {

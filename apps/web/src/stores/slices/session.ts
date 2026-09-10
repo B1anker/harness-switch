@@ -25,6 +25,11 @@ export type SessionSlice = {
 
 /** Everything a user switch or a sign-out invalidates, since both start from scratch. */
 const USER_SCOPED: Partial<AppState> = {
+  toolModels: [],
+  toolModelsDrafts: {},
+  toolModelsPreview: null,
+  toolModelsLoading: false,
+  toolModelsError: null,
   favoriteCatalogs: {},
   favoriteBackups: [],
   favoriteBackupPreview: null,

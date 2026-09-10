@@ -2,7 +2,9 @@ import type { HarnessId, HarnessSummary } from '@seaveyon/harness-switch-shared'
 import { HarnessIcon } from '@/components/harness-icon';
 import { TabList } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
+import { profileDisplayName, profileGroups } from '@/lib/profile-groups';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/stores/app-store';
 
 export function HarnessTabs({
   harnesses,
@@ -14,6 +16,7 @@ export function HarnessTabs({
   onChange: (id: HarnessId) => void;
 }) {
   const { t } = useTranslation();
+  const favorites = useAppStore((state) => state.favorites);
 
   return (
     <TabList
@@ -29,7 +32,12 @@ export function HarnessTabs({
       {(harness, selected) => {
         const activeLabel = harness.active?.official
           ? t('harness.official')
-          : (harness.active?.name ?? null);
+          : (profileDisplayName(
+              harness.profiles.find((profile) => profile.name === harness.active?.name),
+              favorites,
+            ) ??
+            harness.active?.name ??
+            null);
         return (
           <>
             <span
@@ -51,7 +59,7 @@ export function HarnessTabs({
               </span>
             </span>
             <span className="font-mono text-[11px] text-muted-foreground">
-              {harness.profiles.length}
+              {profileGroups(harness).length}
             </span>
           </>
         );

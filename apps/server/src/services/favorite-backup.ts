@@ -188,6 +188,7 @@ export class FavoriteBackupService implements IFavoriteBackupService {
           path: target.path,
         })),
       ),
+      { key: 'store/toolModels', path: this.environment.files.toolModels },
     ];
   }
 
@@ -220,6 +221,10 @@ export class FavoriteBackupService implements IFavoriteBackupService {
     try {
       const snapshot = snapshotSchema.parse(JSON.parse(this.crypto.decrypt(value)));
       const destinations = this.destinations();
+      // Older checkpoints predate collections; restoring one also clears that newer state.
+      if (snapshot.files.length === destinations.length - 1) {
+        snapshot.files.push({ ...destinations.at(-1)!, content: null });
+      }
       if (
         snapshot.user !== this.environment.dataDir ||
         snapshot.files.length !== destinations.length ||

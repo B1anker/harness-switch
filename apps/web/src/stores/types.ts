@@ -10,6 +10,7 @@ import type { ProbeSlice } from './slices/probe';
 import type { ProviderSlice } from './slices/providers';
 import type { ScanSlice } from './slices/scan';
 import type { SessionSlice } from './slices/session';
+import type { ToolModelsSlice } from './slices/tool-models';
 
 /**
  * The single store the whole app reads. Slices are a way to keep the file sizes honest,
@@ -17,6 +18,7 @@ import type { SessionSlice } from './slices/session';
  * refreshes drift, adopting drift reloads harnesses, and so on.
  */
 export type AppState = FavoriteSlice &
+  ToolModelsSlice &
   SessionSlice &
   HarnessSlice &
   BackupSlice &

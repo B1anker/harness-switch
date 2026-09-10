@@ -9,6 +9,7 @@ import {
   type LocalizedMessage,
   type ModelFavorite,
   portablePayloadSchema,
+  remapFavoriteConnections,
   type TransferConflictPolicy,
   type TransferEnvelope,
   type TransferExportPreview,
@@ -491,15 +492,17 @@ export class TransferService implements ITransferService {
     for (const favorite of payload.favorites ?? []) {
       const id = randomUUID();
       favoriteMap.set(favorite.id, id);
+      const remapped = remapFavoriteConnections(favorite, (oldId) => {
+        const next = randomUUID();
+        connectionMap.set(`${favorite.id}/${oldId}`, next);
+        return next;
+      });
       favorites.push({
-        ...favorite,
+        ...remapped,
         id,
-        connections: favorite.connections.map((connection) => {
-          const connectionId = randomUUID();
-          connectionMap.set(`${favorite.id}/${connection.id}`, connectionId);
+        connections: remapped.connections.map((connection) => {
           return {
             ...connection,
-            id: connectionId,
             providerId: providerMap.get(connection.providerId)!,
           };
         }),

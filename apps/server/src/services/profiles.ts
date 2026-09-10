@@ -238,6 +238,8 @@ export class ProfileService implements IProfileService {
         next.provider_id !== prior.provider_id ||
         next.provider_endpoint !== prior.provider_endpoint ||
         next.base_url !== prior.base_url ||
+        next.extras?.providerId !== prior.extras?.providerId ||
+        next.extras?.modelId !== prior.extras?.modelId ||
         Object.keys(next.overrides ?? {}).length > 0 ||
         Object.keys(link.data.baseline.extras).some(
           (key) => next.extras?.[key] !== prior.extras?.[key],

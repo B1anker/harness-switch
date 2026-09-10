@@ -86,6 +86,8 @@ export interface HarnessAdapter {
 
   /** Add or update an additive entry without changing the harness's current default. */
   renderAvailable?(profile: AdapterProfile, current: CurrentFiles): RenderedFiles;
+  /** Explicit collection registration; independent of legacy save-time synchronization. */
+  renderCollectionModel?(profile: AdapterProfile, current: CurrentFiles): RenderedFiles;
 
   /**
    * Remove this manager's provider routing and return control to the harness's built-in

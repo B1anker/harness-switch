@@ -18,6 +18,7 @@ import {
   favoriteApplyPath,
   favoriteBackupPreviewPath,
   favoriteBackupsPath,
+  favoriteIgnoreUpdatesPath,
   favoritePath,
   favoritePlansPath,
   favoriteSourcePath,
@@ -78,6 +79,7 @@ export type FavoriteSlice = {
   ): Promise<void>;
   planFavorite(request: FavoritePlanRequest): Promise<void>;
   applyFavorite(requestId: string): Promise<FavoriteOperation | undefined>;
+  ignoreFavoriteUpdates(favorite: ModelFavorite): Promise<void>;
   detachFavorite(harness: HarnessId, name: string): Promise<void>;
   clearFavoritePlan(): void;
 };
@@ -314,6 +316,13 @@ export const createFavoriteSlice: Slice<FavoriteSlice> = (set, get) => {
       if (user === get().currentUser && sequence === planRequest) {
         return operation;
       }
+    },
+    ignoreFavoriteUpdates: async (favorite) => {
+      await api(favoriteIgnoreUpdatesPath(favorite.id), {
+        method: 'POST',
+        body: JSON.stringify({ expectedRevision: favorite.revision }),
+      });
+      await Promise.all([get().loadFavorites(), get().loadHarnesses()]);
     },
     detachFavorite: async (harness, name) => {
       const source = await api<{ data: { sourceFingerprint: string } }>(

@@ -746,7 +746,12 @@
     "favoriteCredentialConsentRequired": "需要明确同意将内联密钥存入凭据库",
     "favoriteBackupInvalid": "备份无效、已损坏或配置目录已改变，未恢复。",
     "favoriteBackupRecoveryFailed": "恢复回滚未完成，已暂停配置操作以保护数据。请检查文件权限后重试。",
-    "favoriteBackupStale": "配置在预览后发生变化，请重新检查恢复影响。"
+    "favoriteBackupStale": "配置在预览后发生变化，请重新检查恢复影响。",
+    "toolModelsInvalid": "模型集合文件无法读取，请恢复文件后再编辑。",
+    "toolModelsDefaultRequired": "移除或更换当前默认模型前，请先指定新的默认模型。",
+    "toolModelsConflict": "模型与已有条目冲突。集合中的模型请从工具的可用模型列表管理。",
+    "toolModelsFactsInvalid": "模型的推理设置互相冲突，请检查推理支持、可选档位和所选强度，或恢复跟随模板。",
+    "favoriteReasoningLevelsMissing": "已声明支持推理，但尚未填写支持的档位。本次不写入推理档位，不影响其他配置应用；可在模板的模型参数中补充。"
   },
   "warning": {
     "activation": {
@@ -1251,7 +1256,7 @@
     "modelEmpty": "输入模型 ID 即可添加，也可以先加载供应商目录。",
     "modelCustom": "使用「{{value}}」",
     "catalogLoad": "加载目录",
-    "catalogRefresh": "刷新目录",
+    "catalogRefresh": "刷新模型列表",
     "catalogLoading": "正在获取模型列表…",
     "catalogCount": "目录中有 {{count}} 个模型，可在上方搜索选择。",
     "noCatalogManual": "暂无可用目录，仍可手动输入模型 ID。",
@@ -1300,7 +1305,9 @@
       "connectNext": "下一步：添加模型连接",
       "savedHint": "模板已保存，目前没有关联的工具配置。选择工具并预览后，可保存备用或立即切换。",
       "connectedHint": "模板有更新时，已关联配置不会自动改变。预览并确认后再同步。",
-      "reviewUpdates": "预览待更新配置（{{count}}）"
+      "reviewUpdates": "预览待更新配置（{{count}}）",
+      "ignoreUpdates": "忽略本次更新",
+      "ignoreUpdatesHint": "保留当前配置和模板关联；模板下次变化时仍会提醒。"
     },
     "relationships": {
       "chooseConnection": "选择模型连接",
@@ -1354,7 +1361,66 @@
     "effortPreferenceHint": "从已声明的档位中选择；不指定时沿用工具或服务商的默认行为。",
     "effortUnknownHint": "尚未声明支持的档位，先沿用默认行为；确认档位后再指定偏好。",
     "followDefault": "不指定，沿用默认",
-    "changeProtocol": "更改协议"
+    "changeProtocol": "更改协议",
+    "scheme": {
+      "modelMulti": "模型（可多选）",
+      "defaultModel": "默认模型",
+      "chooseDefault": "选择默认模型",
+      "defaultHint": "首次选择第一个模型；之后由你决定默认模型。",
+      "defaultRemoved": "默认模型已移除，请重新选择。",
+      "toolSettings": "工具适配",
+      "toolHint": "保存各工具的使用方式。",
+      "useConnection": "使用连接",
+      "noCompatible": "请先添加此工具支持的连接和模型。",
+      "default": "统一使用默认模型",
+      "tiers": "按档位分配",
+      "chooseModel": "选择模型",
+      "sameConnection": "同一连接内分配，可重复选择模型。",
+      "allDefault": "全部使用默认模型",
+      "availableModels": "可用模型",
+      "startModel": "启动默认模型",
+      "followTemplate": "跟随模板默认模型",
+      "defaultIncompatible": "默认模型不在可用模型中，请明确选择。",
+      "followModel": "跟随模型设置",
+      "tools": {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "kimi": "Kimi",
+        "dsh": "DSH",
+        "pi": "Pi"
+      },
+      "tier": {
+        "opus": "Opus",
+        "sonnet": "Sonnet",
+        "haiku": "Haiku"
+      },
+      "collectionApplyHint": "将应用模板中为此工具选中的模型，并保留其他模板管理的模型。",
+      "modelSettings": "设置 {{model}} 的参数",
+      "editorHint": "管理连接、模型与各工具的使用方式。",
+      "toggleConnection": "展开或收起连接：{{name}}",
+      "selectedCount": "{{count}} 个模型",
+      "invalidBinding": "工具配置中的模型未选全、已移除或不属于所选连接，请重新选择。",
+      "saveDraft": "保存待应用配置",
+      "draftSaved": "待应用配置已保存，工具当前配置未改变。",
+      "reasoningEffort": "推理强度",
+      "chooseConnection": "选择模型连接",
+      "protocolRequired": "{{tool}} 需要 {{protocol}} 协议，现有连接使用了其他协议。",
+      "addProtocolConnection": "从 {{name}} 添加 {{tool}} 连接",
+      "protocolConnectionHint": "复用账号与模型，新建独立连接。请确认服务商支持所需协议，并检查新连接的地址。",
+      "reviewTool": "已选择 {{tool}}。下一步核对配置、处理冲突并确认保存或切换。",
+      "searchModels": "搜索连接或模型",
+      "filteredSelectionHint": "批量操作只影响当前筛选出的模型。",
+      "groupSelectionCount": "已选 {{selected}} / {{count}}",
+      "collectionProfile": "多模型配置 · {{count}} 个模型",
+      "useCollection": "使用此配置与启动模型",
+      "manageCollection": "管理模板与模型",
+      "missingReasoningCount": "{{count}} 个模型未填写推理档位",
+      "selection": {
+        "all": "全选",
+        "none": "清空",
+        "invert": "反选"
+      }
+    }
   },
   "favorite": {
     "result": "操作完成"
@@ -1526,6 +1592,53 @@
       "scanNote": "用 harness-switch import <id>... 导入；扫描和导入都不会改动工具本身的配置。",
       "undoable": "可撤销",
       "notUndoable": "不可撤销"
+    }
+  },
+  "toolModels": {
+    "title": "可用模型",
+    "hint": "组合多个模型模板，单独选择这个工具的默认模型。",
+    "manage": "管理模型",
+    "loading": "正在加载模型集合…",
+    "retry": "重新加载",
+    "missing": "模板或连接已不存在",
+    "remove": "移除",
+    "connection": "使用的连接",
+    "settings": "为这个工具单独设置",
+    "inheritHint": "默认跟随模型模板和连接；只有修改过的字段才会在这个工具中覆盖。",
+    "reset": "恢复跟随模板和连接",
+    "previewTitle": "确认模型变更",
+    "previewCount": "写入 {{count}} 个模型，移除 {{removed}} 个原有条目。",
+    "defaultChanged": "默认模型：{{name}} · {{model}}",
+    "keepDefault": "保持当前默认模型",
+    "notRepresented": "此工具无法写入这些设置：{{fields}}",
+    "fileChanges": "原生文件变更（已隐藏凭据）",
+    "changed": "有变更",
+    "unchanged": "无变更",
+    "before": "变更前",
+    "after": "变更后",
+    "apply": "应用这些变更",
+    "empty": "尚未选择模型，请从下方添加模板。",
+    "add": "从模板添加（可多选）",
+    "noTemplates": "请先创建包含连接的模型模板。",
+    "default": "应用后的默认模型",
+    "scope": {
+      "kimi": "写入 Kimi Code 配置后，请重启或重新加载工具以读取配置。",
+      "dsh": "默认模型用于新的 DSH 会话，现有会话保持自己的模型选择。"
+    },
+    "save": "仅保存草稿",
+    "preview": "预览应用",
+    "saving": "正在保存草稿…",
+    "previewing": "正在生成预览…",
+    "applying": "正在写入模型配置…",
+    "saved": "草稿已保存，工具配置尚未改变。",
+    "applied": "模型配置已生效。",
+    "appliedCount": "上次已应用 {{count}} 个模型",
+    "draftHint": "当前为保存的草稿，可预览与工具实际配置的差异。",
+    "nativeStatus": {
+      "unknown": "尚无已应用模型可供比较。",
+      "in-sync": "已应用模型与工具原生配置一致。",
+      "drifted": "工具中的模型配置已发生变化，请预览差异后再应用。",
+      "invalid": "暂时无法比较工具配置，请检查文件后重新预览。"
     }
   }
 }

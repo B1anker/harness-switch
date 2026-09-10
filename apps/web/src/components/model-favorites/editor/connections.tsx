@@ -1,12 +1,12 @@
 import type { FavoriteConnection, FavoriteInput } from '@seaveyon/harness-switch-shared';
 import type { Dispatch, SetStateAction } from 'react';
 import { Button } from '@/components/ui/button';
-import { Disclosure } from '@/components/ui/disclosure';
 import { FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useTranslation } from '@/lib/i18n';
 import { ConnectionCard } from '../connection-card';
+import { FavoriteSelect } from '../fields';
+import { modelGroups } from './model-groups';
 
 export function FavoriteConnections({
   draft,
@@ -19,6 +19,8 @@ export function FavoriteConnections({
   openVault,
   update,
   addConnection,
+  onModelSettings,
+  selectModels,
 }: {
   draft: FavoriteInput;
   setDraft: Dispatch<SetStateAction<FavoriteInput>>;
@@ -30,50 +32,49 @@ export function FavoriteConnections({
   openVault(id: string | null): void;
   update(id: string, patch: Partial<FavoriteConnection>): void;
   addConnection(): void;
+  onModelSettings?(id: string): void;
+  selectModels(group: FavoriteConnection[], models: string[]): void;
 }) {
   const { t } = useTranslation();
   return (
     <>
-      <FormField
-        id="favorite-name"
-        label={t('favorites.name')}
-        error={fieldErrors['favorite-name']}
-      >
-        {(control) => (
-          <Input
-            {...control}
-            maxLength={120}
-            placeholder={draft.connections[0]?.requestModelId || t('favorites.autoName')}
-            value={draft.name}
-            onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-          />
-        )}
-      </FormField>
       <div className="flex items-baseline gap-2">
         <h3 className="font-semibold">{t('favorites.connections')}</h3>
         <p className="min-w-0 truncate text-muted-foreground text-xs">
           {t('favorites.channelHint')}
         </p>
       </div>
-      {draft.connections.map((connection, index) => (
-        <ConnectionCard
-          key={connection.id}
-          connection={connection}
-          index={index}
-          disabled={busy}
-          error={cardErrors[connection.id]}
-          fieldErrors={fieldErrors}
-          modelHints={modelHints?.[`${connection.providerId}/${connection.endpointKey}`]}
-          onAddProvider={() => openVault(connection.id)}
-          onChange={(patch) => update(connection.id, patch)}
-          onRemove={() =>
-            setDraft({
-              ...draft,
-              connections: draft.connections.filter((item) => item.id !== connection.id),
-            })
-          }
-        />
-      ))}
+      {modelGroups(draft.connections).map((group, index) => {
+        const connection = group[0]!;
+        return (
+          <ConnectionCard
+            key={connection.id}
+            connection={connection}
+            index={index}
+            disabled={busy}
+            models={group}
+            onModelSettings={onModelSettings}
+            onModelsChange={(models) => selectModels(group, models)}
+            error={cardErrors[connection.id]}
+            fieldErrors={fieldErrors}
+            modelHints={modelHints?.[`${connection.providerId}/${connection.endpointKey}`]}
+            onAddProvider={() => openVault(connection.id)}
+            onChange={(patch) => {
+              for (const item of group) {
+                update(item.id, patch);
+              }
+            }}
+            onRemove={() =>
+              setDraft({
+                ...draft,
+                connections: draft.connections.filter(
+                  (item) => !group.some((entry) => entry.id === item.id),
+                ),
+              })
+            }
+          />
+        );
+      })}
       {!draft.connections.length ? (
         <div className="space-y-3 rounded-xl border border-dashed px-4 py-8 text-center">
           <p className="text-muted-foreground text-sm">{t('favorites.connectionsEmpty')}</p>
@@ -90,34 +91,49 @@ export function FavoriteConnections({
         </div>
       ) : (
         <Button
-          variant="outline"
-          className="w-full border-dashed text-muted-foreground"
+          variant="link"
+          className="h-auto px-0 text-primary"
           disabled={busy || draft.connections.length >= 50}
           onClick={addConnection}
         >
           {t('favorites.addConnection')}
         </Button>
       )}
-      <Disclosure
-        title={t('favorites.notesOptional')}
-        forceOpen={!!fieldErrors['favorite-notes']}
-        triggerClassName="-ml-4"
+      <FavoriteSelect
+        id="favorite-default-model"
+        label={t('favorites.scheme.defaultModel')}
+        value={draft.defaultConnectionId ?? ''}
+        placeholder={t('favorites.scheme.chooseDefault')}
+        hint={t('favorites.scheme.defaultHint')}
+        options={draft.connections
+          .filter((connection) => connection.requestModelId)
+          .map((connection) => ({
+            value: connection.id,
+            label: `${connection.label || providers.find((provider) => provider.id === connection.providerId)?.name || ''} / ${connection.requestModelId}`,
+          }))}
+        onChange={(defaultConnectionId) => setDraft({ ...draft, defaultConnectionId })}
+        error={
+          draft.defaultConnectionId &&
+          !draft.connections.some((connection) => connection.id === draft.defaultConnectionId)
+            ? t('favorites.scheme.defaultRemoved')
+            : undefined
+        }
+      />
+      <FormField
+        id="favorite-notes"
+        label={t('favorites.notesOptional')}
+        error={fieldErrors['favorite-notes']}
       >
-        <FormField
-          id="favorite-notes"
-          label={t('favorites.notes')}
-          error={fieldErrors['favorite-notes']}
-        >
-          {(control) => (
-            <Textarea
-              {...control}
-              maxLength={4096}
-              value={draft.notes}
-              onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-            />
-          )}
-        </FormField>
-      </Disclosure>
+        {(control) => (
+          <Textarea
+            {...control}
+            className="min-h-16"
+            maxLength={4096}
+            value={draft.notes}
+            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+          />
+        )}
+      </FormField>
     </>
   );
 }

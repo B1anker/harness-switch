@@ -7,6 +7,10 @@
  * know yet. Renaming a code is a breaking change; add a new one instead.
  */
 export const ERROR_CODES = {
+  toolModelsFactsInvalid: 'toolModelsFactsInvalid',
+  toolModelsInvalid: 'toolModelsInvalid',
+  toolModelsDefaultRequired: 'toolModelsDefaultRequired',
+  toolModelsConflict: 'toolModelsConflict',
   favoriteNotFound: 'favoriteNotFound',
   favoriteRevisionRequired: 'favoriteRevisionRequired',
   favoriteRevisionConflict: 'favoriteRevisionConflict',
@@ -24,6 +28,7 @@ export const ERROR_CODES = {
   favoriteUndoConflict: 'favoriteUndoConflict',
   favoritePreferenceNotRepresented: 'favoritePreferenceNotRepresented',
   favoriteEffortUnverified: 'favoriteEffortUnverified',
+  favoriteReasoningLevelsMissing: 'favoriteReasoningLevelsMissing',
   favoriteEffortMapped: 'favoriteEffortMapped',
   favoriteEffortUnset: 'favoriteEffortUnset',
   favoriteStoreInvalid: 'favoriteStoreInvalid',

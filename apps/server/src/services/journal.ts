@@ -27,6 +27,7 @@ const METADATA_KEYS = [
   'active',
   'vault',
   'favorites',
+  'toolModels',
 ] as const satisfies readonly OperationMetadataKey[];
 
 const OPERATION_KINDS = [
