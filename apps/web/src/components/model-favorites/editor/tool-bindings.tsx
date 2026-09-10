@@ -6,12 +6,12 @@ import {
 } from '@seaveyon/harness-switch-shared';
 import { type Dispatch, type SetStateAction, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { TabList, TabPanel } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { FavoriteSelect } from '../fields';
 import { modelGroups } from './model-groups';
+import { ModelSelectionGroups } from './model-selection-groups';
 import { ToolConnectionPicker } from './tool-connection-picker';
 
 export function ToolBindings({
@@ -149,27 +149,11 @@ export function ToolBindings({
                 ) : null}
               </>
             ) : (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium">{t('favorites.scheme.availableModels')}</h4>
-                {candidates.map((entry) => (
-                  <label key={entry.id} className="flex items-center gap-3 py-1 text-sm">
-                    <Checkbox
-                      checked={selectedIds.includes(entry.id)}
-                      onCheckedChange={(checked) =>
-                        change({
-                          modelIds: checked
-                            ? [...selectedIds, entry.id]
-                            : selectedIds.filter((id) => id !== entry.id),
-                        })
-                      }
-                    />
-                    <span className="break-all font-mono">
-                      {multi ? `${entry.label} / ` : ''}
-                      {entry.requestModelId}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <ModelSelectionGroups
+                connections={candidates}
+                selectedIds={selectedIds}
+                onChange={(modelIds) => change({ modelIds })}
+              />
             )}
             <FavoriteSelect
               id={`binding-${tool}-default`}

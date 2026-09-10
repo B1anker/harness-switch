@@ -750,7 +750,8 @@
     "toolModelsInvalid": "模型集合文件无法读取，请恢复文件后再编辑。",
     "toolModelsDefaultRequired": "移除或更换当前默认模型前，请先指定新的默认模型。",
     "toolModelsConflict": "模型与已有条目冲突。集合中的模型请从工具的可用模型列表管理。",
-    "toolModelsFactsInvalid": "模型的推理设置互相冲突，请检查推理支持、可选档位和所选强度，或恢复跟随模板。"
+    "toolModelsFactsInvalid": "模型的推理设置互相冲突，请检查推理支持、可选档位和所选强度，或恢复跟随模板。",
+    "favoriteReasoningLevelsMissing": "已声明支持推理，但尚未填写支持的档位。本次不写入推理档位，不影响其他配置应用；可在模板的模型参数中补充。"
   },
   "warning": {
     "activation": {
@@ -1406,7 +1407,19 @@
       "protocolRequired": "{{tool}} 需要 {{protocol}} 协议，现有连接使用了其他协议。",
       "addProtocolConnection": "从 {{name}} 添加 {{tool}} 连接",
       "protocolConnectionHint": "复用账号与模型，新建独立连接。请确认服务商支持所需协议，并检查新连接的地址。",
-      "reviewTool": "已选择 {{tool}}。下一步核对配置、处理冲突并确认保存或切换。"
+      "reviewTool": "已选择 {{tool}}。下一步核对配置、处理冲突并确认保存或切换。",
+      "searchModels": "搜索连接或模型",
+      "filteredSelectionHint": "批量操作只影响当前筛选出的模型。",
+      "groupSelectionCount": "已选 {{selected}} / {{count}}",
+      "collectionProfile": "多模型配置 · {{count}} 个模型",
+      "useCollection": "使用此配置与启动模型",
+      "manageCollection": "管理模板与模型",
+      "missingReasoningCount": "{{count}} 个模型未填写推理档位",
+      "selection": {
+        "all": "全选",
+        "none": "清空",
+        "invert": "反选"
+      }
     }
   },
   "favorite": {

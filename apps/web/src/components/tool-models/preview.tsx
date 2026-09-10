@@ -1,4 +1,4 @@
-import { catalogKey, type ToolModelsPreview } from '@seaveyon/harness-switch-shared';
+import { catalogKey, ERROR_CODES, type ToolModelsPreview } from '@seaveyon/harness-switch-shared';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Disclosure } from '@/components/ui/disclosure';
@@ -12,6 +12,9 @@ export function ModelsPreview({
   onApply?(): void;
 }) {
   const { t } = useTranslation();
+  const missingLevels = preview.items.filter((item) =>
+    item.warnings.some((warning) => warning.code === ERROR_CODES.favoriteReasoningLevelsMissing),
+  );
   const selected = preview.items.find((item) => item.id === preview.defaultItemId);
   return (
     <div className="space-y-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
@@ -27,17 +30,25 @@ export function ModelsPreview({
           ? t('toolModels.defaultChanged', { name: selected.name, model: selected.model })
           : t('toolModels.keepDefault')}
       </p>
+      {missingLevels.length ? (
+        <Alert variant="muted">
+          <p>{t('favorites.scheme.missingReasoningCount', { count: missingLevels.length })}</p>
+          <p>{t(catalogKey(ERROR_CODES.favoriteReasoningLevelsMissing))}</p>
+        </Alert>
+      ) : null}
       {preview.items.map((item) => (
         <div key={item.id} className="space-y-1 text-sm">
           <p>
             {item.name} · <span className="font-mono">{item.model}</span>
           </p>
           <p className="text-xs text-muted-foreground">{item.connection}</p>
-          {item.warnings.map((warning, index) => (
-            <Alert key={`${warning.code}-${index}`} variant="warning">
-              {t(catalogKey(warning.code), warning.data)}
-            </Alert>
-          ))}
+          {item.warnings
+            .filter((warning) => warning.code !== ERROR_CODES.favoriteReasoningLevelsMissing)
+            .map((warning, index) => (
+              <Alert key={`${warning.code}-${index}`} variant="warning">
+                {t(catalogKey(warning.code), warning.data)}
+              </Alert>
+            ))}
           {item.notRepresented.length ? (
             <Alert variant="warning">
               {t('toolModels.notRepresented', {

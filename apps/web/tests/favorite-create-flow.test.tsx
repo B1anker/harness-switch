@@ -164,7 +164,9 @@ test('a preset without a vault entry creates it inline and adopts curated model 
   fireEvent.click(await screen.findByRole('option', { name: 'deepseek-reasoner' }));
   fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   const overrides = within(screen.getByRole('region', { name: '按连接单独设置' }));
-  fireEvent.click(overrides.getByRole('button', { name: /deepseek-reasoner/ }));
+  fireEvent.change(overrides.getByRole('textbox', { name: '搜索连接或模型' }), {
+    target: { value: 'deepseek-reasoner' },
+  });
   expect(overrides.getByRole('combobox', { name: '支持推理' })).toHaveTextContent('是');
   expect(overrides.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(128000);
 });

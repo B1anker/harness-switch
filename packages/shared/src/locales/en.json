@@ -750,7 +750,8 @@
     "toolModelsInvalid": "The model collection file is invalid. Restore it before editing.",
     "toolModelsDefaultRequired": "Choose a replacement default before removing or changing the current default model.",
     "toolModelsConflict": "The model conflicts with an existing entry. Manage collection models from the tool model list.",
-    "toolModelsFactsInvalid": "Model reasoning settings conflict. Check reasoning support, supported levels and the selected effort, or restore inheritance."
+    "toolModelsFactsInvalid": "Model reasoning settings conflict. Check reasoning support, supported levels and the selected effort, or restore inheritance.",
+    "favoriteReasoningLevelsMissing": "Reasoning support is declared, but supported effort levels are unspecified. This apply will omit effort levels and still apply other settings. Add supported levels in the template model settings."
   },
   "warning": {
     "activation": {
@@ -1406,7 +1407,19 @@
       "protocolRequired": "{{tool}} requires {{protocol}}; existing connections use another protocol.",
       "addProtocolConnection": "Add a {{tool}} connection from {{name}}",
       "protocolConnectionHint": "Reuse the account and models in a separate connection. Confirm provider support for this protocol and check the new connection URL.",
-      "reviewTool": "Selected {{tool}}. Next, review the configuration, resolve conflicts, and confirm saving or switching."
+      "reviewTool": "Selected {{tool}}. Next, review the configuration, resolve conflicts, and confirm saving or switching.",
+      "searchModels": "Search connections or models",
+      "filteredSelectionHint": "Bulk actions affect only models matching this filter.",
+      "groupSelectionCount": "{{selected}} / {{count}} selected",
+      "collectionProfile": "Multi-model configuration · {{count}} models",
+      "useCollection": "Use configuration and startup model",
+      "manageCollection": "Manage template and models",
+      "missingReasoningCount": "{{count}} models have unspecified reasoning levels",
+      "selection": {
+        "all": "Select all",
+        "none": "Clear",
+        "invert": "Invert"
+      }
     }
   },
   "favorite": {

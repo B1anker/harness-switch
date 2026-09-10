@@ -6,6 +6,7 @@ export function Disclosure({
   title,
   children,
   forceOpen = false,
+  defaultOpen = false,
   summary,
   triggerClassName,
 }: {
@@ -13,12 +14,13 @@ export function Disclosure({
   children: ReactNode;
   /** Pins the section open, e.g. when a validation error lands inside it. */
   forceOpen?: boolean;
+  defaultOpen?: boolean;
   /** Muted text after the title, e.g. the defaults hidden inside while collapsed. */
   summary?: string;
   /** Extra classes on the trigger, e.g. a negative margin to align its text with the page. */
   triggerClassName?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const id = useId();
   const expanded = open || forceOpen;
   return (

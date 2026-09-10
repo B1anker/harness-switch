@@ -134,6 +134,15 @@ export function projectFavorite(
     result.warnings.push({ code: ERROR_CODES.favoriteEffortUnverified });
   }
   for (const field of Object.keys(facts)) {
+    if (
+      id === 'dsh' &&
+      field === 'reasoningSupported' &&
+      facts.reasoningSupported === true &&
+      !facts.supportedReasoningEfforts?.length
+    ) {
+      result.warnings.push({ code: ERROR_CODES.favoriteReasoningLevelsMissing });
+      continue;
+    }
     if (!represented.has(field)) {
       result.notRepresented.push(field);
     }

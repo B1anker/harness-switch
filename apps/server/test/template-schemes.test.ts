@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import {
   createFavoriteRequestSchema,
+  ERROR_CODES,
   type FavoriteInput,
   type ModelFavorite,
   remapFavoriteConnections,
@@ -98,6 +99,19 @@ test('Claude tiers use exact request IDs and reject a mapping across separate co
   expect(adapter.projectFavorite(invalid, invalid.connections[0]!).blockers.length).toBeGreaterThan(
     0,
   );
+});
+
+test('DSH reports unspecified reasoning levels precisely without a generic unsupported capability warning', async () => {
+  const app = await createTestApp();
+  const adapter = app.services.get(IAdapterRegistry).get('dsh');
+  const favorite = scheme();
+  favorite.toolBindings = {};
+  favorite.defaults = { reasoningSupported: true };
+  const result = adapter.projectFavorite(favorite, favorite.connections[0]!);
+  expect(result.blockers).toEqual([]);
+  expect(result.notRepresented).not.toContain('reasoningSupported');
+  expect(result.warnings).toContainEqual({ code: ERROR_CODES.favoriteReasoningLevelsMissing });
+  expect(result.projection.extras.reasoningEfforts).toBeUndefined();
 });
 
 test('Codex writes a model catalog with per-model facts, and official mode stops using it', async () => {
