@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { InstantiationService } from '../src/di';
-import { IUpdateService } from '../src/services/update';
+import { compareVersions, IUpdateService } from '../src/services/update';
 import { IVersionService } from '../src/services/version';
 import {
   createSandbox,
@@ -26,6 +26,35 @@ afterEach(() => {
 /** A fresh container per call, so one test's cached registry answer cannot reach another. */
 const checkForUpdate = (force = false) => createTestServices().get(IUpdateService).check(force);
 const serverVersion = () => services.get(IVersionService).version();
+
+describe('compareVersions', () => {
+  test('orders plain releases numerically, not lexically', () => {
+    expect(compareVersions('1.10.0', '1.9.9')).toBe(1);
+    expect(compareVersions('1.2', '1.2.0')).toBe(0);
+    expect(compareVersions('v2.0.0', '1.99.99')).toBe(1);
+  });
+
+  test('a pre-release is older than its release and never compares as NaN', () => {
+    expect(compareVersions('1.2.0-beta.1', '1.2.0')).toBe(-1);
+    expect(compareVersions('1.2.0', '1.2.0-rc.1')).toBe(1);
+    // The old numeric split turned `0-beta` into NaN, which compared as "not newer" both ways.
+    expect(compareVersions('1.2.0-beta.1', '1.1.9')).toBe(1);
+    expect(compareVersions('1.1.9', '1.2.0-beta.1')).toBe(-1);
+  });
+
+  test('orders pre-release identifiers the way semver does', () => {
+    expect(compareVersions('1.0.0-alpha', '1.0.0-alpha.1')).toBe(-1);
+    expect(compareVersions('1.0.0-alpha.2', '1.0.0-alpha.10')).toBe(-1);
+    expect(compareVersions('1.0.0-alpha.1', '1.0.0-beta')).toBe(-1);
+    expect(compareVersions('1.0.0-beta.11', '1.0.0-rc.1')).toBe(-1);
+    expect(compareVersions('1.0.0-rc.1', '1.0.0-rc.1')).toBe(0);
+  });
+
+  test('ignores build metadata', () => {
+    expect(compareVersions('1.0.0+build.5', '1.0.0')).toBe(0);
+    expect(compareVersions('1.0.0-beta+exp', '1.0.0-beta')).toBe(0);
+  });
+});
 
 describe('UpdateService.check', () => {
   test('reports an update when the registry has a newer version', async () => {

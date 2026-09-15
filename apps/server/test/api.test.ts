@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createCipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type {
   HarnessSummary,
   PreviewResponse,
@@ -9,11 +9,14 @@ import type {
   TransferPreview,
 } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
+import { instanceFingerprint } from '../src/common/instance';
 import {
   asSession,
   createSandbox,
   createTestApp,
+  expectMode,
   loginAgain,
+  POSIX,
   restartApp,
   type Sandbox,
   type TestApp,
@@ -170,6 +173,17 @@ describe('rest api', () => {
     // The two endpoints deliberately outside the guard stay reachable.
     expect((await app.request('/api/version')).status).toBe(200);
     expect((await app.request('/healthz')).status).toBe(200);
+  });
+
+  test('healthz identifies the daemon by a digest and never echoes its token', async () => {
+    const token = 'daemon-secret-token';
+    sandbox.setEnv('HSW_DAEMON_TOKEN', token);
+    const { app } = await createTestApp();
+
+    const response = await app.request('/healthz');
+    const text = await response.text();
+    expect(text).not.toContain(token);
+    expect(JSON.parse(text)).toEqual({ ok: true, instance: instanceFingerprint(token) });
   });
 
   test('issues a session cookie the browser cannot read from script', async () => {
@@ -341,10 +355,52 @@ describe('rest api', () => {
     expect(pi.label).toBe('Pi');
     expect(pi.mode).toBe('additive');
     expect(pi.modelRequired).toBe(true);
+    expect(pi.official).toEqual(
+      expect.objectContaining({ kind: 'account-login', available: false, active: false }),
+    );
     expect(pi.targets.map((target) => target.path)).toEqual([
       sandbox.home('.pi', 'agent', 'models.json'),
       sandbox.home('.pi', 'agent', 'settings.json'),
+      sandbox.home('.pi', 'agent', 'auth.json'),
     ]);
+  });
+
+  test('pi returns to official login once auth.json holds a /login credential', async () => {
+    const context = await createTestApp();
+    await createProfile(context, 'pi', {
+      name: 'glm',
+      baseUrl: 'https://api.z.ai/api/anthropic',
+      apiKey: 'sk-glm',
+      model: 'glm-4.6',
+    });
+    expect((await activate(context, 'pi', 'glm')).status).toBe(200);
+
+    // Without a credential the switch is refused and the pointer stays where it was.
+    const refused = await context.post('/api/harnesses/pi/official/activate');
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ code: ERROR_CODES.officialLoginMissing });
+    expect((await summary(context, 'pi')).active?.name).toBe('glm');
+
+    const authFile = sandbox.home('.pi', 'agent', 'auth.json');
+    await writeFile(authFile, JSON.stringify({ anthropic: { type: 'api_key', key: 'sk-a' } }), {
+      mode: 0o600,
+    });
+    expect((await summary(context, 'pi')).official?.available).toBe(true);
+    expect((await context.post('/api/harnesses/pi/official/activate')).status).toBe(200);
+
+    const pi = await summary(context, 'pi');
+    expect(pi.active?.official).toBe(true);
+    const settings = JSON.parse(
+      await readFile(sandbox.home('.pi', 'agent', 'settings.json'), 'utf8'),
+    );
+    expect(settings.defaultProvider).toBeUndefined();
+    expect(settings.defaultModel).toBeUndefined();
+    // The provider entry survives for the next switch; auth.json is untouched.
+    const models = JSON.parse(await readFile(sandbox.home('.pi', 'agent', 'models.json'), 'utf8'));
+    expect(models.providers.glm.apiKey).toBe('sk-glm');
+    expect(JSON.parse(await readFile(authFile, 'utf8'))).toEqual({
+      anthropic: { type: 'api_key', key: 'sk-a' },
+    });
   });
 
   test('activating pi writes models.json so the official agent can see the provider', async () => {
@@ -717,29 +773,34 @@ describe('rest api', () => {
     expect(claude.active?.name).toBe('main');
   });
 
-  test('refuses to delete an additive profile when its live provider cannot be cleaned up', async () => {
-    const context = await createTestApp();
-    await createProfile(context, 'kimi', {
-      name: 'victim',
-      baseUrl: 'https://api.example.com/v1',
-      apiKey: 'sk-test',
-      model: 'kimi-k2',
-    });
+  // A regular file where the config directory should be is ENOTDIR on POSIX; Windows
+  // reports ENOENT, which reads as "no config yet" and lets the revoke succeed.
+  test.skipIf(!POSIX)(
+    'refuses to delete an additive profile when its live provider cannot be cleaned up',
+    async () => {
+      const context = await createTestApp();
+      await createProfile(context, 'kimi', {
+        name: 'victim',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-test',
+        model: 'kimi-k2',
+      });
 
-    // Block the live config so revoking the provider must fail.
-    const kimiHome = sandbox.home('.kimi-code');
-    await writeFile(kimiHome, 'not a directory');
+      // Block the live config so revoking the provider must fail.
+      const kimiHome = sandbox.home('.kimi-code');
+      await writeFile(kimiHome, 'not a directory');
 
-    const deleted = await context.del('/api/harnesses/kimi/profiles/victim');
-    expect(deleted.status).toBeGreaterThanOrEqual(400);
+      const deleted = await context.del('/api/harnesses/kimi/profiles/victim');
+      expect(deleted.status).toBeGreaterThanOrEqual(400);
 
-    await rm(kimiHome, { force: true });
+      await rm(kimiHome, { force: true });
 
-    // The profile is still there: deletion failed closed instead of leaving an
-    // orphan provider entry behind with no record left to clean it up.
-    const kimi = await summary(context, 'kimi');
-    expect(profileOf(kimi, 'victim').name).toBe('victim');
-  });
+      // The profile is still there: deletion failed closed instead of leaving an
+      // orphan provider entry behind with no record left to clean it up.
+      const kimi = await summary(context, 'kimi');
+      expect(profileOf(kimi, 'victim').name).toBe('victim');
+    },
+  );
 
   test('switching away saves hand edits without wiping fields the live file cannot hold', async () => {
     const context = await createTestApp();
@@ -1085,7 +1146,7 @@ describe('rest api', () => {
       codexLoginCacheMigrated: true,
     });
     expect(await readFile(authPath, 'utf8')).toBe(exportedCache);
-    expect((await stat(authPath)).mode & 0o777).toBe(0o600);
+    expectMode(authPath, 0o600);
 
     const redundant = await context.post('/api/transfer/import', {
       envelope,

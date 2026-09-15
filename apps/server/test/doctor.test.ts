@@ -6,7 +6,7 @@ import type { InstantiationService } from '../src/di';
 import { IActivationService } from '../src/services/activation';
 import { IDoctorService } from '../src/services/doctor';
 import { IProfileService } from '../src/services/profiles';
-import { createSandbox, createTestServices, OFFLINE, type Sandbox } from './support';
+import { createSandbox, createTestServices, OFFLINE, POSIX, type Sandbox } from './support';
 
 let sandbox: Sandbox;
 let services: InstantiationService;
@@ -36,7 +36,12 @@ function doctor() {
 }
 
 function fakeBin(name: string): void {
-  writeFileSync(sandbox.home('bin', name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  // What each platform calls executable: the mode bit on POSIX, a PATHEXT suffix on Windows.
+  if (POSIX) {
+    writeFileSync(sandbox.home('bin', name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  } else {
+    writeFileSync(sandbox.home('bin', `${name}.cmd`), '@exit /b 0\r\n');
+  }
 }
 
 /**
@@ -111,16 +116,19 @@ describe('doctor', () => {
     expect(check?.code).toBe(DOCTOR_CODES.fileMissing);
   });
 
-  test('flags group/other-readable config files as permission warnings', async () => {
-    fakeBin('claude');
-    activateClaude();
-    chmodSync(sandbox.home('.claude', 'settings.json'), 0o644);
-    const report = await doctor().run({ harness: 'claude' });
-    const check = checksOf(report, 'claude', 'claude.files.settings')[0];
-    expect(check?.status).toBe('warn');
-    const detail = check?.detail as { mode?: number } | undefined;
-    expect(detail?.mode).toBe(0o644);
-  });
+  test.skipIf(!POSIX)(
+    'flags group/other-readable config files as permission warnings',
+    async () => {
+      fakeBin('claude');
+      activateClaude();
+      chmodSync(sandbox.home('.claude', 'settings.json'), 0o644);
+      const report = await doctor().run({ harness: 'claude' });
+      const check = checksOf(report, 'claude', 'claude.files.settings')[0];
+      expect(check?.status).toBe('warn');
+      const detail = check?.detail as { mode?: number } | undefined;
+      expect(detail?.mode).toBe(0o644);
+    },
+  );
 
   test('flags an unparsable live file as a parse error', async () => {
     fakeBin('claude');
@@ -131,7 +139,7 @@ describe('doctor', () => {
     expect(check?.status).toBe('error');
   });
 
-  test('reports an unreadable live file without failing the whole run', async () => {
+  test.skipIf(!POSIX)('reports an unreadable live file without failing the whole run', async () => {
     fakeBin('claude');
     mkdirSync(sandbox.home('.claude'), { recursive: true });
     const settings = sandbox.home('.claude', 'settings.json');
@@ -150,7 +158,7 @@ describe('doctor', () => {
     expect(checksOf(report, 'claude', 'claude.install')[0]?.status).toBe('ok');
   });
 
-  test('an unreadable live file does not crash the drift check', async () => {
+  test.skipIf(!POSIX)('an unreadable live file does not crash the drift check', async () => {
     fakeBin('claude');
     activateClaude();
     chmodSync(sandbox.home('.claude', 'settings.json'), 0o000);
@@ -162,18 +170,21 @@ describe('doctor', () => {
     expect(check?.code).toBe('doctor.check.driftInvalid');
   });
 
-  test('a full run survives one unreadable harness and still reports the rest', async () => {
-    mkdirSync(sandbox.home('.claude'), { recursive: true });
-    const settings = sandbox.home('.claude', 'settings.json');
-    writeFileSync(settings, '{}');
-    chmodSync(settings, 0o000);
+  test.skipIf(!POSIX)(
+    'a full run survives one unreadable harness and still reports the rest',
+    async () => {
+      mkdirSync(sandbox.home('.claude'), { recursive: true });
+      const settings = sandbox.home('.claude', 'settings.json');
+      writeFileSync(settings, '{}');
+      chmodSync(settings, 0o000);
 
-    const report = await doctor().run({});
-    expect(report.items.length).toBeGreaterThan(1);
-    for (const item of report.items) {
-      expect(item.checks.length).toBeGreaterThan(0);
-    }
-  });
+      const report = await doctor().run({});
+      expect(report.items.length).toBeGreaterThan(1);
+      for (const item of report.items) {
+        expect(item.checks.length).toBeGreaterThan(0);
+      }
+    },
+  );
 
   test('reports drift against the active profile', async () => {
     fakeBin('claude');

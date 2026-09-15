@@ -94,7 +94,7 @@ Web 界面支持简体中文和英语。可以通过登录页或 Dashboard 顶�
 - **Claude Code** 默认使用 `ANTHROPIC_AUTH_TOKEN`，这是大多数第三方中转服务的要求。若使用官方 API，请把配置切换为 `ANTHROPIC_API_KEY`。
 - **Codex** 默认把 token 以 `experimental_bearer_token` 的形式写入 `config.toml`。另一种写 `auth.json` 的方式会覆盖你的 ChatGPT 登录缓存，因此需要显式选择；无论选哪种，原有的 `auth.json` 都会先被备份。
 - **Kimi Code**（`~/.kimi-code`）与 Kimi CLI（`~/.kimi`）是两个不同的产品，尽管两者都提供 `kimi` 命令。本项目针对的是 Kimi Code，它完全不从 shell 读取凭据。它的配置是"多 provider 共存 + 一个指针"，因此切回官方登录只会把 `default_model` 指回 `/login` 写入的托管 provider——所有第三方条目都原样保留，供下次切换直接复用；`credentials/` 下的 OAuth 缓存也不会被改动。如果 `config.toml` 里没有托管条目（即从未完成过 `/login`），切换会被拒绝并提示先在终端登录一次。
-- **Pi**（`@earendil-works/pi-coding-agent`）会在 `models.json` 中注册一个自定义 provider，并通过 `defaultProvider` / `defaultModel` 让 `settings.json` 指向它。API Key 必须位于该 provider 条目中（或 `auth.json`），否则 Pi 会显示 "No models available" 并要求 `/login`。运行时的 `--model` 参数仍可覆盖默认模型。
+- **Pi**（`@earendil-works/pi-coding-agent`）会在 `models.json` 中注册一个自定义 provider，并通过 `defaultProvider` / `defaultModel` 让 `settings.json` 指向它。API Key 必须位于该 provider 条目中（或 `auth.json`），否则 Pi 会显示 "No models available" 并要求 `/login`。运行时的 `--model` 参数仍可覆盖默认模型。切回官方登录只会在 `defaultProvider` 指向自定义 provider 时摘掉这个指针，`models.json` 里的条目全部保留；`auth.json` 只读不写，里面没有任何 `/login` 凭据时切换会被拒绝。
 - **DeepSeek Harness** 会注册一个自定义的 `llm-pi-ai` provider，把 API Key 存入它单独的凭据文档，并更新 `agent-default-model`。已有会话会保持各自选定的路由，新建会话则使用已激活的配置。
 
 `~/.harness-switch/env.sh` 只是 Codex 使用环境变量认证模式时的兼容层：
@@ -335,7 +335,7 @@ npx -y @seaveyon/harness-switch@latest list        # CLI 自动化（见上文�
 
 也可以把 `npx -y` 替换为 `pnpm dlx`、`pnpx` 或 `bunx`。加上 `@latest` 可以让包执行器先获取最新发布版本；同一份可执行文件同时支持 Node.js 和 Bun，直接运行已安装构建产物时可使用 `node dist/harness-switch.js` 或 `bun dist/harness-switch.js`。
 
-守护进程把 PID、实例身份和实际监听地址写入 `~/.harness-switch/daemon.pid`，把日志写入 `~/.harness-switch/daemon.log`（每次启动重新生成）。首次运行会创建 Web 登录密码 `~/.harness-switch/web_password` 并打印到日志。如果已有守护进程在运行，再次调用会先停掉旧进程再启动新进程，因此端口不会冲突，最新代码总是生效。
+守护进程把 PID、实例身份和实际监听地址写入 `~/.harness-switch/daemon.pid`，把日志写入 `~/.harness-switch/daemon.log`（每次启动重新生成）。首次运行会创建 Web 登录密码 `~/.harness-switch/web_password`（权限 `0600`）；日志和 `harness-switch status` 只打印这个路径，不会打印密码本身。如果已有守护进程在运行，再次调用会先停掉旧进程再启动新进程，因此端口不会冲突，最新代码总是生效。
 
 新进程只有通过 `/healthz` 检查后才会报告启动成功。记录的守护进程不健康时，`status` 返回非零退出码；`stop` 或更新在发送信号前会验证实例身份，避免陈旧 PID 被系统复用后误杀无关进程。
 

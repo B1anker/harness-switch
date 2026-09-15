@@ -141,6 +141,7 @@ export const ERROR_CODES = {
   githubGistNotFound: 'github.gistNotFound',
   githubDeviceCodeExpired: 'github.deviceCodeExpired',
   githubRateLimitExceeded: 'github.rateLimitExceeded',
+  githubUnexpectedResponse: 'github.unexpectedResponse',
 
   /* Local users and persistent storage */
   userNotManageable: 'user.notManageable',
@@ -148,6 +149,7 @@ export const ERROR_CODES = {
   storageUnreadable: 'storage.unreadable',
   storageQuarantineFailed: 'storage.quarantineFailed',
   storageCorruptQuarantined: 'storage.corruptQuarantined',
+  storageInvalid: 'storage.invalid',
 } as const;
 
 /**

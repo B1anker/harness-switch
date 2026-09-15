@@ -24,9 +24,9 @@ import { IEnvironmentService, type LocalUser } from './environment';
 import { IFileService } from './files';
 import { ILiveWriteService, type PlannedWrite } from './live-write';
 import { IModelFavoriteStore } from './model-favorite-store';
-import type { ProfileStore, StoredProfile } from './profiles';
+import { type ProfileStore, profileStoreSchema, type StoredProfile } from './profiles';
 import { IUserService } from './users';
-import type { VaultEntry, VaultStore } from './vault';
+import { type VaultEntry, type VaultStore, vaultStoreSchema } from './vault';
 
 type PortableProvider = Omit<VaultEntry, 'api_key'> & { apiKey: string };
 type PortableProfile = Omit<StoredProfile, 'api_key'> & { apiKey: string };
@@ -386,7 +386,7 @@ export class UserSyncService implements IUserSyncService {
   }
 
   private readProfiles(): ProfileStore {
-    return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
+    return this.files.readStore(this.environment.files.profiles, profileStoreSchema, {});
   }
 
   private profilesEqual(
@@ -426,7 +426,7 @@ export class UserSyncService implements IUserSyncService {
   }
 
   private readVault(): VaultStore {
-    return this.files.readJsonStrict<VaultStore>(this.environment.files.vault, {
+    return this.files.readStore(this.environment.files.vault, vaultStoreSchema, {
       version: 1,
       entries: {},
     });

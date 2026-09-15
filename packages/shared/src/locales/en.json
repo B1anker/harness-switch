@@ -180,6 +180,9 @@
         "reasoning": {
           "label": "Reasoning support",
           "help": "Maps to reasoning in models.json. Enable it for thinking models such as GPT or Claude."
+        },
+        "target": {
+          "auth": "auth.json (official-login detection only)"
         }
       },
       "dsh": {
@@ -254,6 +257,7 @@
     "officialHintClaude": "Use Claude Code's own Anthropic account login",
     "officialHintCodex": "Use Codex's own ChatGPT / OpenAI account login",
     "officialHintKimi": "Use Kimi Code's own Kimi account login (the OAuth credential written by /login)",
+    "officialHintPi": "Return to the account Pi's own /login stored in auth.json; Pi picks the startup model, adjust it with /model",
     "officialHintDsh": "Detect and switch to DeepSeek Harness's existing official DeepSeek API key configuration",
     "application": "Application",
     "writeMode": "Write mode",
@@ -592,7 +596,8 @@
       "authFailed": "GitHub authorization failed; sign in again",
       "gistNotFound": "No harness-switch backup Gist was found in GitHub",
       "deviceCodeExpired": "The device code expired; get a new one",
-      "rateLimitExceeded": "GitHub API rate limit exceeded; try again later"
+      "rateLimitExceeded": "GitHub API rate limit exceeded; try again later",
+      "unexpectedResponse": "GitHub returned a response this version cannot read; try again later"
     },
     "cli": {
       "missingArgument": "A required argument is missing"
@@ -706,7 +711,8 @@
     "storage": {
       "unreadable": "Could not read {{file}}",
       "quarantineFailed": "Could not quarantine the corrupt {{file}}",
-      "corruptQuarantined": "The data store is corrupt. The original was quarantined as {{quarantine}}; restore from a backup before continuing"
+      "corruptQuarantined": "The data store is corrupt. The original was quarantined as {{quarantine}}; restore from a backup before continuing",
+      "invalid": "The data store {{file}} does not have the expected shape ({{issue}}). It was left untouched rather than overwritten; inspect the file or restore from a backup"
     },
     "probe": {
       "badUrl": "Base URL does not parse, or is not http/https",

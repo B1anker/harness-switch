@@ -6,31 +6,42 @@ import type {
   UpdateProviderRequest,
 } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
+import { z } from 'zod';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
-import { type EncryptedValue, ICryptoService } from './crypto';
+import { encryptedValueSchema, ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
-import type { ProfileStore } from './profiles';
+import { type ProfileStore, profileStoreSchema } from './profiles';
 
-export type VaultEntry = {
-  id: string;
-  name: string;
-  api_key: EncryptedValue;
-  notes?: string;
-  endpoints: ProviderEndpoint[];
-  created_at: string;
-  updated_at: string;
+const providerEndpointSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  baseUrl: z.string(),
+});
+
+export const vaultEntrySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  api_key: encryptedValueSchema,
+  notes: z.string().optional(),
+  endpoints: z.array(providerEndpointSchema),
+  created_at: z.string(),
+  updated_at: z.string(),
   /** Internal provenance used to update a previous cross-user sync without duplicating it. */
-  synced_from?: { username: string; provider_id: string };
-};
+  synced_from: z.object({ username: z.string(), provider_id: z.string() }).optional(),
+});
+
+export type VaultEntry = z.infer<typeof vaultEntrySchema>;
 
 export type { ProviderEndpoint } from '@seaveyon/harness-switch-shared';
 
-export type VaultStore = {
-  version: 1;
-  entries: Record<string, VaultEntry>;
-};
+export const vaultStoreSchema = z.object({
+  version: z.literal(1),
+  entries: z.record(z.string(), vaultEntrySchema),
+});
+
+export type VaultStore = z.infer<typeof vaultStoreSchema>;
 
 export type VaultReference = {
   harness: string;
@@ -192,14 +203,14 @@ export class VaultService implements IVaultService {
   private read(): VaultStore {
     // Strict: a corrupt vault must never be mistaken for an empty one, or a later
     // write would overwrite the user's encrypted credentials.
-    return this.files.readJsonStrict<VaultStore>(this.environment.files.vault, {
+    return this.files.readStore(this.environment.files.vault, vaultStoreSchema, {
       version: STORE_VERSION,
       entries: {},
     });
   }
 
   private readProfileStore(): ProfileStore {
-    return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
+    return this.files.readStore(this.environment.files.profiles, profileStoreSchema, {});
   }
 
   private write(store: VaultStore): void {

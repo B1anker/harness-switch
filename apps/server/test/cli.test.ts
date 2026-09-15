@@ -16,7 +16,13 @@ let baseUrl = '';
 
 beforeEach(() => {
   sandbox = createSandbox('hsw-cli', {
-    env: (home) => ({ CODEX_HOME: home('.codex'), HSW_UPDATE_CHECK: '0', PORT: undefined }),
+    // The assertions below read zh-CN prose; a runner whose LANG is en_US must not flip them.
+    env: (home) => ({
+      CODEX_HOME: home('.codex'),
+      HSW_UPDATE_CHECK: '0',
+      HSW_LANG: 'zh-CN',
+      PORT: undefined,
+    }),
   });
   services = createTestServices();
   // The CLI logs in with the same password file the daemon would have written.
@@ -119,13 +125,14 @@ describe('cli', () => {
   });
 
   test('json errors preserve the HTTP status and stable server code', async () => {
+    // Pi has no /login credential in a fresh sandbox, so the official switch is refused.
     const { code, logs } = await run('official', ['pi', '--yes', '--json']);
     expect(code).toBe(1);
     const payload = JSON.parse(logs.join('\n')) as {
       error: { code: string; status: number; message: string };
     };
     expect(payload.error.status).toBe(400);
-    expect(payload.error.code).toBe('activation.officialLoginUnsupported');
+    expect(payload.error.code).toBe('activation.officialLoginMissing');
     expect(payload.error.message.length).toBeGreaterThan(0);
   });
 

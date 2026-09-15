@@ -4,7 +4,7 @@ import { USER_BLOCK_CODES } from '@seaveyon/harness-switch-shared';
 import { createServices } from '../src/bootstrap';
 import { IEnvironmentService, type LocalUser } from '../src/services/environment';
 import { IUserAccessService } from '../src/services/user-access';
-import { createSandbox, type Sandbox } from './support';
+import { createSandbox, POSIX, type Sandbox } from './support';
 
 let sandbox: Sandbox;
 let services: ReturnType<typeof createServices>;
@@ -71,7 +71,9 @@ function home(name: string, mode?: number): string {
   return dir;
 }
 
-describe('user access probe', () => {
+// Every verdict below is the POSIX branch of the probe; on win32 it answers `ok` before
+// looking at the disk, so there is no permission fixture that could change the outcome.
+describe.skipIf(!POSIX)('user access probe', () => {
   test('a writable home owned by this process is manageable', () => {
     home('plain');
     expect(access().inspect(peer('plain')).ok).toBe(true);

@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { statSync } from 'node:fs';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
 import type { InstantiationService } from '../src/di';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import { IProfileService } from '../src/services/profiles';
 import { IVaultService } from '../src/services/vault';
-import { createSandbox, createTestServices, expectHttpError, type Sandbox } from './support';
+import {
+  createSandbox,
+  createTestServices,
+  expectHttpError,
+  expectMode,
+  type Sandbox,
+} from './support';
 
 let sandbox: Sandbox;
 let services: InstantiationService;
@@ -45,8 +50,7 @@ describe('provider vault', () => {
     createProvider();
     const raw = services.get(IFileService).readText(services.get(IEnvironmentService).files.vault);
     expect(raw).not.toContain('sk-acme');
-    const mode = statSync(services.get(IEnvironmentService).files.vault).mode & 0o777;
-    expect(mode).toBe(0o600);
+    expectMode(services.get(IEnvironmentService).files.vault, 0o600);
     expect(vault().decrypt('acme')).toBe('sk-acme');
   });
 

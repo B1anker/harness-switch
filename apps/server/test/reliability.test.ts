@@ -5,7 +5,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -21,7 +20,7 @@ import {
   type OperationPlan,
   type PlannedWrite,
 } from '../src/services/live-write';
-import { createSandbox, createTestServices, type Sandbox } from './support';
+import { createSandbox, createTestServices, expectMode, POSIX, type Sandbox } from './support';
 
 let sandbox: Sandbox;
 let services: InstantiationService;
@@ -91,6 +90,47 @@ describe('live write', () => {
 
     journal.undo(receipt?.id ?? '');
     expect(readFileSync(profiles, 'utf8')).toBe('{"before":true}\n');
+  });
+
+  test('refuses an async operation and rolls the files back instead of committing early', () => {
+    const live = services.get(ILiveWriteService);
+    const journal = services.get(IJournalService);
+    seed(piModels, '{"original":true}\n');
+
+    expect(() =>
+      live.transaction(
+        plan('pi', 'demo', [
+          { key: 'models', path: piModels, format: 'json', content: '{"changed":true}\n' },
+        ]),
+        // Cast: the type forbids this, which is exactly the mistake the guard exists for.
+        (async () => undefined) as unknown as () => void,
+      ),
+    ).toThrow(/must be synchronous/);
+
+    expect(readFileSync(piModels, 'utf8')).toBe('{"original":true}\n');
+    expect(journal.list()[0]?.state).toBe('rolled-back');
+  });
+
+  test('refuses to nest one transaction inside another', () => {
+    const live = services.get(ILiveWriteService);
+    seed(piModels, '{"original":true}\n');
+
+    expect(() =>
+      live.transaction(
+        plan('pi', 'outer', [
+          { key: 'models', path: piModels, format: 'json', content: '{"outer":true}\n' },
+        ]),
+        () =>
+          live.apply(
+            plan('pi', 'inner', [
+              { key: 'settings', path: piSettings, format: 'json', content: '{}\n' },
+            ]),
+          ),
+      ),
+    ).toThrow(/re-entered/);
+
+    expect(readFileSync(piModels, 'utf8')).toBe('{"original":true}\n');
+    expect(services.get(IFileService).exists(piSettings)).toBe(false);
   });
 
   test('rejects unparsable content before writing anything', () => {
@@ -185,10 +225,10 @@ describe('live write', () => {
     ).toThrow('profile store failed');
 
     expect(readFileSync(codexAuth, 'utf8')).toBe(original);
-    expect(statSync(codexAuth).mode & 0o777).toBe(0o600);
+    expectMode(codexAuth, 0o600);
   });
 
-  test('keeps the permissions the user gave the file', () => {
+  test.skipIf(!POSIX)('keeps the permissions the user gave the file', () => {
     const live = services.get(ILiveWriteService);
     seed(dshSettings, 'providers: {}\n', 0o644);
 
@@ -198,10 +238,10 @@ describe('live write', () => {
       ]),
     );
 
-    expect(statSync(dshSettings).mode & 0o777).toBe(0o644);
+    expectMode(dshSettings, 0o644);
   });
 
-  test('new files holding an api key are not world readable', () => {
+  test.skipIf(!POSIX)('new files holding an api key are not world readable', () => {
     const live = services.get(ILiveWriteService);
 
     live.apply(
@@ -210,7 +250,7 @@ describe('live write', () => {
       ]),
     );
 
-    expect(statSync(claudeSettings).mode & 0o777).toBe(0o600);
+    expectMode(claudeSettings, 0o600);
   });
 
   test('refuses a target whose directory is a symlink out of the home', () => {

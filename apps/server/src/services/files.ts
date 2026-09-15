@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { basename, dirname } from 'node:path';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
+import type { z } from 'zod';
 import { HttpError } from '../common/errors';
 import { isInside, realPath } from '../common/paths';
 import { createDecorator, inject } from '../di';
@@ -60,6 +61,12 @@ export interface IFileService {
    * file as missing and uses the fallback.
    */
   readJsonStrict<T>(file: string, fallback: T): T;
+  /**
+   * {@link IFileService.readJsonStrict} followed by a schema check. Valid JSON of the
+   * wrong shape is refused rather than quarantined: the document is intact, so the user
+   * can inspect it, and refusing the read is what stops a later write from replacing it.
+   */
+  readStore<T>(file: string, schema: z.ZodType<T>, fallback: T): T;
   writeSecure(file: string, text: string): void;
   /**
    * Writes a file owned by the user (a harness config) without changing its permissions.
@@ -196,6 +203,19 @@ export class FileService implements IFileService {
         },
       );
     }
+  }
+
+  readStore<T>(file: string, schema: z.ZodType<T>, fallback: T): T {
+    const parsed = schema.safeParse(this.readJsonStrict<unknown>(file, fallback));
+    if (parsed.success) {
+      return parsed.data;
+    }
+    const first = parsed.error.issues[0];
+    const issue = first ? `${first.path.join('.') || '$'}: ${first.message}` : 'unknown';
+    throw new HttpError(500, `数据存储结构不符合预期：${file}（${issue}）`, {
+      code: ERROR_CODES.storageInvalid,
+      params: { file, issue },
+    });
   }
 
   writeSecure(file: string, text: string): void {

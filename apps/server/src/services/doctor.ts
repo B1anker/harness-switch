@@ -1,5 +1,5 @@
-import { spawnSync } from 'node:child_process';
 import { accessSync, constants, statSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
 import {
   DOCTOR_CODES,
   type DoctorCheck,
@@ -119,7 +119,7 @@ export class DoctorService implements IDoctorService {
       checks.push(ok(`${harness}.install`, DOCTOR_CODES.installNotRequired, { harness: label }));
     } else {
       checks.push(
-        this.commandExists(bin)
+        commandOnPath(bin)
           ? ok(`${harness}.install`, DOCTOR_CODES.installFound, { bin })
           : error(`${harness}.install`, DOCTOR_CODES.installMissing, { bin }),
       );
@@ -287,19 +287,6 @@ export class DoctorService implements IDoctorService {
       : [catalog];
   }
 
-  private commandExists(bin: string): boolean {
-    try {
-      // Pass the environment explicitly so runtime PATH overrides remain visible.
-      const result = spawnSync('/bin/sh', ['-c', `command -v ${bin}`], {
-        env: process.env,
-        encoding: 'utf8',
-      });
-      return result.status === 0 && result.stdout.trim().length > 0;
-    } catch {
-      return false;
-    }
-  }
-
   private isReadable(path: string): boolean {
     try {
       accessSync(path, constants.R_OK);
@@ -396,4 +383,36 @@ function completionCheck(
 
 function octal(mode: number): string {
   return mode.toString(8).padStart(4, '0');
+}
+
+/** What cmd.exe treats as runnable when `PATHEXT` is unset. */
+const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
+
+/**
+ * Whether `bin` resolves on the current `PATH`. Walked here instead of asking
+ * `sh -c 'command -v'`: there is no `/bin/sh` on Windows, and the shell was only ever
+ * answering this question. Windows marks an executable by suffix, POSIX by mode bit.
+ */
+function commandOnPath(bin: string): boolean {
+  const names =
+    process.platform === 'win32'
+      ? [bin, ...(process.env.PATHEXT ?? DEFAULT_PATHEXT).split(';').map((ext) => bin + ext)]
+      : [bin];
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (dir === '') {
+      continue;
+    }
+    for (const name of names) {
+      const candidate = join(dir, name);
+      try {
+        if (statSync(candidate).isFile()) {
+          accessSync(candidate, constants.X_OK);
+          return true;
+        }
+      } catch {
+        // Absent, or present without the execute bit: keep looking.
+      }
+    }
+  }
+  return false;
 }

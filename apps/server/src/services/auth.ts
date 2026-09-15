@@ -90,7 +90,9 @@ export class AuthService implements IAuthService {
     if (!this.files.exists(file)) {
       const password = this.crypto.randomPassword();
       this.files.writeSecure(file, `${password}\n`);
-      this.log.info(`Initial web password: ${password}`);
+      // The path, never the value: daemon.log is not 0600 and is what users paste into
+      // bug reports. `harness-switch status` points at the same file.
+      this.log.info(`Initial web password written to ${file}`);
     }
     const password = this.files.readText(file).trim();
     if (!password) {
