@@ -1,7 +1,13 @@
 import { expect, test } from '@rstest/core';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { DashboardPage } from '@/pages/dashboard-page';
-import { harnessFixture, profileFixture, setStoreState, stubStoreActions } from './support';
+import {
+  favoriteFixture,
+  harnessFixture,
+  profileFixture,
+  setStoreState,
+  stubStoreActions,
+} from './support';
 
 test('global backups are available from the main tool view', () => {
   setDashboardState();
@@ -61,6 +67,7 @@ function setDashboardState() {
     loadProviders: async () => {},
     loadDrift: async () => {},
     loadDoctor: async () => {},
+    loadOperations: async () => {},
     loadScan: async () => {},
   });
 }
@@ -206,14 +213,83 @@ test('a user whose block code this build does not know still reads as a sentence
   expect(entry).toHaveTextContent('未知错误');
 });
 
-test('the right column shows the doctor and operations cards for the selected harness', () => {
+test('the top rail is workspace and recovery timeline; templates are not a destination', () => {
   setDashboardState();
 
   render(<DashboardPage />);
 
+  const rail = screen.getByRole('tablist', { name: '主导航' });
+  expect(
+    within(rail)
+      .getAllByRole('tab')
+      .map((tab) => tab.textContent),
+  ).toEqual(['工作台', '恢复时间线']);
+});
+
+test('the tool page opens on the configuration list and folds the rest into details', () => {
+  setDashboardState();
+  setStoreState({ operations: [], operationsLoading: false, operationsError: null });
+
+  render(<DashboardPage />);
+
   fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
-  expect(screen.getByText('诊断')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '查看差异' })).toBeNull();
-  expect(screen.getByText('操作记录')).toBeInTheDocument();
-  expect(screen.getAllByRole('button', { name: '查看详情' })).toHaveLength(2);
+  // Nothing is wrong, so nothing is said: no banner, and the details stay folded
+  // (a folded heading is hidden, so the role query does not see it).
+  expect(screen.queryByRole('button', { name: '查看详情' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: '写入目标' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: '诊断' })).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: /详情/ }));
+  expect(screen.getByRole('heading', { name: '写入目标' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: '环境变量文件兼容性' })).toBeVisible();
+  expect(screen.getByRole('heading', { name: '诊断' })).toBeVisible();
+  expect(screen.getByRole('button', { name: '查看详情' })).toBeVisible();
+  // No write has happened yet, so there are no receipts or backups to introduce.
+  expect(screen.queryByText('操作记录')).toBeNull();
+  expect(screen.queryByText('最近备份')).toBeNull();
+});
+
+test('a doctor warning surfaces as a banner above the configuration list', () => {
+  setDashboardState();
+  setStoreState({
+    doctor: [
+      {
+        harness: 'claude',
+        checks: [
+          {
+            id: 'claude.install',
+            status: 'warn',
+            code: 'doctor.check.installMissing',
+            data: { bin: 'claude' },
+          },
+        ],
+      },
+    ],
+  });
+
+  render(<DashboardPage />);
+
+  fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
+  // The folded details carry the same report; the banner is the one the user can see.
+  const banner = screen.getByRole('button', { name: '查看详情' }).closest('section')!;
+  expect(banner).toBeVisible();
+  expect(within(banner).getByText('1 项警告')).toBeInTheDocument();
+});
+
+test('templates open from the tool page and lead back to it', () => {
+  setDashboardState();
+  setStoreState({
+    favorites: [favoriteFixture('daily', 'model')],
+    operations: [],
+  });
+
+  render(<DashboardPage />);
+
+  fireEvent.click(screen.getByRole('button', { name: '配置与切换' }));
+  fireEvent.click(screen.getByRole('button', { name: '管理模板' }));
+  expect(screen.getByRole('heading', { name: '模板库' })).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: '工作台' })).toHaveAttribute('aria-selected', 'true');
+
+  fireEvent.click(screen.getByRole('button', { name: '返回 Claude Code' }));
+  expect(screen.getByRole('heading', { name: 'Claude Code 配置与切换' })).toBeInTheDocument();
 });

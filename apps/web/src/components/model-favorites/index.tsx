@@ -34,9 +34,18 @@ type EditingState =
       draft: FavoriteInput;
       modelHints?: Record<string, string[]>;
       hintFacts?: Record<string, ModelFacts>;
+      /** A preset start opens the editor in its guided form; a clone shows everything. */
+      guided?: boolean;
     };
 
-export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?: string }) {
+export function ModelFavorites({
+  initialSelectedId = '',
+  startCreating = false,
+}: {
+  initialSelectedId?: string;
+  /** Opens the create dialog on mount, for the tool page's "make a template" suggestion. */
+  startCreating?: boolean;
+}) {
   const { t } = useTranslation();
   const favorites = useAppStore((state) => state.favorites);
   const loading = useAppStore((state) => state.favoritesLoading);
@@ -47,7 +56,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [editing, setEditing] = useState<EditingState | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(startCreating);
   const [applying, setApplying] = useState<FavoritePlanRequest['items'] | null>(null);
   const [capturing, setCapturing] = useState(false);
   useEffect(() => {
@@ -63,6 +72,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
     setCreating(false);
     setEditing({
       kind: 'draft',
+      guided: true,
       draft: {
         name: '',
         notes: '',
@@ -274,6 +284,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
           initialDraft={editing.kind === 'draft' ? editing.draft : undefined}
           modelHints={editing.kind === 'draft' ? editing.modelHints : undefined}
           hintFacts={editing.kind === 'draft' ? editing.hintFacts : undefined}
+          guided={editing.kind === 'draft' && editing.guided === true}
           onClose={() => setEditing(null)}
           onSaved={(saved, next) => {
             setSearch('');

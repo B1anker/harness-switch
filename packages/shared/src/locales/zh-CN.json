@@ -1350,6 +1350,8 @@
     "editorSections": "模板设置",
     "connectionTab": "连接配置",
     "capabilitiesTab": "模型能力",
+    "advanced": "高级设置",
+    "advancedHint": "模型能力、更多连接、默认模型与备注",
     "sharedCapabilities": "模板默认能力",
     "sharedCapabilitiesHint": "所有连接共用这些值，单独设置的连接除外。缺失项会预填 256K 上下文、64K 最大输出、支持推理；已有值保留，点击保存模板后生效。可按实际模型修改或清空。",
     "inheritedValue": "继承模板",
@@ -1504,6 +1506,11 @@
     "available": "可配置",
     "linkMissing": "关联来源缺失",
     "back": "返回工作台",
+    "backToTool": "返回 {{name}}",
+    "details": "详情",
+    "detailsSummary": "写入位置与方式、环境变量文件、历史记录",
+    "sharedProviderHint_one": "有 {{count}} 个配置共用同一供应商，可以收成一个模板：一处修改，多处生效。",
+    "sharedProviderHint_other": "有 {{count}} 个配置共用同一供应商，可以收成一个模板：一处修改，多处生效。",
     "captureCurrent": "收藏当前配置"
   },
   "timeline": {

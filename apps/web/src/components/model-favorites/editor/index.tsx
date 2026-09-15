@@ -45,6 +45,7 @@ export function FavoriteEditor({
   initialDraft,
   modelHints,
   hintFacts,
+  guided = false,
   onClose,
   onSaved,
 }: {
@@ -55,6 +56,12 @@ export function FavoriteEditor({
   modelHints?: Record<string, string[]>;
   /** Curated capability defaults per model id, applied when the model is chosen. */
   hintFacts?: Record<string, ModelFacts>;
+  /**
+   * The preset flow: one connection to pick models for and tools to bind. Capabilities,
+   * further connections, the default model and notes wait behind "advanced" until asked
+   * for — or until a validation error lands in one of them.
+   */
+  guided?: boolean;
   onClose(): void;
   /** Called on save with null, then with the chosen follow-up action if requested. */
   onSaved?(saved: ModelFavorite, next: FavoriteSaveNext): void;
@@ -77,6 +84,7 @@ export function FavoriteEditor({
     dirty,
   } = useFavoriteDraft(favorite ?? initialDraft, modelHints, hintFacts);
   const [tab, setTab] = useState('connections');
+  const [advanced, setAdvanced] = useState(!guided);
   const [modelSettings, setModelSettings] = useState<string>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -138,16 +146,24 @@ export function FavoriteEditor({
               String(issue.path[2]),
             ),
         ) || Object.values(all.cards).includes('favorites.validation.duplicateConnection');
-      setTab(
+      const nextTab =
         connectionError ||
-          all.fields['favorite-name'] ||
-          all.fields['favorite-notes'] ||
-          result.error.issues.some((issue) =>
-            ['defaultConnectionId', 'toolBindings'].includes(String(issue.path[0])),
-          )
+        all.fields['favorite-name'] ||
+        all.fields['favorite-notes'] ||
+        result.error.issues.some((issue) =>
+          ['defaultConnectionId', 'toolBindings'].includes(String(issue.path[0])),
+        )
           ? 'connections'
-          : 'capabilities',
-      );
+          : 'capabilities';
+      setTab(nextTab);
+      // An error the user cannot see cannot be fixed: unfold whatever it landed in.
+      if (
+        nextTab === 'capabilities' ||
+        all.fields['favorite-notes'] ||
+        result.error.issues.some((issue) => issue.path[0] === 'defaultConnectionId')
+      ) {
+        setAdvanced(true);
+      }
       setError(
         Object.keys(all.fields).length || Object.keys(all.cards).length
           ? ''
@@ -191,6 +207,8 @@ export function FavoriteEditor({
             setDraft={setDraft}
             tab={tab}
             setTab={setTab}
+            advanced={advanced}
+            onAdvanced={() => setAdvanced(true)}
             busy={busy}
             error={fieldErrors['favorite-name']}
           />
@@ -210,12 +228,14 @@ export function FavoriteEditor({
                     fieldErrors={fieldErrors}
                     cardErrors={cardErrors}
                     modelHints={modelHints}
+                    advanced={advanced}
                     openVault={openVault}
                     update={update}
                     addConnection={addConnection}
                     selectModels={selectModels}
                     onModelSettings={(id) => {
                       setModelSettings(id);
+                      setAdvanced(true);
                       setTab('capabilities');
                     }}
                   />

@@ -11,15 +11,14 @@ import {
   Lock,
   LogOut,
   Server,
-  Star,
   UserRound,
 } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { BackupPanel } from '@/components/backup-panel';
 import { BrandMark } from '@/components/brand-mark';
 import { ChangePasswordDialog } from '@/components/change-password-dialog';
 import { ConfigTransferDialog } from '@/components/config-transfer-dialog';
-import { DoctorPanel } from '@/components/doctor-panel';
+import { DoctorRow, HealthBanner } from '@/components/doctor-panel';
 import { HarnessTabs } from '@/components/harness-tabs';
 import { LanguageToggle } from '@/components/language-toggle';
 import { ModelFavorites } from '@/components/model-favorites';
@@ -30,6 +29,7 @@ import { ProviderVaultDialog } from '@/components/provider-vault-dialog';
 import { RecoveryTimeline } from '@/components/recovery-timeline';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { Disclosure } from '@/components/ui/disclosure';
 import {
   DropdownMenu,
   DropdownMenuItem,
@@ -51,21 +51,31 @@ type Editing = {
   copySource?: ProfilePublic;
 };
 
+/**
+ * Where templates open to: a selected template, or the create dialog straight away when
+ * the tool page suggested making one.
+ */
+type TemplateEntry = { id: string; create: boolean };
+
 export function DashboardPage() {
   const currentUser = useAppStore((state) => state.currentUser);
+  // `favorites` and `tools` are sub-views of the workspace; the top rail knows only two.
   const [view, setView] = useState<'workspace' | 'favorites' | 'history' | 'tools'>('workspace');
-  const { locale } = useI18n();
   const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
-  const envFile = useAppStore((state) => state.envFile);
-  const backups = useAppStore((state) => state.backups);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [vaultOpen, setVaultOpen] = useState(false);
   const [selectedHarnessId, setSelectedHarnessId] = useState<HarnessId>('claude');
-  const [templateToOpen, setTemplateToOpen] = useState('');
+  const [templateEntry, setTemplateEntry] = useState<TemplateEntry>({ id: '', create: false });
   const editingHarness = harnesses.find((item) => item.id === editing?.harnessId);
   const selectedHarness = harnesses.find((item) => item.id === selectedHarnessId) ?? harnesses[0];
+  const mainTab = view === 'history' ? 'history' : 'workspace';
+
+  function openTemplates(entry: TemplateEntry) {
+    setTemplateEntry(entry);
+    setView('favorites');
+  }
 
   return (
     <div className="min-h-[100dvh] bg-background">
@@ -90,10 +100,9 @@ export function DashboardPage() {
             idPrefix="dashboard"
             items={[
               { id: 'workspace' as const, icon: LayoutGrid },
-              { id: 'favorites' as const, icon: Star },
               { id: 'history' as const, icon: History },
             ]}
-            value={view === 'tools' ? 'workspace' : view}
+            value={mainTab}
             onChange={setView}
             className="order-3 flex w-full gap-2 overflow-x-auto border-t pt-2 lg:order-none lg:w-auto lg:border-0 lg:pt-0"
             tabClassName="gap-2 px-4 py-3 text-sm font-medium"
@@ -120,7 +129,7 @@ export function DashboardPage() {
           </div>
         </div>
       </header>
-      <TabPanel idPrefix="dashboard" value={view === 'tools' ? 'workspace' : view}>
+      <TabPanel idPrefix="dashboard" value={mainTab}>
         {view === 'workspace' ? (
           <Workspace
             key={currentUser}
@@ -133,14 +142,27 @@ export function DashboardPage() {
             onHistory={() => setView('history')}
           />
         ) : view === 'favorites' ? (
-          <ModelFavorites
-            key={`${currentUser}/${templateToOpen}`}
-            initialSelectedId={templateToOpen}
-          />
+          <>
+            <Breadcrumb
+              backLabel={
+                selectedHarness
+                  ? t('workspace.backToTool', { name: selectedHarness.label })
+                  : t('workspace.back')
+              }
+              onBack={() => setView(selectedHarness ? 'tools' : 'workspace')}
+            >
+              {t('workspace.nav.favorites')}
+            </Breadcrumb>
+            <ModelFavorites
+              key={`${currentUser}/${templateEntry.id}/${templateEntry.create}`}
+              initialSelectedId={templateEntry.id}
+              startCreating={templateEntry.create}
+            />
+          </>
         ) : view === 'history' ? (
           <RecoveryTimeline key={currentUser} />
         ) : (
-          <div className="grid xl:grid-cols-[17rem_minmax(0,1fr)_18rem]">
+          <div className="grid xl:grid-cols-[17rem_minmax(0,1fr)]">
             <div className="xl:row-span-2">
               <HarnessTabs
                 harnesses={harnesses}
@@ -149,24 +171,9 @@ export function DashboardPage() {
               />
             </div>
             {selectedHarness ? (
-              <nav
-                aria-label={t('workspace.breadcrumb')}
-                className="flex min-w-0 items-center gap-1 border-b bg-card/30 px-4 py-3 text-sm text-muted-foreground sm:px-6 xl:col-span-2"
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2"
-                  onClick={() => setView('workspace')}
-                >
-                  <ArrowLeft />
-                  {t('workspace.back')}
-                </Button>
-                <ChevronRight className="size-4 shrink-0" aria-hidden />
-                <span className="truncate font-medium text-foreground">
-                  {selectedHarness.label}
-                </span>
-              </nav>
+              <Breadcrumb backLabel={t('workspace.back')} onBack={() => setView('workspace')}>
+                {selectedHarness.label}
+              </Breadcrumb>
             ) : null}
             {selectedHarness ? (
               <TabPanel
@@ -175,6 +182,7 @@ export function DashboardPage() {
                 value={selectedHarness.id}
                 className="min-w-0 space-y-6 p-4 sm:p-6 xl:p-8"
               >
+                <HealthBanner harness={selectedHarness} />
                 <ConfigurationSwitcher
                   harness={selectedHarness}
                   onNewProfile={() => setEditing({ harnessId: selectedHarness.id, profile: null })}
@@ -184,30 +192,12 @@ export function DashboardPage() {
                   onCopyProfile={(copySource) =>
                     setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
                   }
-                  onOpenTemplate={(id) => {
-                    setTemplateToOpen(id);
-                    setView('favorites');
-                  }}
+                  onOpenTemplate={(id) => openTemplates({ id, create: false })}
+                  onManageTemplates={() => openTemplates({ id: '', create: false })}
+                  onCreateTemplate={() => openTemplates({ id: '', create: true })}
                 />
-                <details className="group rounded-2xl border bg-card px-5 py-4 text-sm shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
-                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
-                    <span className="font-mono text-[13px]">{t('env.title')}</span>
-                    <ChevronDown className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                  </summary>
-                  <p className="mt-4 leading-relaxed text-muted-foreground">{t('env.intro')}</p>
-                  <code className="mt-3 block rounded-xl bg-muted/70 px-4 py-3 font-mono text-[13px]">
-                    source {envFile || '~/.harness-switch/env.sh'}
-                  </code>
-                  <p className="mt-3 leading-relaxed text-muted-foreground">{t('env.note')}</p>
-                </details>
+                <ToolDetails harness={selectedHarness} />
               </TabPanel>
-            ) : null}
-            {selectedHarness ? (
-              <ContextPanel
-                harness={selectedHarness}
-                latestBackup={backups.find((backup) => backup.harness === selectedHarness.id)}
-                locale={locale}
-              />
             ) : null}
           </div>
         )}
@@ -332,77 +322,110 @@ function UserMenu() {
   );
 }
 
-function ContextPanel({
-  harness,
-  latestBackup,
-  locale,
+/** The one-level path back from a sub-view: `← back › where you are`. */
+function Breadcrumb({
+  backLabel,
+  onBack,
+  children,
 }: {
-  harness: HarnessSummary;
-  locale: string;
-  latestBackup:
-    | {
-        profile: string;
-        createdAt: string;
-        files: { path: string }[];
-      }
-    | undefined;
+  backLabel: string;
+  onBack(): void;
+  children: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
-    <aside className="border-t bg-card/35 p-4 sm:p-6 xl:min-h-[calc(100dvh-80px)] xl:border-l xl:border-t-0 xl:p-5">
-      <div className="space-y-4 xl:sticky xl:top-[100px]">
-        <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
-          <div className="flex items-center gap-2">
-            <Server className="size-4 text-primary" />
-            <h3 className="font-semibold">{t('harness.writeTargets')}</h3>
-          </div>
-          <div className="mt-5 space-y-4">
-            <div>
-              <p className="text-xs text-muted-foreground">{t('harness.application')}</p>
-              <p className="mt-1 text-sm font-medium">{harness.label}</p>
+    <nav
+      aria-label={t('workspace.breadcrumb')}
+      className="flex min-w-0 items-center gap-1 border-b bg-card/30 px-4 py-3 text-sm text-muted-foreground sm:px-6"
+    >
+      <Button variant="ghost" size="sm" className="h-8 px-2" onClick={onBack}>
+        <ArrowLeft />
+        {backLabel}
+      </Button>
+      <ChevronRight className="size-4 shrink-0" aria-hidden />
+      <span className="truncate font-medium text-foreground">{children}</span>
+    </nav>
+  );
+}
+
+/**
+ * Everything about a tool that is not "which configuration is it using": where writes
+ * land and how, the env file, the doctor report, and — once there has been a write —
+ * the receipts and backups it left behind. Folded by default so the first screen holds
+ * only the configuration list; a user who needs a path or a backup opens it.
+ */
+function ToolDetails({ harness }: { harness: HarnessSummary }) {
+  const { t } = useTranslation();
+  const { locale } = useI18n();
+  const envFile = useAppStore((state) => state.envFile);
+  const backups = useAppStore((state) => state.backups);
+  const latestBackup = backups.find((backup) => backup.harness === harness.id);
+  return (
+    <section className="rounded-2xl border bg-card px-5 py-3 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.35)]">
+      <Disclosure
+        title={t('workspace.details')}
+        summary={t('workspace.detailsSummary')}
+        triggerClassName="-mx-3 w-[calc(100%+1.5rem)] justify-start"
+      >
+        <div className="grid gap-6 pt-1 text-sm sm:grid-cols-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <Server className="size-4 text-primary" />
+              <h4 className="text-sm font-semibold">{t('harness.writeTargets')}</h4>
             </div>
-            {harness.targets.map((target) => (
-              <div key={target.key}>
-                <p className="text-xs text-muted-foreground">
-                  {specText(t, target.labelCode, target.label)}
-                </p>
-                <p className="mt-1 break-all font-mono text-xs leading-relaxed">{target.path}</p>
-              </div>
-            ))}
-            <div>
-              <p className="text-xs text-muted-foreground">{t('harness.writeMode')}</p>
-              <p className="mt-1 text-sm">
-                {harness.mode === 'replace' ? t('harness.modeReplace') : t('harness.modeAdditive')}
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <DoctorPanel harness={harness} />
-
-        <OperationsPanel harness={harness} />
-
-        <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
-          <h3 className="font-semibold">{t('backup.latest')}</h3>
-          {latestBackup ? (
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-3">
+              {harness.targets.map((target) => (
+                <div key={target.key}>
+                  <p className="text-xs text-muted-foreground">
+                    {specText(t, target.labelCode, target.label)}
+                  </p>
+                  <p className="mt-1 break-all font-mono text-xs leading-relaxed">{target.path}</p>
+                </div>
+              ))}
               <div>
-                <p className="text-xs text-muted-foreground">{t('backup.profile')}</p>
-                <p className="mt-1 truncate text-sm font-medium">{latestBackup.profile}</p>
+                <p className="text-xs text-muted-foreground">{t('harness.writeMode')}</p>
+                <p className="mt-1 text-sm">
+                  {harness.mode === 'replace'
+                    ? t('harness.modeReplace')
+                    : t('harness.modeAdditive')}
+                </p>
               </div>
-              <p className="font-mono text-[11px] leading-relaxed text-muted-foreground">
-                {new Date(latestBackup.createdAt).toLocaleString(locale)} ·{' '}
-                {t('backup.fileCount', { count: latestBackup.files.length })}
-              </p>
             </div>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">{t('backup.empty')}</p>
-          )}
-          <div className="mt-4 border-t pt-4">
-            <BackupPanel harnessId={harness.id} />
           </div>
-        </section>
-      </div>
-    </aside>
+          <div>
+            <h4 className="font-mono text-[13px] font-semibold">{t('env.title')}</h4>
+            <p className="mt-3 leading-relaxed text-muted-foreground">{t('env.intro')}</p>
+            <code className="mt-3 block rounded-xl bg-muted/70 px-4 py-3 font-mono text-[13px]">
+              source {envFile || '~/.harness-switch/env.sh'}
+            </code>
+            <p className="mt-3 leading-relaxed text-muted-foreground">{t('env.note')}</p>
+          </div>
+        </div>
+        <div className="space-y-5 border-t pt-4 pb-2">
+          <DoctorRow harness={harness} />
+          <OperationsPanel harness={harness} />
+          {latestBackup ? (
+            <div>
+              <div className="flex items-center gap-2">
+                <History className="size-4 text-primary" />
+                <h4 className="text-sm font-semibold">{t('backup.latest')}</h4>
+              </div>
+              <p className="mt-2 truncate text-sm">
+                <span className="font-medium">{latestBackup.profile}</span>
+                <span className="text-muted-foreground">
+                  {' · '}
+                  {new Date(latestBackup.createdAt).toLocaleString(locale)}
+                  {' · '}
+                  {t('backup.fileCount', { count: latestBackup.files.length })}
+                </span>
+              </p>
+              <div className="mt-3">
+                <BackupPanel harnessId={harness.id} />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </Disclosure>
+    </section>
   );
 }

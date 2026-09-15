@@ -21,6 +21,7 @@ export function FavoriteConnections({
   addConnection,
   onModelSettings,
   selectModels,
+  advanced = true,
 }: {
   draft: FavoriteInput;
   setDraft: Dispatch<SetStateAction<FavoriteInput>>;
@@ -29,6 +30,11 @@ export function FavoriteConnections({
   fieldErrors: Record<string, string>;
   cardErrors: Record<string, string>;
   modelHints?: Record<string, string[]>;
+  /**
+   * Whether to show the controls a first template does not need: a second connection,
+   * the default model, notes. The guided flow keeps them behind "advanced".
+   */
+  advanced?: boolean;
   openVault(id: string | null): void;
   update(id: string, patch: Partial<FavoriteConnection>): void;
   addConnection(): void;
@@ -89,7 +95,7 @@ export function FavoriteConnections({
             ) : null}
           </div>
         </div>
-      ) : (
+      ) : advanced ? (
         <Button
           variant="link"
           className="h-auto px-0 text-primary"
@@ -98,42 +104,46 @@ export function FavoriteConnections({
         >
           {t('favorites.addConnection')}
         </Button>
-      )}
-      <FavoriteSelect
-        id="favorite-default-model"
-        label={t('favorites.scheme.defaultModel')}
-        value={draft.defaultConnectionId ?? ''}
-        placeholder={t('favorites.scheme.chooseDefault')}
-        hint={t('favorites.scheme.defaultHint')}
-        options={draft.connections
-          .filter((connection) => connection.requestModelId)
-          .map((connection) => ({
-            value: connection.id,
-            label: `${connection.label || providers.find((provider) => provider.id === connection.providerId)?.name || ''} / ${connection.requestModelId}`,
-          }))}
-        onChange={(defaultConnectionId) => setDraft({ ...draft, defaultConnectionId })}
-        error={
-          draft.defaultConnectionId &&
-          !draft.connections.some((connection) => connection.id === draft.defaultConnectionId)
-            ? t('favorites.scheme.defaultRemoved')
-            : undefined
-        }
-      />
-      <FormField
-        id="favorite-notes"
-        label={t('favorites.notesOptional')}
-        error={fieldErrors['favorite-notes']}
-      >
-        {(control) => (
-          <Textarea
-            {...control}
-            className="min-h-16"
-            maxLength={4096}
-            value={draft.notes}
-            onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+      ) : null}
+      {!advanced ? null : (
+        <>
+          <FavoriteSelect
+            id="favorite-default-model"
+            label={t('favorites.scheme.defaultModel')}
+            value={draft.defaultConnectionId ?? ''}
+            placeholder={t('favorites.scheme.chooseDefault')}
+            hint={t('favorites.scheme.defaultHint')}
+            options={draft.connections
+              .filter((connection) => connection.requestModelId)
+              .map((connection) => ({
+                value: connection.id,
+                label: `${connection.label || providers.find((provider) => provider.id === connection.providerId)?.name || ''} / ${connection.requestModelId}`,
+              }))}
+            onChange={(defaultConnectionId) => setDraft({ ...draft, defaultConnectionId })}
+            error={
+              draft.defaultConnectionId &&
+              !draft.connections.some((connection) => connection.id === draft.defaultConnectionId)
+                ? t('favorites.scheme.defaultRemoved')
+                : undefined
+            }
           />
-        )}
-      </FormField>
+          <FormField
+            id="favorite-notes"
+            label={t('favorites.notesOptional')}
+            error={fieldErrors['favorite-notes']}
+          >
+            {(control) => (
+              <Textarea
+                {...control}
+                className="min-h-16"
+                maxLength={4096}
+                value={draft.notes}
+                onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+              />
+            )}
+          </FormField>
+        </>
+      )}
     </>
   );
 }

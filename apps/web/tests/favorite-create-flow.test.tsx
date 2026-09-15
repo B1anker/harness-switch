@@ -123,9 +123,39 @@ test('a preset with a matching vault entry pre-fills the channel without any set
   );
   expect(screen.getByText('OpenAI 兼容（Chat Completions）')).toBeInTheDocument();
   expect(screen.queryByLabelText('API Key')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '高级设置' }));
   fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   expect(screen.getByRole('spinbutton', { name: '上下文窗口' })).toHaveValue(262144);
   expect(screen.getByRole('spinbutton', { name: '最大输出 token' })).toHaveValue(65536);
+});
+
+test('the preset flow opens a guided editor: models and tools first, the rest behind advanced', async () => {
+  renderList();
+  fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
+  fireEvent.click(screen.getByRole('button', { name: /快速创建（推荐）/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'OpenRouter' }));
+  await screen.findByRole('combobox', { name: '服务商账号' });
+  // Step three and four are on screen; nothing else competes with them.
+  expect(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '工具适配' })).toBeInTheDocument();
+  expect(screen.queryByRole('tab', { name: '模型能力' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '添加模型连接' })).toBeNull();
+  expect(screen.queryByRole('combobox', { name: '默认模型' })).toBeNull();
+  expect(screen.queryByLabelText('模板备注（可选）')).toBeNull();
+
+  fireEvent.click(screen.getByRole('button', { name: '高级设置' }));
+  expect(screen.getByRole('tab', { name: '模型能力' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '添加模型连接' })).toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: '默认模型' })).toBeInTheDocument();
+  expect(screen.getByLabelText('模板备注（可选）')).toBeInTheDocument();
+});
+
+test('the blank and edit paths show the full editor from the start', async () => {
+  renderList();
+  fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
+  fireEvent.click(screen.getByRole('button', { name: /手动配置（高级）/ }));
+  expect(await screen.findByRole('tab', { name: '模型能力' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '高级设置' })).toBeNull();
 });
 
 test('a preset without a vault entry creates it inline and adopts curated model facts', async () => {
@@ -162,6 +192,7 @@ test('a preset without a vault entry creates it inline and adopts curated model 
   // Curated candidates are offered without a live catalog, and choosing one adopts its facts.
   fireEvent.click(await screen.findByRole('combobox', { name: /^模型(?:（可多选）)?$/ }));
   fireEvent.click(await screen.findByRole('option', { name: 'deepseek-reasoner' }));
+  fireEvent.click(screen.getByRole('button', { name: '高级设置' }));
   fireEvent.click(screen.getByRole('tab', { name: '模型能力' }));
   const overrides = within(screen.getByRole('region', { name: '按连接单独设置' }));
   fireEvent.change(overrides.getByRole('textbox', { name: '搜索连接或模型' }), {

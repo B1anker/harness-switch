@@ -1350,6 +1350,8 @@
     "editorSections": "Template settings",
     "connectionTab": "Connections",
     "capabilitiesTab": "Model capabilities",
+    "advanced": "Advanced",
+    "advancedHint": "Model capabilities, more connections, default model and notes",
     "sharedCapabilities": "Template defaults",
     "sharedCapabilitiesHint": "Shared by all connections unless overridden. Missing fields are prefilled with 256K context, 64K output and reasoning enabled; existing values are preserved. Changes take effect when you save the template. Adjust or clear them for your model.",
     "inheritedValue": "Inherited from template",
@@ -1504,6 +1506,11 @@
     "available": "Available",
     "linkMissing": "Linked source missing",
     "back": "Back to workspace",
+    "backToTool": "Back to {{name}}",
+    "details": "Details",
+    "detailsSummary": "Write targets and mode, env file, history",
+    "sharedProviderHint_one": "{{count}} configuration shares a provider with another. Save them as a template: edit once, apply everywhere.",
+    "sharedProviderHint_other": "{{count}} configurations share one provider. Save them as a template: edit once, apply everywhere.",
     "captureCurrent": "Favorite the current profile"
   },
   "timeline": {

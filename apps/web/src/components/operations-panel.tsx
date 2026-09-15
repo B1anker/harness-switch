@@ -12,7 +12,9 @@ type OperationsPanelProps = {
 };
 
 /**
- * Right-column card: durable write receipts for the selected harness.
+ * Durable write receipts for the selected harness, as a row inside the tool details.
+ * Nothing is rendered until the first write has happened: a receipt log is a concept the
+ * user only needs once there is something in it.
  */
 export function OperationsPanel({ harness }: OperationsPanelProps) {
   const { t } = useTranslation();
@@ -28,12 +30,24 @@ export function OperationsPanel({ harness }: OperationsPanelProps) {
     void loadOperations(harness.id);
   }, [harness.id, loadOperations]);
 
+  if (items.length === 0 && !operationsError) {
+    return null;
+  }
+
   return (
-    <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
+    <div>
       <div className="flex items-center gap-2">
         <History className="size-4 text-primary" />
-        <h3 className="font-semibold">{t('operations.title')}</h3>
-        <span className="ml-auto">
+        <h4 className="text-sm font-semibold">{t('operations.title')}</h4>
+        <span className="ml-auto flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={operations === null}
+            onClick={() => setOpen(true)}
+          >
+            {t('operations.viewDetails')}
+          </Button>
           <Button
             size="icon"
             variant="ghost"
@@ -44,32 +58,16 @@ export function OperationsPanel({ harness }: OperationsPanelProps) {
           </Button>
         </span>
       </div>
-
-      <div className="mt-4">
+      <div className="mt-2">
         {operationsError ? (
           <p className="text-sm text-destructive">{lineText(t, operationsError)}</p>
-        ) : operations === null || operationsLoading ? (
-          <p className="text-sm text-muted-foreground">{t('operations.loading')}</p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('operations.empty')}</p>
         ) : (
           <p className="text-sm text-muted-foreground">
             {t('operations.count', { count: items.length })}
           </p>
         )}
       </div>
-
-      <Button
-        className="mt-4 w-full"
-        size="sm"
-        variant="outline"
-        disabled={operations === null}
-        onClick={() => setOpen(true)}
-      >
-        {t('operations.viewDetails')}
-      </Button>
-
       <OperationsDialog harnessId={harness.id} open={open} onOpenChange={setOpen} />
-    </section>
+    </div>
   );
 }
