@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
+import { IgnoreUpdates } from './ignore-updates';
 
 export function FavoriteNextStep({
   favorite,
@@ -17,10 +18,24 @@ export function FavoriteNextStep({
 }) {
   const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
-  const activeCount = favorite.references.filter((ref) => {
-    const harness = harnesses.find((item) => item.id === ref.harness);
-    return harness?.active && !harness.active.official && harness.active.name === ref.name;
-  }).length;
+  const configurationKey = (ref: FavoriteListItem['references'][number]) => {
+    const profile = harnesses
+      .find((entry) => entry.id === ref.harness)
+      ?.profiles.find((entry) => entry.name === ref.name);
+    return (ref.harness === 'kimi' || ref.harness === 'dsh') &&
+      profile?.modelFavorite?.collectionOverrides
+      ? `${ref.harness}/collection/${favorite.id}`
+      : `${ref.harness}/${ref.name}`;
+  };
+  const configurationCount = new Set(favorite.references.map(configurationKey)).size;
+  const activeCount = new Set(
+    favorite.references
+      .filter((ref) => {
+        const harness = harnesses.find((item) => item.id === ref.harness);
+        return harness?.active && !harness.active.official && harness.active.name === ref.name;
+      })
+      .map(configurationKey),
+  ).size;
   const updates: FavoritePlanRequest['items'] = favorite.references
     .filter((ref) => ref.needsUpdate)
     .flatMap((ref) => {
@@ -47,11 +62,13 @@ export function FavoriteNextStep({
     .filter(
       (item, index, items) => items.findIndex((other) => other.harness === item.harness) === index,
     );
-  const updateCount = favorite.references.filter((ref) => ref.needsUpdate).length;
+  const updateCount = new Set(
+    favorite.references.filter((ref) => ref.needsUpdate).map(configurationKey),
+  ).size;
   return (
     <div className="space-y-3 rounded-xl border bg-primary/5 p-4" role="status">
       <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm font-medium">
-        <span>{t('favorites.onboarding.savedCount', { count: favorite.references.length })}</span>
+        <span>{t('favorites.onboarding.savedCount', { count: configurationCount })}</span>
         <span>{t('favorites.onboarding.activeCount', { count: activeCount })}</span>
         {updateCount ? (
           <span>{t('favorites.onboarding.updateCount', { count: updateCount })}</span>
@@ -86,6 +103,7 @@ export function FavoriteNextStep({
           {t('favorites.onboarding.reviewUpdates', { count: updates.length })}
         </Button>
       ) : null}
+      {updateCount ? <IgnoreUpdates favorite={favorite} /> : null}
     </div>
   );
 }

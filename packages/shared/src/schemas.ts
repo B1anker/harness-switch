@@ -55,7 +55,19 @@ const mapKey = z.string().min(1).max(MAX_NAME);
 
 export const harnessIdSchema = z.enum(HARNESS_IDS);
 
-export const extrasSchema = z.record(mapKey, optionalText(MAX_EXTRA_VALUE));
+export const extrasSchema = z.record(mapKey, optionalText(65536)).superRefine((extras, context) => {
+  for (const [key, value] of Object.entries(extras)) {
+    if (key !== 'modelCatalog' && value.length > MAX_EXTRA_VALUE) {
+      context.addIssue({
+        code: 'too_big',
+        origin: 'string',
+        maximum: MAX_EXTRA_VALUE,
+        inclusive: true,
+        path: [key],
+      });
+    }
+  }
+});
 
 export const overridesSchema = z.record(mapKey, optionalText(MAX_OVERRIDE));
 

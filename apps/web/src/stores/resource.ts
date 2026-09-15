@@ -4,6 +4,7 @@ import type { AppState, SetState } from './types';
 
 /** The collections that carry their own `{ x, xLoading, xError }` triple. */
 type ResourceName =
+  | 'toolModels'
   | 'favorites'
   | 'providers'
   | 'doctor'

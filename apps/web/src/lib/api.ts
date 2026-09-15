@@ -194,6 +194,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 export const favoritesPath = (suffix?: string) =>
   `/api/model-favorites${suffix ? `/${suffix}` : ''}`;
 export const favoritePath = (id: string) => `${favoritesPath()}/${encodeURIComponent(id)}`;
+export const favoriteIgnoreUpdatesPath = (id: string) => `${favoritePath(id)}/ignore-updates`;
 export const favoriteTargetsPath = (id: string) => `${favoritePath(id)}/targets`;
 export const favoriteSourcePath = (harness: string, name: string, detach = false) =>
   `${favoritesPath()}/source/${encodeURIComponent(harness)}/${encodeURIComponent(name)}${detach ? '/detach' : ''}`;
@@ -204,3 +205,5 @@ export const favoriteBackupPreviewPath = (id: string) =>
   `${favoritesPath('backups')}/${encodeURIComponent(id)}/preview`;
 export const favoriteApplyPath = (id: string) =>
   `${favoritePlansPath()}/${encodeURIComponent(id)}/apply`;
+export const toolModelsPath = (harness: string, action?: 'preview' | 'apply') =>
+  `/api/tool-models/${encodeURIComponent(harness)}${action ? `/${action}` : ''}`;

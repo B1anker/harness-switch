@@ -61,7 +61,7 @@ test('the model picker trigger matches the protocol select height', () => {
   const favorite = favoriteFixture('daily', 'model');
   stubStoreActions(['loadFavoriteCatalog']);
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
-  const model = screen.getByRole('combobox', { name: '模型' });
+  const model = screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ });
   fireEvent.click(screen.getByRole('button', { name: '更改协议' }));
   const protocol = screen.getByRole('combobox', { name: '协议' });
   expect(model.className).toContain('h-10');
@@ -73,7 +73,7 @@ test('the model list scrolls with the wheel inside the modal dialog', () => {
   const favorite = favoriteFixture('daily', 'manual/model');
   stubStoreActions(['loadFavoriteCatalog']);
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
-  fireEvent.click(screen.getByRole('combobox', { name: '模型' }));
+  fireEvent.click(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ }));
   const list = screen.getByRole('listbox', { name: '搜索或输入模型 ID' });
   expect(list.className).toContain('overflow-y-auto');
   // The modal dialog's RemoveScroll would swallow a wheel that bubbles to the document.

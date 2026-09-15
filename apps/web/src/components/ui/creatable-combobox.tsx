@@ -17,6 +17,7 @@ export function CreatableCombobox({
   getLabel = (item: string) => item,
   disabled,
   trigger,
+  selectedValues,
   ...control
 }: FieldControlProps & {
   value: string;
@@ -29,17 +30,22 @@ export function CreatableCombobox({
   getLabel?(value: string): string;
   disabled?: boolean;
   trigger?: ReactNode;
+  selectedValues?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const candidates = [...new Set(value ? [value, ...options] : options)];
+  const candidates = [
+    ...new Set([...(selectedValues ?? []), ...(value ? [value] : []), ...options]),
+  ];
   const filtered = candidates.filter((item) =>
     `${getLabel(item)} ${item}`.toLowerCase().includes(query.toLowerCase()),
   );
   const custom = query.trim();
   const select = (next: string) => {
     onChange(next);
-    setOpen(false);
+    if (!selectedValues) {
+      setOpen(false);
+    }
   };
   return (
     <Popover.Root
@@ -102,7 +108,13 @@ export function CreatableCombobox({
                   onSelect={() => select(item)}
                   className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2.5 text-sm data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
                 >
-                  <Check className={cn('size-4 shrink-0', value !== item && 'invisible')} />
+                  <Check
+                    className={cn(
+                      'size-4 shrink-0',
+                      !(selectedValues ? selectedValues.includes(item) : value === item) &&
+                        'invisible',
+                    )}
+                  />
                   <span className="break-all">{getLabel(item)}</span>
                 </Command.Item>
               ))}

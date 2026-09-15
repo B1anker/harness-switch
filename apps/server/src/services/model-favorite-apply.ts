@@ -96,13 +96,28 @@ export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
     const connection = favorite?.connections.find((item) => item.id === link?.connectionId);
     const projected =
       favorite && connection
-        ? this.adapters.get(profile.harness).projectFavorite(favorite, connection, link?.baseline)
+        ? this.adapters.get(profile.harness).projectFavorite(
+            favorite,
+            {
+              ...connection,
+              factOverrides: {
+                ...connection.factOverrides,
+                ...link?.collectionOverrides?.factOverrides,
+              },
+              preferenceOverrides: {
+                ...connection.preferenceOverrides,
+                ...link?.collectionOverrides?.preferenceOverrides,
+              },
+            },
+            link?.baseline,
+          )
         : undefined;
     return {
       sourceMissing: !!link && !favorite,
       connectionMissing: !!link && !connection,
       needsUpdate:
         !!link &&
+        link.ignoredRevision !== favorite?.revision &&
         !!projected &&
         (link.projectionVersion !== projected.projectionVersion ||
           hash(link.baseline) !== hash(projected.projection)),
@@ -148,6 +163,9 @@ export class ModelFavoriteApplyService implements IModelFavoriteApplyService {
           }
         }
         const prior = this.profiles.get(selection.harness, name);
+        if (prior?.modelFavorite?.collectionOverrides) {
+          throw failure(ERROR_CODES.toolModelsConflict);
+        }
         if (selection.existing ? prior?.modelFavorite?.favoriteId !== favorite.id : !!prior) {
           throw failure(ERROR_CODES.favoriteInUse);
         }

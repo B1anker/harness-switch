@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { type InferredFacts, NEW_TEMPLATE_FACTS, updateConnectionFacts } from '../draft-facts';
 import { presetFactsForConnection, presetProtocolForUrl } from '../preset-connections';
+import { selectGroupModels } from './model-groups';
 
 function emptyConnection(providerId = '', endpointKey = ''): FavoriteConnection {
   return {
@@ -38,6 +39,9 @@ export function useFavoriteDraft(
     };
     return {
       ...source,
+      defaultConnectionId:
+        source.defaultConnectionId ??
+        source.connections.find((connection) => connection.requestModelId)?.id,
       defaults: {
         ...source.defaults,
         contextWindow: source.defaults.contextWindow ?? NEW_TEMPLATE_FACTS.contextWindow,
@@ -81,18 +85,25 @@ export function useFavoriteDraft(
           ],
         };
       }
-      const result = updateConnectionFacts(
-        current,
-        vaultTarget,
-        {
-          providerId: created.id,
-          endpointKey,
-          ...(protocol ? { protocol } : {}),
-        },
-        inferred.current,
-      );
-      inferred.current = result.inferred;
-      return result.draft;
+      const target = current.connections.find((entry) => entry.id === vaultTarget);
+      let next = current;
+      for (const entry of current.connections.filter(
+        (candidate) => (candidate.groupId ?? candidate.id) === (target?.groupId ?? target?.id),
+      )) {
+        const result = updateConnectionFacts(
+          next,
+          entry.id,
+          {
+            providerId: created.id,
+            endpointKey,
+            ...(protocol ? { protocol } : {}),
+          },
+          inferred.current,
+        );
+        inferred.current = result.inferred;
+        next = result.draft;
+      }
+      return next;
     });
     setVaultTarget(undefined);
   }, [providerList, vaultTarget]);
@@ -116,6 +127,48 @@ export function useFavoriteDraft(
       inferred.current = result.inferred;
       return result.draft;
     });
+  const selectModels = (group: FavoriteConnection[], models: string[]) =>
+    setDraft((current) => {
+      let next = selectGroupModels(current, group, models);
+      for (const connection of next.connections) {
+        if (
+          !connection.requestModelId ||
+          current.connections.some(
+            (entry) =>
+              entry.id === connection.id && entry.requestModelId === connection.requestModelId,
+          )
+        ) {
+          continue;
+        }
+        const candidates = modelHints?.[`${connection.providerId}/${connection.endpointKey}`];
+        const hint =
+          (!modelHints || candidates?.includes(connection.requestModelId)
+            ? hintFacts?.[connection.requestModelId]
+            : undefined) ??
+          presetFactsForConnection(
+            providers,
+            connection.providerId,
+            connection.endpointKey,
+            connection.requestModelId,
+          );
+        const before = {
+          ...next,
+          connections: next.connections.map((entry) =>
+            entry.id === connection.id ? { ...entry, requestModelId: '' } : entry,
+          ),
+        };
+        const result = updateConnectionFacts(
+          before,
+          connection.id,
+          { requestModelId: connection.requestModelId },
+          inferred.current,
+          hint,
+        );
+        next = result.draft;
+        inferred.current = result.inferred;
+      }
+      return next;
+    });
   return {
     draft,
     setDraft,
@@ -125,6 +178,7 @@ export function useFavoriteDraft(
     openVault,
     addConnection,
     update,
+    selectModels,
     inferredFacts: inferred.current,
     dirty: JSON.stringify(draft) !== baseline.current,
   };

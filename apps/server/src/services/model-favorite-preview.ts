@@ -12,6 +12,7 @@ export function favoriteNativePreview(
   format: ConfigFormat,
   content: string | undefined,
   credentials: readonly string[] = [],
+  redactAll = false,
 ): string | null {
   if (content === undefined) {
     return null;
@@ -25,7 +26,7 @@ export function favoriteNativePreview(
           ? parseYamlDocument(content).toJSON()
           : null;
   const value = nativeValueSchema.parse(JSON.parse(JSON.stringify(parsed)));
-  return JSON.stringify(redact(value, credentials), null, 2);
+  return JSON.stringify(redact(value, credentials, redactAll), null, 2);
 }
 
 function redact(value: NativeValue, credentials: readonly string[], secret = false): NativeValue {

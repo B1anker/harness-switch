@@ -1,8 +1,9 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { CircleUserRound, Copy, Pencil, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { CircleUserRound, Pencil, Plus, ShieldCheck } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { ActivateDialog } from '@/components/activate-dialog';
-import { FavoriteLinkStatus } from '@/components/model-favorites/link-status';
+import { CollectionProfileCard } from '@/components/collection-profile-card';
+import { ProfileRow } from '@/components/profile-row';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,10 +17,9 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
-import { configuredModel } from '@/lib/configured-model';
 import { harnessWords } from '@/lib/harness-words';
 import { useTranslation } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
+import { profileDisplayName, profileGroups } from '@/lib/profile-groups';
 import { useAppStore } from '@/stores/app-store';
 
 type HarnessCardProps = {
@@ -42,6 +42,7 @@ export function HarnessCard({
   switching,
 }: HarnessCardProps) {
   const { t } = useTranslation();
+  const favorites = useAppStore((state) => state.favorites);
   const deleteProfile = useAppStore((state) => state.deleteProfile);
   const [pendingName, setPendingName] = useState<string | null>(null);
   const [activating, setActivating] = useState<ProfilePublic | null>(null);
@@ -50,8 +51,8 @@ export function HarnessCard({
   const linkedOfficialProfile = official?.linkedProfileName
     ? harness.profiles.find((profile) => profile.name === official.linkedProfileName)
     : undefined;
-  const visibleProfiles = harness.profiles.filter(
-    (profile) => profile.name !== official?.linkedProfileName,
+  const visibleGroups = profileGroups(harness).filter(
+    (group) => group.selected.name !== official?.linkedProfileName,
   );
   const pendingProfile = harness.profiles.find((profile) => profile.name === pendingName);
   const isLastDshOfficial =
@@ -63,7 +64,12 @@ export function HarnessCard({
   const words = harnessWords(harness.id);
   const activeName = harness.active?.official
     ? t('harness.official')
-    : (harness.active?.name ?? null);
+    : (profileDisplayName(
+        harness.profiles.find((profile) => profile.name === harness.active?.name),
+        favorites,
+      ) ??
+      harness.active?.name ??
+      null);
 
   return (
     <div className="space-y-6">
@@ -112,7 +118,7 @@ export function HarnessCard({
           <div>
             {!switching ? <h3 className="text-sm font-semibold">{t(words.collection)}</h3> : null}
             <p className="mt-1 text-xs text-muted-foreground">
-              {t('harness.profileCount', { count: visibleProfiles.length })}
+              {t('harness.profileCount', { count: visibleGroups.length })}
             </p>
           </div>
           {extraActions}
@@ -157,7 +163,7 @@ export function HarnessCard({
               </div>
             </div>
           ) : null}
-          {visibleProfiles.length === 0 && !linkedOfficialProfile ? (
+          {visibleGroups.length === 0 && !linkedOfficialProfile ? (
             <div className="rounded-xl border border-dashed bg-card/60 px-5 py-8 text-center">
               <p className="text-sm text-muted-foreground">{t('harness.noProfiles')}</p>
               <Button className="mt-4" size="sm" onClick={onAdd}>
@@ -165,97 +171,35 @@ export function HarnessCard({
                 {t('harness.newProfile')}
               </Button>
             </div>
-          ) : visibleProfiles.length > 0 ? (
-            visibleProfiles.map((profile) => {
+          ) : visibleGroups.length > 0 ? (
+            visibleGroups.map((group) => {
+              if (group.favoriteId) {
+                return (
+                  <CollectionProfileCard
+                    key={group.id}
+                    group={group}
+                    harness={harness}
+                    onActivate={setActivating}
+                    onOpenTemplate={onOpenTemplate}
+                  />
+                );
+              }
+              const profile = group.selected;
               const active =
                 harness.active?.official !== true && harness.active?.name === profile.name;
               return (
-                <div
+                <ProfileRow
                   key={profile.name}
-                  className={cn(
-                    'flex flex-col gap-4 rounded-xl border bg-card px-4 py-4 shadow-[0_10px_28px_-26px_rgb(36_39_70/0.38)] transition-[border-color,background-color,box-shadow] sm:flex-row sm:items-center sm:justify-between',
-                    active
-                      ? 'border-primary/20 bg-primary/[0.035] shadow-[0_12px_30px_-24px_rgb(99_91_255/0.35)]'
-                      : 'hover:border-primary/15 hover:bg-card/85',
-                  )}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span
-                      className={cn(
-                        'mt-2 size-2 shrink-0 rounded-full',
-                        active ? 'bg-primary' : 'bg-muted-foreground/30',
-                      )}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{profile.name}</p>
-                        {active ? <Badge>{t(words.appliedBadge)}</Badge> : null}
-                        {profile.overriddenTargets.length > 0 ? (
-                          <Badge variant="outline">{t('harness.manualOverride')}</Badge>
-                        ) : null}
-                      </div>
-                      <p className="mt-1 truncate font-mono text-xs text-muted-foreground">
-                        {profile.baseUrl}
-                      </p>
-                      {
-                        <p
-                          title={configuredModel(profile, t)}
-                          className="mt-0.5 truncate font-mono text-xs text-muted-foreground"
-                        >
-                          {configuredModel(profile, t)}
-                        </p>
-                      }
-                      {profile.modelFavorite ? (
-                        <FavoriteLinkStatus profile={profile} onOpenTemplate={onOpenTemplate} />
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5 self-end sm:self-auto">
-                    <Button
-                      size="sm"
-                      variant={active ? 'secondary' : 'outline'}
-                      onClick={() => setActivating(profile)}
-                      disabled={active}
-                    >
-                      {!active ? <Play /> : null}
-                      {t(
-                        switching
-                          ? active
-                            ? 'workspace.activeNow'
-                            : 'workspace.useConfiguration'
-                          : active
-                            ? words.appliedBadge
-                            : words.apply,
-                      )}
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t('harness.edit', { name: profile.name })}
-                      onClick={() => onEdit(profile)}
-                    >
-                      <Pencil />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t('harness.copy', { name: profile.name })}
-                      onClick={() => onCopy?.(profile)}
-                    >
-                      <Copy />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t('harness.delete', { name: profile.name })}
-                      disabled={active}
-                      title={active ? t('harness.deleteBlocked') : undefined}
-                      onClick={() => setPendingName(profile.name)}
-                    >
-                      <Trash2 className={active ? undefined : 'text-destructive'} />
-                    </Button>
-                  </div>
-                </div>
+                  profile={profile}
+                  harness={harness}
+                  active={active}
+                  switching={switching}
+                  onOpenTemplate={onOpenTemplate}
+                  onEdit={onEdit}
+                  onCopy={onCopy}
+                  setActivating={setActivating}
+                  setPendingName={setPendingName}
+                />
               );
             })
           ) : null}

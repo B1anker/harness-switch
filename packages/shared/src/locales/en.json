@@ -746,7 +746,12 @@
     "favoriteCredentialConsentRequired": "Favorite credential consent required.",
     "favoriteBackupInvalid": "The backup is invalid, damaged or belongs to different configuration paths. Nothing was restored.",
     "favoriteBackupRecoveryFailed": "Restore rollback is incomplete. Configuration operations are paused to protect data. Check file permissions and retry.",
-    "favoriteBackupStale": "Configuration changed after preview. Check the restore impact again."
+    "favoriteBackupStale": "Configuration changed after preview. Check the restore impact again.",
+    "toolModelsInvalid": "The model collection file is invalid. Restore it before editing.",
+    "toolModelsDefaultRequired": "Choose a replacement default before removing or changing the current default model.",
+    "toolModelsConflict": "The model conflicts with an existing entry. Manage collection models from the tool model list.",
+    "toolModelsFactsInvalid": "Model reasoning settings conflict. Check reasoning support, supported levels and the selected effort, or restore inheritance.",
+    "favoriteReasoningLevelsMissing": "Reasoning support is declared, but supported effort levels are unspecified. This apply will omit effort levels and still apply other settings. Add supported levels in the template model settings."
   },
   "warning": {
     "activation": {
@@ -1251,7 +1256,7 @@
     "modelEmpty": "Enter a model ID to add it, or load the provider catalog first.",
     "modelCustom": "Use “{{value}}”",
     "catalogLoad": "Load catalog",
-    "catalogRefresh": "Refresh catalog",
+    "catalogRefresh": "Refresh model list",
     "catalogLoading": "Loading model list…",
     "catalogCount": "{{count}} catalog models available to search above.",
     "noCatalogManual": "No catalog available. You can still enter a model ID.",
@@ -1300,7 +1305,9 @@
       "connectNext": "Next: add a model connection",
       "savedHint": "Your template is saved and currently has no linked tool profiles. Choose tools and preview to save for later or switch now.",
       "connectedHint": "Template changes do not update linked profiles automatically. Preview and confirm to sync them.",
-      "reviewUpdates": "Preview pending updates ({{count}})"
+      "reviewUpdates": "Preview pending updates ({{count}})",
+      "ignoreUpdates": "Ignore this update",
+      "ignoreUpdatesHint": "Keep the current configuration and template link. Future template changes will still notify you."
     },
     "relationships": {
       "chooseConnection": "Choose a model connection",
@@ -1354,7 +1361,66 @@
     "effortPreferenceHint": "Choose a declared level, or leave unspecified to use the tool or provider default.",
     "effortUnknownHint": "Supported levels are not declared. Keep the default behavior until the levels are confirmed.",
     "followDefault": "Unspecified; use default",
-    "changeProtocol": "Change protocol"
+    "changeProtocol": "Change protocol",
+    "scheme": {
+      "modelMulti": "Models (multiple)",
+      "defaultModel": "Default model",
+      "chooseDefault": "Choose a default model",
+      "defaultHint": "The first model is selected initially; later changes are your choice.",
+      "defaultRemoved": "The default model was removed. Choose a replacement.",
+      "toolSettings": "Tool settings",
+      "toolHint": "Save how each tool uses this template.",
+      "useConnection": "Connection",
+      "noCompatible": "Add a compatible connection and model first.",
+      "default": "Use the default model for all tiers",
+      "tiers": "Assign models by tier",
+      "chooseModel": "Choose a model",
+      "sameConnection": "Choose within one connection. Models can be reused.",
+      "allDefault": "Use default for all tiers",
+      "availableModels": "Available models",
+      "startModel": "Startup model",
+      "followTemplate": "Follow template default",
+      "defaultIncompatible": "The default is not available. Choose a model explicitly.",
+      "followModel": "Follow model settings",
+      "tools": {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "kimi": "Kimi",
+        "dsh": "DSH",
+        "pi": "Pi"
+      },
+      "tier": {
+        "opus": "Opus",
+        "sonnet": "Sonnet",
+        "haiku": "Haiku"
+      },
+      "collectionApplyHint": "Apply this template’s selected models and retain models managed by other templates.",
+      "modelSettings": "Settings for {{model}}",
+      "editorHint": "Manage connections, models, and how each tool uses them.",
+      "toggleConnection": "Expand or collapse connection: {{name}}",
+      "selectedCount": "{{count}} models",
+      "invalidBinding": "Tool model assignments are incomplete, removed, or outside the selected connection. Choose again.",
+      "saveDraft": "Save pending configuration",
+      "draftSaved": "Pending configuration saved. The active tool configuration is unchanged.",
+      "reasoningEffort": "Reasoning effort",
+      "chooseConnection": "Choose a model connection",
+      "protocolRequired": "{{tool}} requires {{protocol}}; existing connections use another protocol.",
+      "addProtocolConnection": "Add a {{tool}} connection from {{name}}",
+      "protocolConnectionHint": "Reuse the account and models in a separate connection. Confirm provider support for this protocol and check the new connection URL.",
+      "reviewTool": "Selected {{tool}}. Next, review the configuration, resolve conflicts, and confirm saving or switching.",
+      "searchModels": "Search connections or models",
+      "filteredSelectionHint": "Bulk actions affect only models matching this filter.",
+      "groupSelectionCount": "{{selected}} / {{count}} selected",
+      "collectionProfile": "Multi-model configuration · {{count}} models",
+      "useCollection": "Use configuration and startup model",
+      "manageCollection": "Manage template and models",
+      "missingReasoningCount": "{{count}} models have unspecified reasoning levels",
+      "selection": {
+        "all": "Select all",
+        "none": "Clear",
+        "invert": "Invert"
+      }
+    }
   },
   "favorite": {
     "result": "Operation completed"
@@ -1526,6 +1592,53 @@
       "scanNote": "Use harness-switch import <id>... to import; neither scanning nor importing changes the tools' own configuration.",
       "undoable": "undoable",
       "notUndoable": "not undoable"
+    }
+  },
+  "toolModels": {
+    "title": "Available models",
+    "hint": "Combine model templates for this tool and choose a default independently.",
+    "manage": "Manage models",
+    "loading": "Loading model collection…",
+    "retry": "Reload",
+    "missing": "Missing template or connection",
+    "remove": "Remove",
+    "connection": "Connection",
+    "settings": "Settings for this tool",
+    "inheritHint": "Values follow this template and connection. Only fields you edit are overridden for this tool.",
+    "reset": "Follow template and connection",
+    "previewTitle": "Review model changes",
+    "previewCount": "Write {{count}} models; remove {{removed}} previous entries.",
+    "defaultChanged": "Default: {{name}} · {{model}}",
+    "keepDefault": "Keep the current default",
+    "notRepresented": "This tool cannot write these settings: {{fields}}",
+    "fileChanges": "Native file changes (credentials hidden)",
+    "changed": "Changed",
+    "unchanged": "Unchanged",
+    "before": "Before",
+    "after": "After",
+    "apply": "Apply these changes",
+    "empty": "No models selected. Add templates below.",
+    "add": "Add from templates (select multiple)",
+    "noTemplates": "Create a model template with a connection first.",
+    "default": "Default model after applying",
+    "scope": {
+      "kimi": "Models are written to Kimi Code. Restart or reload the tool to read the new configuration.",
+      "dsh": "The default applies to new DSH sessions; an existing session keeps its own model selection."
+    },
+    "save": "Save draft only",
+    "preview": "Preview application",
+    "saving": "Saving draft…",
+    "previewing": "Preparing preview…",
+    "applying": "Writing model configuration…",
+    "saved": "Draft saved. Native configuration has not changed.",
+    "applied": "Model configuration applied.",
+    "appliedCount": "{{count}} models last applied",
+    "draftHint": "Saved draft; preview to compare it with the native configuration.",
+    "nativeStatus": {
+      "unknown": "No applied models to compare yet.",
+      "in-sync": "Applied models match the native configuration.",
+      "drifted": "Native models differ from the last application. Review changes before applying again.",
+      "invalid": "Unable to compare native configuration. Check the files and preview again."
     }
   }
 }

@@ -172,6 +172,15 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
         .array(z.object({ id: z.string() }).passthrough())
         .safeParse(isYamlNode(prior) ? prior.toJSON() : prior);
       if (parsed.success) {
+        if (profile.extras.modelId) {
+          models = [
+            ...parsed.data.filter((entry) => entry.id !== profile.model),
+            ...models.map((model) => ({
+              ...parsed.data.find((entry) => entry.id === model.id),
+              ...model,
+            })),
+          ];
+        }
         // Favorites own only the primary model; preserve native declarations for other slots.
         models = models.map((model) =>
           model.id === profile.model
@@ -187,7 +196,8 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
       settings.setIn(['llm-deepseek', 'maxTokens'], numeric(profile.extras.maxTokens, 256000));
     } else {
       settings.setIn(['llm-pi-ai', 'providers', providerId], {
-        displayName: profile.name,
+        ...toPlain(settings.getIn(['llm-pi-ai', 'providers', providerId])),
+        displayName: profile.extras.providerName || profile.name,
         apiKeyEnv: credentialRef,
         api: profile.extras.api || DEFAULT_API,
         baseURL: profile.baseUrl,
@@ -280,6 +290,22 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
     const { official, providerId, credentialRef } = this.route(profile);
     const rendered: RenderedFiles = {};
 
+    if (profile.extras.modelId && !official && current[SETTINGS] !== undefined) {
+      const settings = parseYamlDocument(current[SETTINGS]);
+      const path = ['llm-pi-ai', 'providers', providerId, 'models'];
+      const raw = settings.getIn(path);
+      const models =
+        z
+          .array(z.object({ id: z.string() }).passthrough())
+          .optional()
+          .parse(isYamlNode(raw) ? raw.toJSON() : raw) ?? [];
+      const remaining = models.filter((model) => model.id !== profile.model);
+      if (remaining.length) {
+        settings.setIn(path, remaining);
+        return { [SETTINGS]: settings.toString() };
+      }
+    }
+
     if (current[SETTINGS] !== undefined) {
       const settings = tryParseYamlDocument(current[SETTINGS]);
       if (settings) {
@@ -300,7 +326,17 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
       const credentials = tryParseYamlDocument(current[CREDENTIALS]);
       if (credentials) {
         this.normalizeCredentials(credentials);
-        credentials.deleteIn(['refs', credentialRef]);
+        const settings = tryParseYamlDocument(rendered[SETTINGS] ?? current[SETTINGS]);
+        const providers = settings
+          ? toPlain(settings.getIn(['llm-pi-ai', 'providers']))
+          : undefined;
+        const stillReferenced =
+          Object.values(providers ?? {}).some(
+            (provider) => toPlain(provider)?.apiKeyEnv === credentialRef,
+          ) || settings?.getIn(['llm-deepseek', 'apiKeyEnv']) === credentialRef;
+        if (!stillReferenced) {
+          credentials.deleteIn(['refs', credentialRef]);
+        }
         rendered[CREDENTIALS] = credentials.toString();
       }
       // The credential provider rejects an invalid document too, so leave it intact.
@@ -318,7 +354,9 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
     }
     const route = toPlain(settings.getIn(settingsPath));
     const models = Array.isArray(route?.models) ? route.models : [];
-    const firstModel = toPlain(models[0]);
+    const firstModel = toPlain(
+      models.find((entry) => toPlain(entry)?.id === profile.model) ?? models[0],
+    );
     const apiKey = credentialValue(credentials, credentialRef);
 
     return {
@@ -329,10 +367,12 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
         ...profile.extras,
         providerType: official ? 'official' : 'custom',
         api: typeof route?.api === 'string' ? route.api : profile.extras.api || '',
-        models: models
-          .map((entry) => toPlain(entry)?.id)
-          .filter((id): id is string => typeof id === 'string')
-          .join('\n'),
+        models: profile.extras.modelId
+          ? ''
+          : models
+              .map((entry) => toPlain(entry)?.id)
+              .filter((id): id is string => typeof id === 'string')
+              .join('\n'),
         contextWindow: valueString(firstModel?.contextWindow, profile.extras.contextWindow),
         maxTokens: valueString(firstModel?.maxTokens, profile.extras.maxTokens),
         reasoningEfforts: reasoningEffortsString(
@@ -359,13 +399,29 @@ export class DshAdapter extends BaseAdapter implements HarnessAdapter {
       return [];
     }
     return compact(
-      Object.entries(providers).map(([id, provider]) => {
+      Object.entries(providers).flatMap(([id, provider]) => {
         const route = toPlain(provider);
         if (!route) {
-          return null;
+          return [];
         }
-        const seed = seedProfile({ providerId: id });
-        return toCandidate(id, seed, this.backfill(seed, current), id === selected);
+        const models = z.array(z.object({ id: z.string() }).passthrough()).safeParse(route.models);
+        if (!models.success || !models.data.length) {
+          const seed = seedProfile({ providerId: id });
+          return [toCandidate(id, seed, this.backfill(seed, current), id === selected)];
+        }
+        return models.data.map((model) => {
+          const independent = models.data.length > 1 || id.startsWith('hsw-mc-');
+          const seed = {
+            ...seedProfile({ providerId: id, ...(independent ? { modelId: model.id } : {}) }),
+            model: model.id,
+          };
+          return toCandidate(
+            independent ? `${id}-${model.id}` : id,
+            seed,
+            this.backfill(seed, current),
+            id === selected && settings.getIn(['agent-default-model', 'model']) === model.id,
+          );
+        });
       }),
     );
   }

@@ -10,12 +10,14 @@ import { createProbeSlice } from './slices/probe';
 import { createProviderSlice } from './slices/providers';
 import { createScanSlice } from './slices/scan';
 import { createSessionSlice } from './slices/session';
+import { createToolModelsSlice } from './slices/tool-models';
 import type { AppState } from './types';
 
 export type { AppState };
 
 export const useAppStore = create<AppState>()((...args) => ({
   ...createSessionSlice(...args),
+  ...createToolModelsSlice(...args),
   ...createFavoriteSlice(...args),
   ...createHarnessSlice(...args),
   ...createBackupSlice(...args),

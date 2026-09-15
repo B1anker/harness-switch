@@ -248,9 +248,7 @@ export class ActivationService implements IActivationService {
     const profile = this.profiles.decrypt(harness, name);
     const targets = adapter.targets();
     const current = this.readCurrent(targets);
-    const rendered = adapter.render(profile, current);
-
-    return Object.entries(rendered).map(([key, content]) => {
+    return this.expectedNamedWrites(harness, name).map(({ key, content }) => {
       const target = this.requireTarget(targets, key);
       const override = profile.overrides[key];
       return {
@@ -397,7 +395,19 @@ export class ActivationService implements IActivationService {
     const adapter = this.adapters.get(harness);
     const profile = this.profiles.decrypt(harness, name);
     const targets = adapter.targets();
-    const rendered = adapter.render(profile, this.readCurrent(targets));
+    let current = this.readCurrent(targets);
+    const register = adapter.renderCollectionModel ?? adapter.renderAvailable;
+    if (register) {
+      for (const entry of this.profiles.list(harness)) {
+        if (entry.modelFavorite?.collectionOverrides && entry.name !== name) {
+          current = {
+            ...current,
+            ...register.call(adapter, this.profiles.decrypt(harness, entry.name), current),
+          };
+        }
+      }
+    }
+    const rendered = adapter.render(profile, current);
     for (const [key, content] of Object.entries(profile.overrides)) {
       // An override only makes sense for a file this harness owns; a stale key from an
       // earlier schema is ignored rather than written to an unknown path.

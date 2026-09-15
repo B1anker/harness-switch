@@ -20,6 +20,7 @@ import { createOperationRoutes } from './http/routes/operations';
 import { createProbeRoutes } from './http/routes/probe';
 import { createProviderRoutes } from './http/routes/providers';
 import { createScanRoutes } from './http/routes/scan';
+import { createToolModelsRoutes } from './http/routes/tool-models';
 import { createTransferRoutes } from './http/routes/transfer';
 import { createUpdateRoutes } from './http/routes/update';
 import { createUserRoutes } from './http/routes/users';
@@ -62,6 +63,7 @@ export function createApp(services: InstantiationService): Hono {
   };
 
   guarded('/model-favorites', createModelFavoriteRoutes(services));
+  guarded('/tool-models', createToolModelsRoutes(services));
   guarded('/model-favorite-plans', createModelFavoritePlanRoutes(services));
   guarded('/model-favorite-operations', createModelFavoriteOperationRoutes(services));
   guarded('/users', createUserRoutes(services));

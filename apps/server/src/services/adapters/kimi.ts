@@ -127,18 +127,31 @@ export class KimiAdapter extends BaseAdapter implements HarnessAdapter {
     provider.base_url = profile.baseUrl;
     provider.api_key = profile.apiKey;
 
-    const model = ensureObject(ensureObject(config, 'models'), id);
+    const modelId = profile.extras.modelId || id;
+    const model = ensureObject(ensureObject(config, 'models'), modelId);
     model.provider = id;
     model.model = profile.model;
     model.max_context_size = numeric(profile.extras.maxContextSize, DEFAULT_CONTEXT);
 
-    config.default_model = id;
+    config.default_model = modelId;
 
     return { [CONFIG]: stringifyToml(config) };
   }
 
+  renderCollectionModel(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
+    const previous = parseTomlObject(current[CONFIG]);
+    const rendered = parseTomlObject(this.render(profile, current)[CONFIG]);
+    if (previous.default_model === undefined) {
+      delete rendered.default_model;
+    } else {
+      rendered.default_model = previous.default_model;
+    }
+    return { [CONFIG]: stringifyToml(rendered) };
+  }
+
   revoke(profile: AdapterProfile, current: CurrentFiles): RenderedFiles {
     const id = providerId(profile);
+    const modelId = profile.extras.modelId || id;
     if (current[CONFIG] === undefined) {
       return {};
     }
@@ -148,14 +161,19 @@ export class KimiAdapter extends BaseAdapter implements HarnessAdapter {
     }
 
     const providers = config.providers;
-    if (isPlainObject(providers)) {
-      delete providers[id];
-    }
     const models = config.models;
     if (isPlainObject(models)) {
-      delete models[id];
+      delete models[modelId];
     }
-    if (config.default_model === id) {
+    if (
+      isPlainObject(providers) &&
+      !Object.values(isPlainObject(models) ? models : {}).some(
+        (model) => isPlainObject(model) && model.provider === id,
+      )
+    ) {
+      delete providers[id];
+    }
+    if (config.default_model === modelId) {
       const remaining = isPlainObject(models) ? Object.keys(models) : [];
       if (remaining.length > 0) {
         config.default_model = remaining[0];
@@ -207,7 +225,7 @@ export class KimiAdapter extends BaseAdapter implements HarnessAdapter {
     const providers = config.providers;
     const provider = isPlainObject(providers) ? providers[id] : undefined;
     const models = config.models;
-    const model = isPlainObject(models) ? models[id] : undefined;
+    const model = isPlainObject(models) ? models[profile.extras.modelId || id] : undefined;
     const apiKey = readString(provider, 'api_key');
     return {
       baseUrl: readString(provider, 'base_url') || profile.baseUrl,
@@ -216,7 +234,7 @@ export class KimiAdapter extends BaseAdapter implements HarnessAdapter {
     };
   }
 
-  /** One candidate per `providers` entry; `default_model` names the one in use. */
+  /** Model aliases are independent of providers; several aliases may share a credential. */
   detect(current: CurrentFiles): DetectedProfile[] {
     const config = tryParseTomlObject(current[CONFIG]);
     if (!config) {
@@ -229,20 +247,22 @@ export class KimiAdapter extends BaseAdapter implements HarnessAdapter {
     const models = isPlainObject(config.models) ? config.models : {};
     const selected = readString(config, 'default_model');
     return compact(
-      Object.entries(providers).map(([id, provider]) => {
+      Object.entries(models).map(([modelId, model]) => {
+        const id = readString(model, 'provider') || modelId;
+        const provider = providers[id];
         if (!isPlainObject(provider)) {
           return null;
         }
-        const model = models[id];
         const seed = seedProfile({
           providerId: id,
+          ...(modelId === id ? {} : { modelId }),
           providerType: readString(provider, 'type') || 'kimi',
           maxContextSize: valueString(
             isPlainObject(model) ? model.max_context_size : undefined,
             String(DEFAULT_CONTEXT),
           ),
         });
-        return toCandidate(id, seed, this.backfill(seed, current), id === selected);
+        return toCandidate(modelId, seed, this.backfill(seed, current), modelId === selected);
       }),
     );
   }

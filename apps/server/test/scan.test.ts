@@ -139,7 +139,11 @@ describe('existing configuration scan', () => {
   test('says which files it looked at, including the ones that are missing', async () => {
     const context = await createTestApp();
     const codex = resultFor(await scan(context), 'codex');
-    expect(codex.sources.map((source) => source.key).toSorted()).toEqual(['auth', 'config']);
+    expect(codex.sources.map((source) => source.key).toSorted()).toEqual([
+      'auth',
+      'config',
+      'modelCatalog',
+    ]);
     expect(codex.sources.every((source) => !source.exists)).toBe(true);
     expect(codex.noteMsg).toContain('没有找到');
   });

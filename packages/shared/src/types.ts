@@ -575,7 +575,7 @@ export type OperationKind =
   | 'sync';
 
 /** Store files an operation changed alongside the native config files. */
-export type OperationMetadataKey = 'profiles' | 'active' | 'vault' | 'favorites';
+export type OperationMetadataKey = 'profiles' | 'active' | 'vault' | 'favorites' | 'toolModels';
 
 export type OperationFile = {
   key: string;

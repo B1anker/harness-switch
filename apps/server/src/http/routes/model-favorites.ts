@@ -92,6 +92,11 @@ export function createModelFavoriteRoutes(services: InstantiationService): Hono 
     );
     return c.json({ code: FAVORITE_CODES.result, data: { ok: true } });
   });
+  app.post('/:id/ignore-updates', async (c) => {
+    const body = await readJsonBody(c, favoriteRevisionRequestSchema.required());
+    favorites.ignoreUpdates(param(c, 'id'), body.expectedRevision);
+    return c.json({ code: FAVORITE_CODES.result, data: { ok: true } });
+  });
   app.patch('/:id', async (c) =>
     c.json({
       code: FAVORITE_CODES.result,
