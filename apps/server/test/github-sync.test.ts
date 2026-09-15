@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import type {
-  GitHubDevicePollResponse,
-  GitHubPushResponse,
-  GitHubSyncStatus,
-  TransferImportResponse,
+import {
+  ERROR_CODES,
+  type GitHubDevicePollResponse,
+  type GitHubPushResponse,
+  type GitHubSyncStatus,
+  type TransferImportResponse,
 } from '@seaveyon/harness-switch-shared';
 import { createSandbox, createTestApp, type Sandbox } from './support';
 
@@ -86,6 +87,23 @@ describe('GitHub Sync Service and Routes', () => {
     const checkStatus = await context.json<GitHubSyncStatus>('/api/github/status');
     expect(checkStatus.connected).toBe(true);
     expect(checkStatus.username).toBe('octocat');
+  });
+
+  test('a 200 whose body is not the shape GitHub documents is a failed request', async () => {
+    const context = await createTestApp();
+    sandbox.stubFetch((url) => {
+      if (url.includes('/user')) {
+        // A gateway or captive portal answering in GitHub's place.
+        return Response.json({ html: '<html>please sign in</html>' });
+      }
+      return new Response('Not found', { status: 404 });
+    });
+
+    const res = await context.post('/api/github/token', { token: 'ghp_fake_token_12345' });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ code: ERROR_CODES.githubUnexpectedResponse });
+    // Nothing was saved off the back of a response that could not be read.
+    expect((await context.json<GitHubSyncStatus>('/api/github/status')).connected).toBe(false);
   });
 
   test('push and pull roundtrip with encryption', async () => {

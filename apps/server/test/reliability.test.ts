@@ -93,6 +93,47 @@ describe('live write', () => {
     expect(readFileSync(profiles, 'utf8')).toBe('{"before":true}\n');
   });
 
+  test('refuses an async operation and rolls the files back instead of committing early', () => {
+    const live = services.get(ILiveWriteService);
+    const journal = services.get(IJournalService);
+    seed(piModels, '{"original":true}\n');
+
+    expect(() =>
+      live.transaction(
+        plan('pi', 'demo', [
+          { key: 'models', path: piModels, format: 'json', content: '{"changed":true}\n' },
+        ]),
+        // Cast: the type forbids this, which is exactly the mistake the guard exists for.
+        (async () => undefined) as unknown as () => void,
+      ),
+    ).toThrow(/must be synchronous/);
+
+    expect(readFileSync(piModels, 'utf8')).toBe('{"original":true}\n');
+    expect(journal.list()[0]?.state).toBe('rolled-back');
+  });
+
+  test('refuses to nest one transaction inside another', () => {
+    const live = services.get(ILiveWriteService);
+    seed(piModels, '{"original":true}\n');
+
+    expect(() =>
+      live.transaction(
+        plan('pi', 'outer', [
+          { key: 'models', path: piModels, format: 'json', content: '{"outer":true}\n' },
+        ]),
+        () =>
+          live.apply(
+            plan('pi', 'inner', [
+              { key: 'settings', path: piSettings, format: 'json', content: '{}\n' },
+            ]),
+          ),
+      ),
+    ).toThrow(/re-entered/);
+
+    expect(readFileSync(piModels, 'utf8')).toBe('{"original":true}\n');
+    expect(services.get(IFileService).exists(piSettings)).toBe(false);
+  });
+
   test('rejects unparsable content before writing anything', () => {
     const live = services.get(ILiveWriteService);
     seed(codexConfig, 'model = "keep"\n');

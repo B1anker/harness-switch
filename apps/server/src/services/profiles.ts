@@ -7,42 +7,56 @@ import {
   type ProfilePublic,
   type ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
+import { z } from 'zod';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import type { AdapterProfile } from './adapters';
 import { IAdapterRegistry } from './adapters';
-import { type EncryptedValue, ICryptoService } from './crypto';
+import { encryptedValueSchema, ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { ILogService } from './log';
 import { IHarnessRegistry } from './registry';
 import { IVaultService, type ProviderEndpoint } from './vault';
 
-export type StoredProfile = {
-  model_favorite?: ModelFavoriteLink;
-  base_url: string;
-  api_key: EncryptedValue;
-  model: string;
-  notes: string;
+/**
+ * One profile as it sits in `profiles.json`. Read through the schema so a field the
+ * adapters lean on (string extras, a string endpoint) can never arrive in another shape.
+ * Two fields stay deliberately lenient: a template link that no longer parses is treated
+ * as absent, which is how the `safeParse` sites downstream already read it, and a key
+ * written by an older layout is kept as an opaque object so `decrypt` can turn it into an
+ * empty credential instead of the whole store becoming unreadable.
+ */
+export const storedProfileSchema = z.object({
+  model_favorite: modelFavoriteLinkSchema.optional().catch(undefined),
+  base_url: z.string(),
+  api_key: z.union([encryptedValueSchema, z.record(z.string(), z.unknown())]),
+  model: z.string(),
+  // Older layouts omitted both; the public projection already read them as ''.
+  notes: z.string().default(''),
   /** Harness-specific structured fields, as declared by the adapter's FieldSpec list. */
-  extras?: Record<string, string>;
+  extras: z.record(z.string(), z.string()).optional(),
   /**
    * Target key to verbatim file content. Present only for files the user took over in
    * the advanced editor, which then win over anything the form fields would render.
    */
-  overrides?: Record<string, string>;
+  overrides: z.record(z.string(), z.string()).optional(),
   /**
    * Optional reference to a Provider Vault entry. When set, the vault owns the
-   * credential: `api_key` below is only a materialized cache of the latest value,
+   * credential: `api_key` above is only a materialized cache of the latest value,
    * and `decrypt` resolves through the vault instead.
    */
-  provider_id?: string;
+  provider_id: z.string().optional(),
   /** Optional named endpoint under the vault entry; its base URL wins when set. */
-  provider_endpoint?: string;
-  updated_at: string;
-};
+  provider_endpoint: z.string().optional(),
+  updated_at: z.string().default(''),
+});
 
-export type ProfileStore = Record<string, Record<string, StoredProfile>>;
+export type StoredProfile = z.infer<typeof storedProfileSchema>;
+
+export const profileStoreSchema = z.record(z.string(), z.record(z.string(), storedProfileSchema));
+
+export type ProfileStore = z.infer<typeof profileStoreSchema>;
 
 export type ProfileInput = {
   name: string;
@@ -383,7 +397,7 @@ export class ProfileService implements IProfileService {
   private read(): ProfileStore {
     // Strict: a corrupt profile store must never be mistaken for an empty one,
     // or a later write would overwrite the user's encrypted profiles.
-    return this.files.readJsonStrict<ProfileStore>(this.environment.files.profiles, {});
+    return this.files.readStore(this.environment.files.profiles, profileStoreSchema, {});
   }
 
   private repairEndpointReferences(store: ProfileStore, harness: HarnessId): boolean {

@@ -180,6 +180,9 @@
         "reasoning": {
           "label": "推理能力",
           "help": "对应 models.json 的 reasoning。GPT / Claude 思考模型需要开启。"
+        },
+        "target": {
+          "auth": "auth.json（仅检测官方登录）"
         }
       },
       "dsh": {
@@ -254,6 +257,7 @@
     "officialHintClaude": "使用 Claude Code 自身的 Anthropic 账号登录",
     "officialHintCodex": "使用 Codex 自身的 ChatGPT / OpenAI 账号登录",
     "officialHintKimi": "使用 Kimi Code 自身的 Kimi 账号登录（/login 写入的 OAuth 凭据）",
+    "officialHintPi": "回到 Pi 自身 /login 写入 auth.json 的账号；启动模型由 Pi 自行选择，可用 /model 调整",
     "officialHintDsh": "检测并切换到 DeepSeek Harness 已有的 DeepSeek 官方 API Key 配置。",
     "application": "应用",
     "writeMode": "写入模式",
@@ -592,7 +596,8 @@
       "authFailed": "GitHub 授权失败，请重新登录",
       "gistNotFound": "GitHub 中未找到 harness-switch 备份 Gist",
       "deviceCodeExpired": "设备授权码已过期，请重新获取",
-      "rateLimitExceeded": "GitHub API 请求速率超限，请稍后再试"
+      "rateLimitExceeded": "GitHub API 请求速率超限，请稍后再试",
+      "unexpectedResponse": "GitHub 返回了无法识别的响应，请稍后重试"
     },
     "cli": {
       "missingArgument": "缺少必要参数"
@@ -706,7 +711,8 @@
     "storage": {
       "unreadable": "无法读取 {{file}}",
       "quarantineFailed": "无法隔离损坏的 {{file}}",
-      "corruptQuarantined": "数据存储已损坏，原文件已隔离为 {{quarantine}}，请从备份恢复后再继续"
+      "corruptQuarantined": "数据存储已损坏，原文件已隔离为 {{quarantine}}，请从备份恢复后再继续",
+      "invalid": "数据存储 {{file}} 的内容不符合预期结构（{{issue}}），已拒绝读取以免覆盖；请检查该文件或从备份恢复"
     },
     "probe": {
       "badUrl": "Base URL 无法解析，或不是 http/https",

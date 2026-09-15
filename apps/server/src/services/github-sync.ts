@@ -11,9 +11,10 @@ import {
   type TransferImportResponse,
   transferEnvelopeSchema,
 } from '@seaveyon/harness-switch-shared';
+import { z } from 'zod';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
-import { type EncryptedValue, ICryptoService } from './crypto';
+import { encryptedValueSchema, ICryptoService } from './crypto';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 import { IHttpClient } from './http-client';
@@ -27,32 +28,61 @@ const GIST_FILENAME = 'harness-switch-backup.json';
 const GIST_DESCRIPTION = 'harness-switch sync vault (Encrypted backup)';
 const USER_AGENT = 'harness-switch';
 
-type GitHubStore = {
-  token?: EncryptedValue;
-  username?: string;
-  avatarUrl?: string;
-  gistId?: string;
-  lastSyncedAt?: string;
-};
+const githubStoreSchema = z.object({
+  token: encryptedValueSchema.optional(),
+  username: z.string().optional(),
+  avatarUrl: z.string().optional(),
+  gistId: z.string().optional(),
+  lastSyncedAt: z.string().optional(),
+});
 
-type GitHubGistFile = {
-  filename?: string;
-  content?: string;
-  raw_url?: string;
-  truncated?: boolean;
-};
+type GitHubStore = z.infer<typeof githubStoreSchema>;
 
-type GitHubGist = {
-  id: string;
-  description: string;
-  updated_at: string;
-  files: Record<string, GitHubGistFile>;
-};
+/**
+ * Only the fields this service reads. GitHub's payloads carry far more; a schema that
+ * named them all would break on every additive API change, so unknown keys are dropped.
+ */
+const githubGistFileSchema = z.object({
+  content: z.string().optional(),
+  raw_url: z.string().optional(),
+  truncated: z.boolean().optional(),
+});
 
-type GitHubUser = {
-  login: string;
-  avatar_url: string;
-};
+const githubGistSchema = z.object({
+  id: z.string(),
+  updated_at: z.string(),
+  files: z.record(z.string(), githubGistFileSchema),
+});
+
+type GitHubGist = z.infer<typeof githubGistSchema>;
+
+const githubUserSchema = z.object({
+  login: z.string(),
+  avatar_url: z.string().optional().default(''),
+});
+
+const deviceCodeResponseSchema = z.object({
+  device_code: z.string(),
+  user_code: z.string(),
+  verification_uri: z.string(),
+  expires_in: z.number(),
+  interval: z.number(),
+});
+
+/** Both an OAuth error and a grant come back as 200, so the two shapes share one schema. */
+const accessTokenResponseSchema = z.object({
+  access_token: z.string().optional(),
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+  interval: z.number().optional(),
+});
+
+/** Free-form `{ error, error_description }` GitHub returns beside a 4xx or a device-flow 200. */
+const githubErrorSchema = z.object({
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+  message: z.string().optional(),
+});
 
 export interface IGitHubSyncService {
   readonly _serviceBrand: undefined;
@@ -102,7 +132,12 @@ export class GitHubSyncService implements IGitHubSyncService {
   ) {}
 
   private readStore(): GitHubStore {
-    return this.files.readJson<GitHubStore>(this.environment.files.github, {});
+    // Tolerant on purpose: this file only caches a connection. A store that no longer
+    // parses reads as "not connected", and the next login rewrites it.
+    const parsed = githubStoreSchema.safeParse(
+      this.files.readJson<unknown>(this.environment.files.github, {}),
+    );
+    return parsed.success ? parsed.data : {};
   }
 
   private writeStore(store: GitHubStore): void {
@@ -132,6 +167,7 @@ export class GitHubSyncService implements IGitHubSyncService {
 
   private async githubFetch<T>(
     path: string,
+    schema: z.ZodType<T>,
     options: RequestInit = {},
     token?: string,
   ): Promise<T> {
@@ -167,9 +203,9 @@ export class GitHubSyncService implements IGitHubSyncService {
       const errorText = await response.text();
       let errorMsg = `GitHub 请求失败 (${response.status})`;
       try {
-        const errorJson = JSON.parse(errorText) as { message?: string };
-        if (errorJson.message) {
-          errorMsg = `GitHub: ${errorJson.message}`;
+        const errorJson = githubErrorSchema.safeParse(JSON.parse(errorText));
+        if (errorJson.success && errorJson.data.message) {
+          errorMsg = `GitHub: ${errorJson.data.message}`;
         }
       } catch {
         // use default error message
@@ -177,7 +213,19 @@ export class GitHubSyncService implements IGitHubSyncService {
       throw new HttpError(response.status, errorMsg, { code: ERROR_CODES.requestFailed });
     }
 
-    return (await response.json()) as T;
+    return this.parseResponse(schema, await response.json());
+  }
+
+  /** A payload GitHub sent but this service cannot read is a failed request, not a crash. */
+  private parseResponse<T>(schema: z.ZodType<T>, payload: unknown): T {
+    const parsed = schema.safeParse(payload);
+    if (parsed.success) {
+      return parsed.data;
+    }
+    this.log.warn(`[github-sync] unexpected response shape: ${parsed.error.issues[0]?.message}`);
+    throw new HttpError(502, 'GitHub 返回了无法识别的响应', {
+      code: ERROR_CODES.githubUnexpectedResponse,
+    });
   }
 
   async getStatus(): Promise<GitHubSyncStatus> {
@@ -188,13 +236,13 @@ export class GitHubSyncService implements IGitHubSyncService {
     }
 
     try {
-      const user = await this.githubFetch<GitHubUser>('/user', {}, token);
+      const user = await this.githubFetch('/user', githubUserSchema, {}, token);
       let gistId = store.gistId;
       let gistUpdatedAt: string | undefined;
 
       if (gistId) {
         try {
-          const gist = await this.githubFetch<GitHubGist>(`/gists/${gistId}`, {}, token);
+          const gist = await this.githubFetch(`/gists/${gistId}`, githubGistSchema, {}, token);
           gistUpdatedAt = gist.updated_at;
         } catch {
           // Gist might have been deleted on GitHub
@@ -231,7 +279,12 @@ export class GitHubSyncService implements IGitHubSyncService {
 
   private async findSyncGist(token: string): Promise<GitHubGist | undefined> {
     try {
-      const gists = await this.githubFetch<GitHubGist[]>('/gists?per_page=100', {}, token);
+      const gists = await this.githubFetch(
+        '/gists?per_page=100',
+        z.array(githubGistSchema),
+        {},
+        token,
+      );
       return gists.find((g) => g.files && Boolean(g.files[GIST_FILENAME]));
     } catch {
       return undefined;
@@ -267,21 +320,14 @@ export class GitHubSyncService implements IGitHubSyncService {
       });
     }
 
-    const data = (await response.json()) as {
-      device_code: string;
-      user_code: string;
-      verification_uri: string;
-      expires_in: number;
-      interval: number;
-      error?: string;
-      error_description?: string;
-    };
-
-    if (data.error) {
-      throw new HttpError(400, data.error_description || data.error, {
+    const payload: unknown = await response.json();
+    const failure = githubErrorSchema.safeParse(payload);
+    if (failure.success && failure.data.error) {
+      throw new HttpError(400, failure.data.error_description || failure.data.error, {
         code: ERROR_CODES.githubAuthFailed,
       });
     }
+    const data = this.parseResponse(deviceCodeResponseSchema, payload);
 
     return {
       deviceCode: data.device_code,
@@ -320,14 +366,11 @@ export class GitHubSyncService implements IGitHubSyncService {
       return { status: 'error', error: 'GitHub 认证请求失败' };
     }
 
-    const data = (await response.json()) as {
-      access_token?: string;
-      token_type?: string;
-      scope?: string;
-      error?: string;
-      error_description?: string;
-      interval?: number;
-    };
+    const parsed = accessTokenResponseSchema.safeParse(await response.json());
+    if (!parsed.success) {
+      return { status: 'error', error: 'GitHub 返回了无法识别的响应' };
+    }
+    const data = parsed.data;
 
     if (data.error) {
       this.log.info(
@@ -355,7 +398,7 @@ export class GitHubSyncService implements IGitHubSyncService {
       let username: string | undefined;
       let avatarUrl: string | undefined;
       try {
-        const user = await this.githubFetch<GitHubUser>('/user', {}, data.access_token);
+        const user = await this.githubFetch('/user', githubUserSchema, {}, data.access_token);
         username = user.login;
         avatarUrl = user.avatar_url;
       } catch (e) {
@@ -374,7 +417,7 @@ export class GitHubSyncService implements IGitHubSyncService {
       throw new HttpError(400, 'Token 不能为空', { code: ERROR_CODES.githubAuthFailed });
     }
 
-    const user = await this.githubFetch<GitHubUser>('/user', {}, trimmed);
+    const user = await this.githubFetch('/user', githubUserSchema, {}, trimmed);
     this.saveToken(trimmed, user.login, user.avatar_url);
     return this.getStatus();
   }
@@ -411,8 +454,9 @@ export class GitHubSyncService implements IGitHubSyncService {
 
     if (gistId) {
       try {
-        const updatedGist = await this.githubFetch<GitHubGist>(
+        const updatedGist = await this.githubFetch(
           `/gists/${gistId}`,
+          githubGistSchema,
           {
             method: 'PATCH',
             body: JSON.stringify({
@@ -442,8 +486,9 @@ export class GitHubSyncService implements IGitHubSyncService {
 
     const existingGist = await this.findSyncGist(token);
     if (existingGist) {
-      const updatedGist = await this.githubFetch<GitHubGist>(
+      const updatedGist = await this.githubFetch(
         `/gists/${existingGist.id}`,
+        githubGistSchema,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -467,8 +512,9 @@ export class GitHubSyncService implements IGitHubSyncService {
       };
     }
 
-    const newGist = await this.githubFetch<GitHubGist>(
+    const newGist = await this.githubFetch(
       '/gists',
+      githubGistSchema,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -512,7 +558,7 @@ export class GitHubSyncService implements IGitHubSyncService {
       this.writeStore({ ...store, gistId });
     }
 
-    const gist = await this.githubFetch<GitHubGist>(`/gists/${gistId}`, {}, token);
+    const gist = await this.githubFetch(`/gists/${gistId}`, githubGistSchema, {}, token);
     const file = gist.files?.[GIST_FILENAME];
     if (!file) {
       throw new HttpError(404, 'Gist 中未找到配置文件', {

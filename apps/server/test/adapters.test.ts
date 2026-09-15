@@ -523,6 +523,7 @@ describe('pi adapter', () => {
     expect(adapter.targets().map((target) => [target.key, target.path, target.format])).toEqual([
       ['models', '/home/tester/.pi/agent/models.json', 'json'],
       ['settings', '/home/tester/.pi/agent/settings.json', 'json'],
+      ['auth', '/home/tester/.pi/agent/auth.json', 'json'],
     ]);
   });
 
@@ -601,6 +602,66 @@ describe('pi adapter', () => {
       ERROR_CODES.adapterApiKeyRequired,
       400,
     );
+  });
+
+  const auth = JSON.stringify({
+    anthropic: { type: 'oauth', refresh: 'r', access: 'a', expires: 1 },
+    openai: { type: 'api_key', key: 'sk-official' },
+  });
+
+  test('official login is offered only once /login has stored a credential', () => {
+    const adapter = new PiAdapter(environment);
+    expect(adapter.official({}).available).toBe(false);
+    expect(adapter.official({ auth: '{}' }).available).toBe(false);
+    expect(adapter.official({ auth: 'not json' }).available).toBe(false);
+    expect(adapter.official({ auth }).available).toBe(true);
+    expect(adapter.official({ auth }).hintCode).toBe('harness.officialHintPi');
+  });
+
+  test('returning to official login drops our pointer but keeps every custom provider', () => {
+    const adapter = new PiAdapter(environment);
+    const activated = adapter.render(profile(), {
+      models,
+      settings: JSON.stringify({ theme: 'dark' }),
+    });
+    const rendered = adapter.renderOfficial(profile(), {
+      models: activated.models,
+      settings: activated.settings,
+      auth,
+    });
+
+    // Only settings.json moves; models.json is not part of the write.
+    expect(Object.keys(rendered)).toEqual(['settings']);
+    expect(JSON.parse(rendered.settings)).toEqual({ theme: 'dark' });
+    expect(JSON.parse(activated.models).providers['glm-main']).toBeDefined();
+  });
+
+  test('official login leaves a built-in default the user picked themselves alone', () => {
+    const adapter = new PiAdapter(environment);
+    const settings = JSON.stringify({ defaultProvider: 'anthropic', defaultModel: 'claude-x' });
+    const rendered = adapter.renderOfficial(undefined, { models, settings, auth });
+    expect(JSON.parse(rendered.settings)).toEqual(JSON.parse(settings));
+  });
+
+  test('official login refuses when auth.json holds no credential', () => {
+    const adapter = new PiAdapter(environment);
+    const activated = adapter.render(profile(), { models });
+    expectHttpError(
+      () => adapter.renderOfficial(profile(), { ...activated }),
+      ERROR_CODES.officialLoginMissing,
+      400,
+    );
+    expectHttpError(
+      () => adapter.renderOfficial(profile(), { ...activated, auth: '{}' }),
+      ERROR_CODES.officialLoginMissing,
+      400,
+    );
+  });
+
+  test('official login leaves an absent or corrupt settings file alone', () => {
+    const adapter = new PiAdapter(environment);
+    expect(adapter.renderOfficial(profile(), { auth })).toEqual({});
+    expect(adapter.renderOfficial(profile(), { auth, settings: '{not json' })).toEqual({});
   });
 });
 

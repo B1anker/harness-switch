@@ -179,6 +179,34 @@ describe('profile storage', () => {
     // An unreadable key decrypts to empty rather than throwing.
     expect(services.get(IProfileService).decrypt('claude', 'legacy').apiKey).toBe('');
   });
+
+  test('refuses a store whose shape it does not understand instead of overwriting it', () => {
+    const environment = services.get(IEnvironmentService);
+    const files = services.get(IFileService);
+    const malformed = {
+      claude: {
+        broken: {
+          base_url: 'https://old',
+          api_key: {},
+          model: '',
+          notes: '',
+          updated_at: '',
+          // A number where the adapters expect a string is how a hand edit typically goes wrong.
+          extras: { authVar: 42 },
+        },
+      },
+    };
+    files.writeJson(environment.files.profiles, malformed);
+
+    const error = expectHttpError(
+      () => services.get(IProfileService).list('claude'),
+      ERROR_CODES.storageInvalid,
+      500,
+    );
+    expect(error.params?.issue).toContain('claude.broken.extras.authVar');
+    // Neither quarantined nor rewritten: the file is intact JSON the user can fix.
+    expect(files.readJson<unknown>(environment.files.profiles, null)).toEqual(malformed);
+  });
 });
 
 describe('backfill', () => {

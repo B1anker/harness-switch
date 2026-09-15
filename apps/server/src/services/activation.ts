@@ -6,6 +6,7 @@ import type {
   PreviewTarget,
 } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES, WARNING_CODES } from '@seaveyon/harness-switch-shared';
+import { z } from 'zod';
 import { HttpError } from '../common/errors';
 import { createDecorator, inject } from '../di';
 import type { AdapterProfile, AdapterTarget, CurrentFiles, HarnessAdapter } from './adapters';
@@ -17,16 +18,21 @@ import { ILogService } from './log';
 import { IProfileService } from './profiles';
 import { IHarnessRegistry } from './registry';
 
-type ActiveEntry = {
-  name: string;
-  base_url: string;
-  api_key: string;
-  model: string;
-  extras?: Record<string, string>;
-  official?: boolean;
-};
+/** `active.json`: what is live per harness, materialised so env.sh can be rebuilt offline. */
+const activeEntrySchema = z.object({
+  name: z.string(),
+  base_url: z.string(),
+  api_key: z.string(),
+  model: z.string(),
+  extras: z.record(z.string(), z.string()).optional(),
+  official: z.boolean().optional(),
+});
 
-type ActiveStore = Record<string, ActiveEntry>;
+type ActiveEntry = z.infer<typeof activeEntrySchema>;
+
+const activeStoreSchema = z.record(z.string(), activeEntrySchema);
+
+type ActiveStore = z.infer<typeof activeStoreSchema>;
 
 export type ActivationResult = {
   envFile: string;
@@ -471,7 +477,7 @@ export class ActivationService implements IActivationService {
   private read(): ActiveStore {
     // Strict: a corrupt active store must not be mistaken for "nothing active",
     // or a later switch could write over it and lose the record of what is live.
-    return this.files.readJsonStrict<ActiveStore>(this.environment.files.active, {});
+    return this.files.readStore(this.environment.files.active, activeStoreSchema, {});
   }
 
   private writeEnv(active: ActiveStore): void {

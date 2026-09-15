@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { instanceFingerprint } from './common/instance';
 import type { InstantiationService } from './di';
 import { registerAssetRoutes } from './http/assets';
 import { registerErrorHandlers } from './http/error-handler';
@@ -33,12 +34,13 @@ export function createApp(services: InstantiationService): Hono {
   const environment = services.get(IEnvironmentService);
   const versions = services.get(IVersionService);
 
-  app.get('/healthz', (c) =>
-    c.json({
+  app.get('/healthz', (c) => {
+    const token = process.env.HSW_DAEMON_TOKEN;
+    return c.json({
       ok: true,
-      ...(process.env.HSW_DAEMON_TOKEN ? { instance: process.env.HSW_DAEMON_TOKEN } : {}),
-    }),
-  );
+      ...(token ? { instance: instanceFingerprint(token) } : {}),
+    });
+  });
 
   const api = new Hono();
   api.use('*', createOriginGuard());

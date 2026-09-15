@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import type { AuditResponse } from '@seaveyon/harness-switch-shared';
 import { ERROR_CODES } from '@seaveyon/harness-switch-shared';
-import { createSandbox, createTestApp, type Sandbox, type TestApp } from './support';
+import { IAuthService } from '../src/services/auth';
+import { ILogService } from '../src/services/log';
+import {
+  createSandbox,
+  createTestApp,
+  createTestServices,
+  type Sandbox,
+  type TestApp,
+} from './support';
 
 let sandbox: Sandbox;
 
@@ -27,6 +35,25 @@ async function auditEvents(context: TestApp): Promise<string[]> {
   const body = await context.json<AuditResponse>('/api/audit');
   return body.items.map((entry) => entry.event);
 }
+
+describe('first-run password', () => {
+  test('is written to disk and never echoed into the log', () => {
+    const services = createTestServices();
+    const log = services.get(ILogService);
+    const lines: string[] = [];
+    log.info = (message) => {
+      lines.push(message);
+    };
+
+    const password = services.get(IAuthService).ensurePassword();
+
+    expect(password.length).toBeGreaterThan(0);
+    expect(lines.some((line) => line.includes('web_password'))).toBe(true);
+    for (const line of lines) {
+      expect(line).not.toContain(password);
+    }
+  });
+});
 
 describe('login brute-force protection', () => {
   test('locks the endpoint after repeated wrong guesses, then reports 429', async () => {

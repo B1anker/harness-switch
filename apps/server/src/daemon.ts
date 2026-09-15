@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { instanceFingerprint } from './common/instance';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 8787;
@@ -263,7 +264,9 @@ async function checkHealth(record: DaemonRecord): Promise<boolean> {
       signal: AbortSignal.timeout(500),
     });
     const payload = (await response.json()) as { ok?: unknown; instance?: unknown };
-    return response.ok && payload.ok === true && payload.instance === record.token;
+    return (
+      response.ok && payload.ok === true && payload.instance === instanceFingerprint(record.token)
+    );
   } catch {
     return false;
   }

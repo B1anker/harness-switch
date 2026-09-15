@@ -5,15 +5,19 @@ import {
   scryptSync,
   timingSafeEqual,
 } from 'node:crypto';
+import { z } from 'zod';
 import { createDecorator, inject } from '../di';
 import { IEnvironmentService } from './environment';
 import { IFileService } from './files';
 
-export type EncryptedValue = {
-  iv: string;
-  tag: string;
-  data: string;
-};
+/** Shape of a ciphertext at rest; every encrypted store field is one of these. */
+export const encryptedValueSchema = z.object({
+  iv: z.string(),
+  tag: z.string(),
+  data: z.string(),
+});
+
+export type EncryptedValue = z.infer<typeof encryptedValueSchema>;
 
 /** An {@link EncryptedValue} plus the salt its key was derived from. */
 export type SealedValue = EncryptedValue & { salt: string };

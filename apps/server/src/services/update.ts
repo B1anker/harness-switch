@@ -24,19 +24,78 @@ export interface IUpdateService {
 
 export const IUpdateService = createDecorator<IUpdateService>('updateService');
 
-/** Numeric dotted comparison; `a > b` means a is newer. */
+/**
+ * Semver-style comparison; positive means `a` is newer. A leading `v` and build metadata
+ * (`+sha`) are ignored. A pre-release (`1.2.0-beta.1`) sorts before its release and its
+ * identifiers compare numerically when both sides are digits, so a dev build never
+ * announces itself as an update over the release it precedes — and `NaN` never enters
+ * the comparison the way `Number('0-beta')` used to.
+ */
 export function compareVersions(a: string, b: string): number {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  const len = Math.max(pa.length, pb.length);
+  const va = parseVersion(a);
+  const vb = parseVersion(b);
+  const len = Math.max(va.release.length, vb.release.length);
   for (let i = 0; i < len; i++) {
-    const da = pa[i] ?? 0;
-    const db = pb[i] ?? 0;
+    const da = va.release[i] ?? 0;
+    const db = vb.release[i] ?? 0;
     if (da !== db) {
       return da > db ? 1 : -1;
     }
   }
+  // The side without a pre-release tag is the release, and the release is newer.
+  if (va.pre.length === 0 && vb.pre.length === 0) {
+    return 0;
+  }
+  if (va.pre.length === 0) {
+    return 1;
+  }
+  if (vb.pre.length === 0) {
+    return -1;
+  }
+  const preLen = Math.max(va.pre.length, vb.pre.length);
+  for (let i = 0; i < preLen; i++) {
+    const pa = va.pre[i];
+    const pb = vb.pre[i];
+    // A shorter identifier list is the older pre-release (`beta` < `beta.1`).
+    if (pa === undefined) {
+      return -1;
+    }
+    if (pb === undefined) {
+      return 1;
+    }
+    const na = /^\d+$/.test(pa) ? Number(pa) : undefined;
+    const nb = /^\d+$/.test(pb) ? Number(pb) : undefined;
+    if (na !== undefined && nb !== undefined) {
+      if (na !== nb) {
+        return na > nb ? 1 : -1;
+      }
+      continue;
+    }
+    // Numeric identifiers sort before alphanumeric ones, as semver specifies.
+    if (na !== undefined) {
+      return -1;
+    }
+    if (nb !== undefined) {
+      return 1;
+    }
+    if (pa !== pb) {
+      return pa > pb ? 1 : -1;
+    }
+  }
   return 0;
+}
+
+function parseVersion(value: string): { release: number[]; pre: string[] } {
+  const trimmed = value.trim().replace(/^v/i, '');
+  const withoutBuild = trimmed.split('+', 1)[0] ?? '';
+  const dash = withoutBuild.indexOf('-');
+  const releasePart = dash === -1 ? withoutBuild : withoutBuild.slice(0, dash);
+  const prePart = dash === -1 ? '' : withoutBuild.slice(dash + 1);
+  const release = releasePart.split('.').map((part) => {
+    const parsed = Number.parseInt(part, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  return { release, pre: prePart ? prePart.split('.') : [] };
 }
 
 @inject(IHttpClient, IVersionService)

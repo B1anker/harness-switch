@@ -72,6 +72,16 @@ export const ILiveWriteService = createDecorator<ILiveWriteService>('liveWriteSe
 export class LiveWriteService implements ILiveWriteService {
   declare readonly _serviceBrand: undefined;
 
+  /**
+   * Set for the duration of one transaction. Every write path in this process is
+   * synchronous end to end — read the stores, plan, write, commit — so the event loop is
+   * what serialises concurrent requests; there is no lock because nothing can yield in the
+   * middle. That guarantee is only as good as the callers: an `await` slipped between
+   * reading state and committing, or an async `operation`, would reopen the interleaving
+   * the journal cannot see. This flag turns either mistake into a loud failure.
+   */
+  private inFlight = false;
+
   constructor(
     private readonly files: IFileService,
     private readonly backups: IBackupService,
@@ -98,6 +108,18 @@ export class LiveWriteService implements ILiveWriteService {
   }
 
   private execute<T>(plan: OperationPlan, operation: () => T): T {
+    if (this.inFlight) {
+      throw new Error('live-write transaction re-entered while another was still applying');
+    }
+    this.inFlight = true;
+    try {
+      return this.run(plan, operation);
+    } finally {
+      this.inFlight = false;
+    }
+  }
+
+  private run<T>(plan: OperationPlan, operation: () => T): T {
     const { harness, profile, writes } = plan;
     for (const write of writes) {
       this.files.assertManaged(write.path);
@@ -145,6 +167,10 @@ export class LiveWriteService implements ILiveWriteService {
         written.push({ snapshot: snapshots[index]!, secret: write.secret === true });
       }
       const result = operation();
+      if (isThenable(result)) {
+        // Committing here would record success for work that has not happened yet.
+        throw new Error('live-write operation must be synchronous; it returned a promise');
+      }
       entry.metadataCommitted();
       entry.committed();
       return result;
@@ -196,4 +222,12 @@ export class LiveWriteService implements ILiveWriteService {
     }
     return complete;
   }
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
