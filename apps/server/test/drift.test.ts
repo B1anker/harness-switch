@@ -6,7 +6,7 @@ import type { InstantiationService } from '../src/di';
 import { IActivationService } from '../src/services/activation';
 import { IDriftService, semanticEqual } from '../src/services/drift';
 import { IProfileService } from '../src/services/profiles';
-import { createSandbox, createTestServices, expectHttpError, type Sandbox } from './support';
+import { createSandbox, createTestServices, expectHttpError, POSIX, type Sandbox } from './support';
 
 let sandbox: Sandbox;
 let services: InstantiationService;
@@ -111,7 +111,7 @@ describe('drift inspect', () => {
     expect(report.status).toBe('invalid');
   });
 
-  test('an unreadable live file shows as invalid rather than throwing', () => {
+  test.skipIf(!POSIX)('an unreadable live file shows as invalid rather than throwing', () => {
     activateClaude();
     chmodSync(claudeSettings(), 0o000);
     const report = drift().inspect('claude');
@@ -120,7 +120,7 @@ describe('drift inspect', () => {
     expect(report.status).toBe('invalid');
   });
 
-  test('an unreadable live file under official login shows as invalid', () => {
+  test.skipIf(!POSIX)('an unreadable live file under official login shows as invalid', () => {
     activateClaude();
     activation().activateOfficial('claude');
     chmodSync(claudeSettings(), 0o000);

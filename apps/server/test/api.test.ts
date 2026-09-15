@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { createCipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type {
   HarnessSummary,
   PreviewResponse,
@@ -14,7 +14,9 @@ import {
   asSession,
   createSandbox,
   createTestApp,
+  expectMode,
   loginAgain,
+  POSIX,
   restartApp,
   type Sandbox,
   type TestApp,
@@ -771,29 +773,34 @@ describe('rest api', () => {
     expect(claude.active?.name).toBe('main');
   });
 
-  test('refuses to delete an additive profile when its live provider cannot be cleaned up', async () => {
-    const context = await createTestApp();
-    await createProfile(context, 'kimi', {
-      name: 'victim',
-      baseUrl: 'https://api.example.com/v1',
-      apiKey: 'sk-test',
-      model: 'kimi-k2',
-    });
+  // A regular file where the config directory should be is ENOTDIR on POSIX; Windows
+  // reports ENOENT, which reads as "no config yet" and lets the revoke succeed.
+  test.skipIf(!POSIX)(
+    'refuses to delete an additive profile when its live provider cannot be cleaned up',
+    async () => {
+      const context = await createTestApp();
+      await createProfile(context, 'kimi', {
+        name: 'victim',
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-test',
+        model: 'kimi-k2',
+      });
 
-    // Block the live config so revoking the provider must fail.
-    const kimiHome = sandbox.home('.kimi-code');
-    await writeFile(kimiHome, 'not a directory');
+      // Block the live config so revoking the provider must fail.
+      const kimiHome = sandbox.home('.kimi-code');
+      await writeFile(kimiHome, 'not a directory');
 
-    const deleted = await context.del('/api/harnesses/kimi/profiles/victim');
-    expect(deleted.status).toBeGreaterThanOrEqual(400);
+      const deleted = await context.del('/api/harnesses/kimi/profiles/victim');
+      expect(deleted.status).toBeGreaterThanOrEqual(400);
 
-    await rm(kimiHome, { force: true });
+      await rm(kimiHome, { force: true });
 
-    // The profile is still there: deletion failed closed instead of leaving an
-    // orphan provider entry behind with no record left to clean it up.
-    const kimi = await summary(context, 'kimi');
-    expect(profileOf(kimi, 'victim').name).toBe('victim');
-  });
+      // The profile is still there: deletion failed closed instead of leaving an
+      // orphan provider entry behind with no record left to clean it up.
+      const kimi = await summary(context, 'kimi');
+      expect(profileOf(kimi, 'victim').name).toBe('victim');
+    },
+  );
 
   test('switching away saves hand edits without wiping fields the live file cannot hold', async () => {
     const context = await createTestApp();
@@ -1139,7 +1146,7 @@ describe('rest api', () => {
       codexLoginCacheMigrated: true,
     });
     expect(await readFile(authPath, 'utf8')).toBe(exportedCache);
-    expect((await stat(authPath)).mode & 0o777).toBe(0o600);
+    expectMode(authPath, 0o600);
 
     const redundant = await context.post('/api/transfer/import', {
       envelope,

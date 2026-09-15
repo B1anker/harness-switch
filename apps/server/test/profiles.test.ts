@@ -7,7 +7,7 @@ import { ICryptoService } from '../src/services/crypto';
 import { IEnvironmentService } from '../src/services/environment';
 import { IFileService } from '../src/services/files';
 import { IProfileService } from '../src/services/profiles';
-import { createSandbox, createTestServices, expectHttpError, type Sandbox } from './support';
+import { createSandbox, createTestServices, expectHttpError, POSIX, type Sandbox } from './support';
 
 let sandbox: Sandbox;
 let services: InstantiationService;
@@ -47,7 +47,7 @@ describe('profile storage', () => {
     expect(services.get(IProfileService).decrypt('claude', 'main').apiKey).toBe('sk-original');
   });
 
-  test('keeps the profile store readable only by its owner', () => {
+  test.skipIf(!POSIX)('keeps the profile store readable only by its owner', () => {
     create('main');
     const file = services.get(IEnvironmentService).files.profiles;
     expect(statSync(file).mode & 0o777).toBe(0o600);
@@ -314,13 +314,18 @@ describe('file service', () => {
     expect(files.readJson(sandbox.home('absent.json'), null)).toBeNull();
   });
 
-  test('readOptional rethrows non-ENOENT errors instead of reporting an absent file', () => {
-    const files = services.get(IFileService);
-    const blocked = sandbox.home('blocked');
-    files.writeUserFile(blocked, 'not a directory');
+  // Windows answers a path through a regular file with ENOENT, not ENOTDIR, so there is no
+  // non-ENOENT error to stage without a second process holding a lock.
+  test.skipIf(!POSIX)(
+    'readOptional rethrows non-ENOENT errors instead of reporting an absent file',
+    () => {
+      const files = services.get(IFileService);
+      const blocked = sandbox.home('blocked');
+      files.writeUserFile(blocked, 'not a directory');
 
-    expect(() => files.readOptional(join(blocked, 'config.json'))).toThrow();
-  });
+      expect(() => files.readOptional(join(blocked, 'config.json'))).toThrow();
+    },
+  );
 
   test('readJsonStrict returns the fallback only when the file is absent', () => {
     const files = services.get(IFileService);

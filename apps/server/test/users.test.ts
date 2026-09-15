@@ -13,7 +13,9 @@ import {
   asSession,
   createSandbox,
   createTestApp,
+  expectMode,
   loginAgain,
+  POSIX,
   type Sandbox,
   type TestApp,
 } from './support';
@@ -45,39 +47,43 @@ describe('local Unix users', () => {
     expect((await second.json<Body>('/api/users')).currentUser).toBe(owner.username);
   });
 
-  test('refuses to switch to a user whose files this process cannot manage', async () => {
-    const { first, services, owner } = await setup();
-    const users = services.get(IUserService);
-    // A peer with no home on disk: the manager could not create its store.
-    const stranger: LocalUser = {
-      username: 'stranger-test',
-      uid: owner.uid,
-      gid: owner.gid,
-      homeDir: sandbox.root('stranger-missing'),
-    };
-    users.list = () => [owner, stranger];
+  // The access probe trusts the platform on Windows, so nothing is ever blocked there.
+  test.skipIf(!POSIX)(
+    'refuses to switch to a user whose files this process cannot manage',
+    async () => {
+      const { first, services, owner } = await setup();
+      const users = services.get(IUserService);
+      // A peer with no home on disk: the manager could not create its store.
+      const stranger: LocalUser = {
+        username: 'stranger-test',
+        uid: owner.uid,
+        gid: owner.gid,
+        homeDir: sandbox.root('stranger-missing'),
+      };
+      users.list = () => [owner, stranger];
 
-    const listed = await first.json<Body>('/api/users');
-    expect(listed.items).toMatchObject([
-      { username: owner.username, manageable: true },
-      { username: stranger.username, manageable: false, blockCode: USER_BLOCK_CODES.homeMissing },
-    ]);
-    // The message stays path-free for the narrow account menu; the path travels as
-    // data, which is what the UI puts in the tooltip.
-    const blocked = listed.items[1];
-    expect(blocked.blockData).toMatchObject({ home: stranger.homeDir });
-    expect(blocked.blockMsg).toBe('主目录不存在');
+      const listed = await first.json<Body>('/api/users');
+      expect(listed.items).toMatchObject([
+        { username: owner.username, manageable: true },
+        { username: stranger.username, manageable: false, blockCode: USER_BLOCK_CODES.homeMissing },
+      ]);
+      // The message stays path-free for the narrow account menu; the path travels as
+      // data, which is what the UI puts in the tooltip.
+      const blocked = listed.items[1];
+      expect(blocked.blockData).toMatchObject({ home: stranger.homeDir });
+      expect(blocked.blockMsg).toBe('主目录不存在');
 
-    const response = await first.post(`/api/users/${stranger.username}/select`);
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({
-      code: ERROR_CODES.userNotSwitchable,
-      data: { username: stranger.username },
-      msg: expect.any(String),
-    });
-    // The refusal must not have moved the session.
-    expect((await first.json<Body>('/api/users')).currentUser).toBe(owner.username);
-  });
+      const response = await first.post(`/api/users/${stranger.username}/select`);
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({
+        code: ERROR_CODES.userNotSwitchable,
+        data: { username: stranger.username },
+        msg: expect.any(String),
+      });
+      // The refusal must not have moved the session.
+      expect((await first.json<Body>('/api/users')).currentUser).toBe(owner.username);
+    },
+  );
 
   test('copies profiles and vault credentials but not active state', async () => {
     const { first, services, owner, peer } = await setup();
@@ -302,7 +308,7 @@ describe('local Unix users', () => {
     expect(migrated.codexLoginCacheMigrated).toBe(true);
     expect(readFileSync(sourceAuth, 'utf8')).toBe(sourceCache);
     expect(readFileSync(targetAuth, 'utf8')).toBe(sourceCache);
-    expect(statSync(targetAuth).mode & 0o777).toBe(0o600);
+    expectMode(targetAuth, 0o600);
 
     const equivalentCache = '{\n  "tokens": { "access_token": "source-login-session" }\n}\n';
     writeFileSync(targetAuth, equivalentCache, { mode: 0o600 });
@@ -383,7 +389,7 @@ describe('local Unix users', () => {
     },
   );
 
-  test('new files use the selected target user ownership metadata', () => {
+  test.skipIf(!POSIX)('new files use the selected target user ownership metadata', () => {
     const services = createServices();
     const environment = services.get(IEnvironmentService);
     const files = services.get(IFileService);

@@ -5,7 +5,6 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -21,7 +20,7 @@ import {
   type OperationPlan,
   type PlannedWrite,
 } from '../src/services/live-write';
-import { createSandbox, createTestServices, type Sandbox } from './support';
+import { createSandbox, createTestServices, expectMode, POSIX, type Sandbox } from './support';
 
 let sandbox: Sandbox;
 let services: InstantiationService;
@@ -226,10 +225,10 @@ describe('live write', () => {
     ).toThrow('profile store failed');
 
     expect(readFileSync(codexAuth, 'utf8')).toBe(original);
-    expect(statSync(codexAuth).mode & 0o777).toBe(0o600);
+    expectMode(codexAuth, 0o600);
   });
 
-  test('keeps the permissions the user gave the file', () => {
+  test.skipIf(!POSIX)('keeps the permissions the user gave the file', () => {
     const live = services.get(ILiveWriteService);
     seed(dshSettings, 'providers: {}\n', 0o644);
 
@@ -239,10 +238,10 @@ describe('live write', () => {
       ]),
     );
 
-    expect(statSync(dshSettings).mode & 0o777).toBe(0o644);
+    expectMode(dshSettings, 0o644);
   });
 
-  test('new files holding an api key are not world readable', () => {
+  test.skipIf(!POSIX)('new files holding an api key are not world readable', () => {
     const live = services.get(ILiveWriteService);
 
     live.apply(
@@ -251,7 +250,7 @@ describe('live write', () => {
       ]),
     );
 
-    expect(statSync(claudeSettings).mode & 0o777).toBe(0o600);
+    expectMode(claudeSettings, 0o600);
   });
 
   test('refuses a target whose directory is a symlink out of the home', () => {
