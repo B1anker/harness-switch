@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import { CATALOGS, ERROR_CODES, LANGUAGES } from '@seaveyon/harness-switch-shared';
 import { parse as parseToml } from 'smol-toml';
 import { parse as parseYaml } from 'yaml';
@@ -520,10 +521,11 @@ describe('pi adapter', () => {
 
   test('targets the official pi agent JSON files', () => {
     const adapter = new PiAdapter(environment);
+    const agentDir = environment.harnessHomes.piAgent;
     expect(adapter.targets().map((target) => [target.key, target.path, target.format])).toEqual([
-      ['models', '/home/tester/.pi/agent/models.json', 'json'],
-      ['settings', '/home/tester/.pi/agent/settings.json', 'json'],
-      ['auth', '/home/tester/.pi/agent/auth.json', 'json'],
+      ['models', join(agentDir, 'models.json'), 'json'],
+      ['settings', join(agentDir, 'settings.json'), 'json'],
+      ['auth', join(agentDir, 'auth.json'), 'json'],
     ]);
   });
 

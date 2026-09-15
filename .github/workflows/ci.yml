@@ -36,8 +36,10 @@ jobs:
 
   # The README promises macOS and Windows; the file-permission, ownership and daemon
   # code is where the platforms differ, so the test suite has to run on them too.
-  # Windows is advisory until the suite is made clean there: it reports, not blocks.
+  # Windows is advisory until the Unix-only permission tests are gated by platform:
+  # its job still shows red when tests fail, but it does not fail the run.
   test-platforms:
+    name: test (${{ matrix.os }}${{ matrix.os == 'windows-latest' && ', advisory' || '' }})
     strategy:
       fail-fast: false
       matrix:

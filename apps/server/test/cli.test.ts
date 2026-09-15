@@ -16,7 +16,13 @@ let baseUrl = '';
 
 beforeEach(() => {
   sandbox = createSandbox('hsw-cli', {
-    env: (home) => ({ CODEX_HOME: home('.codex'), HSW_UPDATE_CHECK: '0', PORT: undefined }),
+    // The assertions below read zh-CN prose; a runner whose LANG is en_US must not flip them.
+    env: (home) => ({
+      CODEX_HOME: home('.codex'),
+      HSW_UPDATE_CHECK: '0',
+      HSW_LANG: 'zh-CN',
+      PORT: undefined,
+    }),
   });
   services = createTestServices();
   // The CLI logs in with the same password file the daemon would have written.
