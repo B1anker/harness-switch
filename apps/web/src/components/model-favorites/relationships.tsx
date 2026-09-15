@@ -1,4 +1,8 @@
-import type { FavoritePlanRequest, HarnessSummary } from '@seaveyon/harness-switch-shared';
+import type {
+  FavoriteConnection,
+  FavoritePlanRequest,
+  HarnessSummary,
+} from '@seaveyon/harness-switch-shared';
 import { useState } from 'react';
 import { ConfigurationFlow, flowEdge, flowNode } from '@/components/configuration-flow';
 import { Alert } from '@/components/ui/alert';
@@ -9,6 +13,10 @@ import { useTranslation } from '@/lib/i18n';
 import { useFavoriteTargets } from '@/lib/use-favorite-targets';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
+import { modelGroups } from './editor/model-groups';
+import { FavoriteSelect } from './fields';
+
+const groupNodeId = (group: FavoriteConnection[]) => group[0]!.groupId ?? group[0]!.id;
 
 export function FavoriteRelationships({
   favorite,
@@ -28,6 +36,14 @@ export function FavoriteRelationships({
   );
   const [mode, setMode] = useState<'save' | 'activate'>('activate');
   const connection = favorite.connections.find((entry) => entry.id === channel);
+  // One node per account rather than per model: a template with a dozen models on one
+  // account would otherwise fill the left column, and the model is a second choice anyway.
+  const groups = modelGroups(favorite.connections);
+  const selectedGroup = groups.find((group) => group.some((entry) => entry.id === channel)) ?? [];
+  const pickFromGroup = (group: FavoriteConnection[]) =>
+    (group.find((entry) => entry.id === channel) ??
+      group.find((entry) => entry.id === favorite.defaultConnectionId) ??
+      group[0])!.id;
   const status = (harness: HarnessSummary) => {
     const refs = favorite.references.filter(
       (ref) =>
@@ -50,23 +66,36 @@ export function FavoriteRelationships({
     }
     return refs.length ? 'workspace.saved' : 'workspace.available';
   };
-  const count = Math.max(favorite.connections.length, harnesses.length, 1);
+  const count = Math.max(groups.length, harnesses.length, 1);
   const height = count * 88 + 48;
   const middle = (height - 66) / 2;
   const nodes = [
-    ...favorite.connections.map((entry, index) =>
-      flowNode(entry.id, 24, middle - ((favorite.connections.length - 1) * 88) / 2 + index * 88, {
-        kind: 'source',
-        label: entry.label,
-        value: entry.groupId
-          ? entry.requestModelId
-          : (providers?.find((provider) => provider.id === entry.providerId)?.name ??
-            t('workspace.missingProvider')),
-        selected: entry.id === channel,
-        action: () => setChannel(entry.id),
-        actionLabel: entry.label + ' · ' + (entry.groupId ? entry.requestModelId : entry.protocol),
-      }),
-    ),
+    ...groups.map((group, index) => {
+      const entry = group[0]!;
+      const provider =
+        providers?.find((item) => item.id === entry.providerId)?.name ??
+        t('workspace.missingProvider');
+      const title = entry.label || provider;
+      const caption = [
+        title === provider ? '' : provider,
+        group.length > 1 ? t('favorites.scheme.selectedCount', { count: group.length }) : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      return flowNode(
+        groupNodeId(group),
+        24,
+        middle - ((groups.length - 1) * 88) / 2 + index * 88,
+        {
+          kind: 'source',
+          label: caption || entry.protocol,
+          value: title,
+          selected: group.some((item) => item.id === channel),
+          action: () => setChannel(pickFromGroup(group)),
+          actionLabel: title + ' · ' + (caption || entry.protocol),
+        },
+      );
+    }),
     flowNode('model', 260, middle, {
       kind: 'model',
       label: t('favorites.modelPicker'),
@@ -102,7 +131,7 @@ export function FavoriteRelationships({
   ];
   const edges = connection
     ? [
-        flowEdge(connection.id, 'model'),
+        flowEdge(groupNodeId(selectedGroup), 'model'),
         ...harnesses
           .filter((harness) =>
             compatibleConnections(favorite, harness.id, targets).some(
@@ -119,16 +148,30 @@ export function FavoriteRelationships({
         <p className="mt-2 text-sm text-muted-foreground">{t('workspace.graphHint')}</p>
       </div>
       {error ? <Alert>{error}</Alert> : null}
-      <SegmentedControl
-        options={['save', 'activate'] as const}
-        value={mode}
-        onChange={setMode}
-        className="max-w-sm"
-      >
-        {(value) =>
-          t(value === 'save' ? 'favorites.modeLabel.save' : 'favorites.modeLabel.activate')
-        }
-      </SegmentedControl>
+      <div className="flex flex-wrap items-end gap-4">
+        <SegmentedControl
+          options={['save', 'activate'] as const}
+          value={mode}
+          onChange={setMode}
+          className="w-full max-w-sm"
+        >
+          {(value) =>
+            t(value === 'save' ? 'favorites.modeLabel.save' : 'favorites.modeLabel.activate')
+          }
+        </SegmentedControl>
+        {selectedGroup.length > 1 ? (
+          <FavoriteSelect
+            id="relationship-model"
+            label={t('favorites.modelPicker')}
+            value={channel ?? ''}
+            options={selectedGroup
+              .filter((entry) => entry.requestModelId)
+              .map((entry) => ({ value: entry.id, label: entry.requestModelId }))}
+            onChange={setChannel}
+            className="w-72 font-mono text-xs"
+          />
+        ) : null}
+      </div>
       <ConfigurationFlow nodes={nodes} edges={edges} height={height} />
       {connection ? (
         <p className="break-all text-xs text-muted-foreground">

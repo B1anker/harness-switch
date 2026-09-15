@@ -1499,7 +1499,7 @@
     "favoriteEyebrow": "MODELS CONNECTED TO TOOLS",
     "favoriteHint": "Choose a template to inspect model connections and tool status, then preview the profiles to save or switch.",
     "favoriteDetail": "Connections reflect actual channels and tool profiles.",
-    "graphHint": "Choose a channel on the left, then a tool on the right.",
+    "graphHint": "Choose an account on the left (and a model above when it has several), then a tool on the right.",
     "manageLinks": "Manage generated profiles and favorite",
     "inUse": "In use",
     "saved": "Saved",

@@ -1499,7 +1499,7 @@
     "favoriteEyebrow": "模型与工具的连接",
     "favoriteHint": "选择模板，查看模型连接和工具状态，再预览需要保存或切换的配置。",
     "favoriteDetail": "渠道与工具之间的关系由实际配置生成。",
-    "graphHint": "选择左侧渠道，再点击右侧工具。",
+    "graphHint": "选择左侧账号（多个模型时在上方选模型），再点击右侧工具。",
     "manageLinks": "管理已生成配置与收藏",
     "inUse": "正在使用",
     "saved": "已保存",

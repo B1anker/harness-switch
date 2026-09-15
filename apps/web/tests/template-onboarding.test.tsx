@@ -203,6 +203,50 @@ test('graph mode separates save and switch actions and retain exact request iden
   expect(screen.getByText(/openai-responses/)).toBeInTheDocument();
 });
 
+test('relationship graph shows one node per account and picks the model beside it', async () => {
+  const { favorite } = linkedSetup();
+  const first = favorite.connections[0]!;
+  const groupId = '00000000-0000-4000-8000-000000000009';
+  const second = {
+    ...first,
+    id: '00000000-0000-4000-8000-000000000003',
+    requestModelId: 'vendor/other',
+  };
+  favorite.connections = [
+    { ...first, groupId },
+    { ...second, groupId },
+  ];
+  const target = favoriteTargetFixture(favorite);
+  setStoreState({
+    favoriteTargets: {
+      [favorite.id]: [
+        {
+          ...target,
+          connections: [...target.connections, { ...target.connections[0]!, id: second.id }],
+        },
+      ],
+    },
+  });
+  const requests: FavoritePlanRequest['items'][] = [];
+  renderWithI18n(
+    <FavoriteRelationships
+      favorite={favorite}
+      onApply={(items) => requests.push(items)}
+      onEditConnections={() => undefined}
+    />,
+  );
+  expect(screen.getByRole('button', { name: /^route · .*2 个模型$/ })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /vendor\/other/ })).toBeNull();
+  fireEvent.click(screen.getByRole('combobox', { name: '模型' }));
+  fireEvent.click(screen.getByRole('option', { name: 'vendor/other' }));
+  expect(screen.getByRole('combobox', { name: '模型' })).toHaveTextContent('vendor/other');
+  expect(screen.getByText('vendor/other', { selector: 'strong' })).toBeInTheDocument();
+  const tool = await screen.findByRole('button', { name: /^Pi / });
+  await waitFor(() => expect(tool).toBeEnabled());
+  fireEvent.click(tool);
+  expect(requests[0]?.[0]?.connectionId).toBe(second.id);
+});
+
 test('refreshed reference status shows pending updates and previews one profile per tool without activation', () => {
   const { favorite, profile, harness } = linkedSetup();
   favorite.references = [
