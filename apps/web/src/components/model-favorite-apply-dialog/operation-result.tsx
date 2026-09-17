@@ -16,13 +16,9 @@ export function OperationResult({ results }: { results: ApplyResult[] }) {
         const succeeded = item.status === 'applied' || item.status === 'unchanged';
         const status = !succeeded
           ? item.status
-          : item.mode === 'save'
-            ? item.status === 'unchanged'
-              ? 'savedUnchanged'
-              : 'saved'
-            : item.status === 'unchanged'
-              ? 'activatedUnchanged'
-              : 'activated';
+          : item.status === 'unchanged'
+            ? 'activatedUnchanged'
+            : 'activated';
         return (
           <article key={item.harness} className="space-y-3 rounded-xl border bg-card p-4">
             <header className="flex flex-wrap items-center gap-3">
@@ -37,9 +33,7 @@ export function OperationResult({ results }: { results: ApplyResult[] }) {
             <p className="text-sm text-muted-foreground">
               {t(
                 succeeded
-                  ? item.mode === 'save'
-                    ? 'favorites.resultSavedHint'
-                    : 'favorites.resultActivatedHint'
+                  ? 'favorites.resultActivatedHint'
                   : item.status === 'failed'
                     ? 'favorites.resultFailedHint'
                     : 'favorites.resultSkippedHint',

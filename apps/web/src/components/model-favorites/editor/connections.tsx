@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useTranslation } from '@/lib/i18n';
 import { ConnectionCard } from '../connection-card';
 import { FavoriteSelect } from '../fields';
-import { modelGroups } from './model-groups';
+import { modelGroups, removeConnectionGroup } from './model-groups';
 
 export function FavoriteConnections({
   draft,
@@ -70,14 +70,7 @@ export function FavoriteConnections({
                 update(item.id, patch);
               }
             }}
-            onRemove={() =>
-              setDraft({
-                ...draft,
-                connections: draft.connections.filter(
-                  (item) => !group.some((entry) => entry.id === item.id),
-                ),
-              })
-            }
+            onRemove={() => setDraft(removeConnectionGroup(draft, group))}
           />
         );
       })}

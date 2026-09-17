@@ -63,6 +63,16 @@ test('first-time users can create a template without having an existing profile'
   expect(actions.captureFavorite).toHaveLength(0);
 });
 
+test('startEditing opens the selected template editor once favorites are ready', async () => {
+  const favorite = favoriteFixture('daily', 'vendor/model');
+  setStoreState({ favorites: [favorite], providers: [], harnesses: [] });
+  stubStoreActions(['loadFavorites', 'loadProviders', 'loadFavoriteTargets']);
+  renderWithI18n(<ModelFavorites initialSelectedId={favorite.id} startEditing />);
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: '编辑模板' })).toBeInTheDocument(),
+  );
+});
+
 test('empty capture dialog explains eligibility and provides a direct create route', () => {
   setStoreState({ favorites: [], providers: [], harnesses: [] });
   stubStoreActions(['loadFavorites', 'loadProviders']);
@@ -164,32 +174,32 @@ test('linked profile details open from the template without saving or detaching'
   expect(actions.detachFavorite).toHaveLength(0);
 });
 
-test('saving from a graph tool node opens the actual preview flow in save-only mode', async () => {
+test('opening a graph tool node goes straight into the activate preview flow', async () => {
   linkedSetup();
   const actions = stubStoreActions(['applyFavorite', 'planFavorite']);
   renderWithI18n(<ModelFavorites />);
-  fireEvent.click(screen.getByRole('button', { name: '保存备用' }));
   const tool = await screen.findByRole('button', { name: 'Pi 正在使用' });
   await waitFor(() => expect(tool).toBeEnabled());
   fireEvent.click(tool);
-  expect(within(screen.getByRole('dialog')).getByRole('radio', { name: '保存备用' })).toBeChecked();
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).queryByRole('radio')).toBeNull();
+  expect(
+    within(dialog).getAllByText('保存配置，并让所选工具立即切换到这份配置。').length,
+  ).toBeGreaterThan(0);
   expect(actions.applyFavorite).toHaveLength(0);
   expect(actions.planFavorite).toHaveLength(0);
 });
 
-test('graph mode separates save and switch actions and retain exact request identity', async () => {
+test('graph tool nodes always request activate and retain exact request identity', async () => {
   const { favorite } = linkedSetup();
   const requests: FavoritePlanRequest['items'][] = [];
   renderWithI18n(
     <FavoriteRelationships favorite={favorite} onApply={(items) => requests.push(items)} />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '保存备用' }));
   const tool = await screen.findByRole('button', { name: 'Pi 正在使用' });
   await waitFor(() => expect(tool).toBeEnabled());
   fireEvent.click(tool);
-  fireEvent.click(screen.getByRole('button', { name: '保存并立即切换' }));
-  fireEvent.click(tool);
-  expect(requests.map((items) => items[0]?.mode)).toEqual(['save', 'activate']);
+  expect(requests.map((items) => items[0]?.mode)).toEqual(['activate']);
   expect(requests[0]?.[0]).toMatchObject({
     profile: 'main',
     existing: true,
@@ -296,7 +306,11 @@ test('refreshed reference status shows pending updates and previews one profile 
   expect(screen.getByText('1 个正在使用')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '预览待更新配置（1）' }));
   expect(requests[0]).toHaveLength(1);
-  expect(requests[0]?.[0]).toMatchObject({ harness: 'pi', mode: 'save', overwriteDiverged: false });
+  expect(requests[0]?.[0]).toMatchObject({
+    harness: 'pi',
+    mode: 'activate',
+    overwriteDiverged: false,
+  });
   act(() =>
     rerender(
       <FavoriteNextStep

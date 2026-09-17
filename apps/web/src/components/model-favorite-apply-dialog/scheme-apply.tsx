@@ -12,7 +12,6 @@ import { TabList, TabPanel } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 import { CollectionApply } from './collection-apply';
-import { ModeRadio } from './mode-radio';
 import type { ApplyDialogProps } from './use-apply-workflow';
 
 export function SchemeApply({
@@ -28,12 +27,11 @@ export function SchemeApply({
     props.quickHarness?.id ?? props.initialItems?.[0]?.harness ?? 'claude',
   );
   const [single, setSingle] = useState(false);
-  const [mode, setMode] = useState(props.initialMode ?? 'save');
   const [busy, setBusy] = useState(false);
   if (single && tool) {
     return renderSingle({
       ...props,
-      initialMode: mode,
+      initialMode: 'activate',
       quickHarness: harnesses.find((entry) => entry.id === tool),
       initialItems: props.initialItems?.filter((entry) => entry.harness === tool),
       onClose: props.onClose,
@@ -85,21 +83,14 @@ export function SchemeApply({
           className="flex min-h-0 flex-1 flex-col"
         >
           {tool === 'kimi' || tool === 'dsh' ? (
-            <CollectionApply
-              key={tool}
-              harness={tool}
-              mode={mode}
-              onModeChange={setMode}
-              onBusyChange={setBusy}
-              {...props}
-            />
+            <CollectionApply key={tool} harness={tool} onBusyChange={setBusy} {...props} />
           ) : tool ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="space-y-4 p-6">
                 <p className="text-sm text-muted-foreground">
                   {t('favorites.scheme.reviewTool', { tool: t(`favorites.scheme.tools.${tool}`) })}
                 </p>
-                <ModeRadio value={mode} onChange={setMode} />
+                <p className="text-sm text-muted-foreground">{t('favorites.modeHint.activate')}</p>
               </div>
               <div className="flex shrink-0 justify-between gap-3 border-t bg-card px-6 py-4">
                 <Button variant="outline" onClick={props.onClose}>

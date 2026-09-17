@@ -105,6 +105,65 @@ test('ignoring a template revision preserves profiles and resumes reminders for 
   expect(apply.state(profiles.get('claude', 'daily')!).needsUpdate).toBe(true);
 });
 
+test('removing a protocol copy retargets linked profiles onto the surviving connection', async () => {
+  const { app, favorite } = await setup();
+  const favorites = app.services.get(IModelFavoriteService);
+  const anthropic = favorite.connections[0]!;
+  const responsesId = randomUUID();
+  const withCopy = favorites.update(favorite.id, {
+    expectedRevision: favorite.revision,
+    connections: [
+      { ...anthropic, protocol: 'anthropic-messages', protocols: ['anthropic-messages'] },
+      {
+        ...anthropic,
+        id: responsesId,
+        groupId: responsesId,
+        label: `${anthropic.label} · codex`,
+        protocol: 'openai-responses',
+        protocols: ['openai-responses'],
+      },
+    ],
+  });
+  const apply = app.services.get(IModelFavoriteApplyService);
+  const prepared = apply.plan(
+    {
+      favoriteId: withCopy.id,
+      expectedRevision: withCopy.revision,
+      items: [
+        {
+          harness: 'codex',
+          connectionId: responsesId,
+          profile: 'daily',
+          existing: false,
+          mode: 'save',
+          overwriteDiverged: false,
+          ignorePreference: false,
+        },
+      ],
+    },
+    'session',
+  );
+  apply.apply(prepared.id, randomUUID(), 'session');
+  expect(app.services.get(IProfileService).get('codex', 'daily')!.modelFavorite!.connectionId).toBe(
+    responsesId,
+  );
+  const collapsed = favorites.update(withCopy.id, {
+    expectedRevision: withCopy.revision,
+    connections: [
+      {
+        ...anthropic,
+        protocol: 'anthropic-messages',
+        protocols: ['anthropic-messages'],
+      },
+    ],
+  });
+  expect(collapsed.connections).toHaveLength(1);
+  expect(collapsed.connections[0]!.protocols).toEqual(['anthropic-messages', 'openai-responses']);
+  expect(app.services.get(IProfileService).get('codex', 'daily')!.modelFavorite!.connectionId).toBe(
+    anthropic.id,
+  );
+});
+
 test('Codex login-cache writes require a specific plan approval and previews redact credentials', async () => {
   const { app, provider } = await setup();
   const profiles = app.services.get(IProfileService);

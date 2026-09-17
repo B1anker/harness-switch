@@ -29,7 +29,7 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
           <p className="break-all font-mono text-sm font-medium">
             {item.projection.projection.model}
           </p>
-          <Badge variant="outline">{t(`favorites.modeLabel.${item.mode}`)}</Badge>
+          <Badge variant="outline">{t('favorites.modeLabel.activate')}</Badge>
         </div>
         {item.projection.notRepresented.length ? (
           <Alert variant="warning">
@@ -42,33 +42,27 @@ export function FavoritePreview({ item }: { item: FavoritePlanItem }) {
             {t(catalogKey(warning.code), warning.data)}
           </Alert>
         ))}
-        {item.mode === 'activate' ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <FileCode2 className="size-4" />
-              {t('favorites.liveComparison')}
-            </div>
-            <p className="text-xs text-muted-foreground">{t('favorites.liveComparisonHint')}</p>
-            {item.nativeFiles.length ? (
-              <ConfigDiffs
-                collapseUnchanged
-                intent="apply"
-                files={item.nativeFiles.map((file) => ({
-                  path: file.key,
-                  existed: file.before !== null,
-                  currentContent: file.before,
-                  content: file.after,
-                }))}
-              />
-            ) : (
-              <Alert variant="warning">{t('favorites.previewBlocked')}</Alert>
-            )}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <FileCode2 className="size-4" />
+            {t('favorites.liveComparison')}
           </div>
-        ) : (
-          <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-            {t('favorites.saveOnlyHint')}
-          </p>
-        )}
+          <p className="text-xs text-muted-foreground">{t('favorites.liveComparisonHint')}</p>
+          {item.nativeFiles.length ? (
+            <ConfigDiffs
+              collapseUnchanged
+              intent="apply"
+              files={item.nativeFiles.map((file) => ({
+                path: file.key,
+                existed: file.before !== null,
+                currentContent: file.before,
+                content: file.after,
+              }))}
+            />
+          ) : (
+            <Alert variant="warning">{t('favorites.previewBlocked')}</Alert>
+          )}
+        </div>
         <Disclosure
           title={t(item.diff.length ? 'favorites.savedComparison' : 'favorites.savedUnchanged')}
         >

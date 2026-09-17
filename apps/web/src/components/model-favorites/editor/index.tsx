@@ -19,6 +19,7 @@ import { DiscardDraftDialog } from '../discard-draft-dialog';
 import { FavoriteCapabilities } from './capabilities';
 import { FavoriteConnections } from './connections';
 import { EditorHeader } from './header';
+import { pruneFavoriteDraft } from './model-groups';
 import { ToolBindings } from './tool-bindings';
 
 import { useFavoriteDraft } from './use-favorite-draft';
@@ -134,10 +135,11 @@ export function FavoriteEditor({
     }
   };
   const submit = async () => {
-    const result = createFavoriteRequestSchema.safeParse(favoritePayload(draft, providers));
+    const payload = pruneFavoriteDraft(favoritePayload(draft, providers));
+    const result = createFavoriteRequestSchema.safeParse(payload);
     if (!result.success) {
       setSubmitted(true);
-      const all = locateFavoriteIssues(draft, result.error.issues);
+      const all = locateFavoriteIssues(payload, result.error.issues);
       const connectionError =
         result.error.issues.some(
           (issue) =>
@@ -163,6 +165,18 @@ export function FavoriteEditor({
         result.error.issues.some((issue) => issue.path[0] === 'defaultConnectionId')
       ) {
         setAdvanced(true);
+      }
+      const bindingIssues = result.error.issues.filter((issue) => issue.path[0] === 'toolBindings');
+      if (bindingIssues.length) {
+        const tools = [
+          ...new Set(
+            bindingIssues.map((issue) =>
+              t(`favorites.scheme.tools.${String(issue.path[1] ?? 'claude')}`),
+            ),
+          ),
+        ].join(t('favorites.scheme.toolListSep'));
+        setError(t('favorites.scheme.invalidBindingTools', { tools }));
+        return;
       }
       setError(
         Object.keys(all.fields).length || Object.keys(all.cards).length

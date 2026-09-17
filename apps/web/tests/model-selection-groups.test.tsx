@@ -1,5 +1,6 @@
 import { expect, rs, test } from '@rstest/core';
 import { fireEvent, screen } from '@testing-library/react';
+import { useState } from 'react';
 import { HarnessCard } from '@/components/harness-card';
 import { ModelSelectionGroups } from '@/components/model-favorites/editor/model-selection-groups';
 import { profileGroups } from '@/lib/profile-groups';
@@ -11,7 +12,7 @@ import {
   setStoreState,
 } from './support';
 
-test('group selection and inversion preserve models belonging to other connections', () => {
+test('group check-all selects only the visible models in that group', () => {
   const first = favoriteFixture('daily', 'model-one').connections[0]!;
   const connections = [
     { ...first, id: 'one', groupId: 'group-a', label: 'Group A' },
@@ -19,23 +20,31 @@ test('group selection and inversion preserve models belonging to other connectio
     { ...first, id: 'three', groupId: 'group-b', label: 'Group B', requestModelId: 'model-three' },
   ];
   const onChange = rs.fn();
-  renderWithI18n(
-    <ModelSelectionGroups
-      connections={connections}
-      selectedIds={['one', 'three']}
-      onChange={onChange}
-    />,
-  );
+  function Harness({ initial }: { initial: string[] }) {
+    const [selectedIds, setSelectedIds] = useState(initial);
+    return (
+      <ModelSelectionGroups
+        connections={connections}
+        selectedIds={selectedIds}
+        onChange={(ids) => {
+          onChange(ids);
+          setSelectedIds(ids);
+        }}
+      />
+    );
+  }
+  renderWithI18n(<Harness initial={['one', 'three']} />);
   fireEvent.click(screen.getByRole('button', { name: /Group A/ }));
-  fireEvent.click(screen.getByRole('button', { name: '全选' }));
+  // Partial → full for the group, then full → empty; other groups stay untouched.
+  fireEvent.click(screen.getByRole('checkbox', { name: '全选' }));
   expect(onChange).toHaveBeenLastCalledWith(['one', 'three', 'two']);
-  fireEvent.click(screen.getByRole('button', { name: '反选' }));
-  expect(onChange).toHaveBeenLastCalledWith(['three', 'two']);
+  fireEvent.click(screen.getByRole('checkbox', { name: '全选' }));
+  expect(onChange).toHaveBeenLastCalledWith(['three']);
   fireEvent.change(screen.getByRole('textbox', { name: '搜索连接或模型' }), {
     target: { value: 'model-two' },
   });
-  fireEvent.click(screen.getByRole('button', { name: '全选' }));
-  expect(onChange).toHaveBeenLastCalledWith(['one', 'three', 'two']);
+  fireEvent.click(screen.getByRole('checkbox', { name: '全选' }));
+  expect(onChange).toHaveBeenLastCalledWith(['three', 'two']);
   expect(screen.queryByRole('checkbox', { name: 'model-one' })).toBeNull();
 });
 

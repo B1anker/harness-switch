@@ -1,5 +1,5 @@
 import type { HarnessSummary, ProfilePublic } from '@seaveyon/harness-switch-shared';
-import { Copy, Pencil, Play, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Play, Sparkles, Trash2 } from 'lucide-react';
 import { FavoriteLinkStatus } from '@/components/model-favorites/link-status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ export function ProfileRow({
 }) {
   const { t } = useTranslation();
   const words = harnessWords(harness.id);
+  const favoriteId = profile.modelFavorite?.favoriteId;
   return (
     <div
       key={profile.name}
@@ -88,14 +89,27 @@ export function ProfileRow({
                 : words.apply,
           )}
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={t('harness.edit', { name: profile.name })}
-          onClick={() => onEdit(profile)}
-        >
-          <Pencil />
-        </Button>
+        {favoriteId ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={t('favorites.edit')}
+            title={t('favorites.edit')}
+            disabled={!onOpenTemplate}
+            onClick={() => onOpenTemplate?.(favoriteId)}
+          >
+            <Sparkles />
+          </Button>
+        ) : (
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={t('harness.edit', { name: profile.name })}
+            onClick={() => onEdit(profile)}
+          >
+            <Pencil />
+          </Button>
+        )}
         <Button
           size="icon"
           variant="ghost"

@@ -2,12 +2,13 @@ import {
   type FavoriteConnection,
   type FavoriteInput,
   type ModelFacts,
+  syncConnectionProtocols,
 } from '@seaveyon/harness-switch-shared';
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { type InferredFacts, NEW_TEMPLATE_FACTS, updateConnectionFacts } from '../draft-facts';
 import { presetFactsForConnection, presetProtocolForUrl } from '../preset-connections';
-import { selectGroupModels } from './model-groups';
+import { pruneFavoriteDraft, selectGroupModels } from './model-groups';
 
 function emptyConnection(providerId = '', endpointKey = ''): FavoriteConnection {
   return {
@@ -15,7 +16,7 @@ function emptyConnection(providerId = '', endpointKey = ''): FavoriteConnection 
     label: '',
     providerId,
     endpointKey,
-    protocol: 'openai-responses',
+    ...syncConnectionProtocols(['openai-responses']),
     requestModelId: '',
     factOverrides: {},
     preferenceOverrides: {},
@@ -37,7 +38,7 @@ export function useFavoriteDraft(
       preferences: {},
       connections: [],
     };
-    return {
+    return pruneFavoriteDraft({
       ...source,
       defaultConnectionId:
         source.defaultConnectionId ??
@@ -49,7 +50,7 @@ export function useFavoriteDraft(
         reasoningSupported:
           source.defaults.reasoningSupported ?? NEW_TEMPLATE_FACTS.reasoningSupported,
       },
-    };
+    });
   });
   const baseline = useRef(JSON.stringify(draft));
   const inferred = useRef<InferredFacts>({});
@@ -81,7 +82,10 @@ export function useFavoriteDraft(
           ...current,
           connections: [
             ...current.connections,
-            { ...emptyConnection(created.id, endpointKey), ...(protocol ? { protocol } : {}) },
+            {
+              ...emptyConnection(created.id, endpointKey),
+              ...(protocol ? syncConnectionProtocols([protocol]) : {}),
+            },
           ],
         };
       }
@@ -96,7 +100,7 @@ export function useFavoriteDraft(
           {
             providerId: created.id,
             endpointKey,
-            ...(protocol ? { protocol } : {}),
+            ...(protocol ? syncConnectionProtocols([protocol]) : {}),
           },
           inferred.current,
         );

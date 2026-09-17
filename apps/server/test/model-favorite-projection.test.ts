@@ -122,7 +122,11 @@ describe('favorite contracts and adapter projections', () => {
     const connection = value.connections[0]!;
     for (const adapter of adapters.all()) {
       for (const protocol of ['openai-chat', 'openai-responses', 'anthropic-messages'] as const) {
-        const result = adapter.projectFavorite(value, { ...connection, protocol });
+        const result = adapter.projectFavorite(value, {
+          ...connection,
+          protocol,
+          protocols: [protocol],
+        });
         const allowed =
           adapter.id === 'codex'
             ? protocol === 'openai-responses'

@@ -7,7 +7,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useTranslation } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { ApplyFooter } from './apply-footer';
@@ -38,7 +37,7 @@ function SingleFavoriteApplyDialog(props: ApplyDialogProps) {
   const { favorite, quickHarness, onEditConnections } = props;
   const { t } = useTranslation();
   const flow = useApplyWorkflow(props);
-  const { step, plan, busy, mode, items } = flow;
+  const { step, plan, busy, items } = flow;
   const [reviewTab, setReviewTab] = useState('route');
   const title = useRef<HTMLHeadingElement>(null);
   const blocked = plan?.items.some((item) => item.projection.blockers.length > 0);
@@ -124,35 +123,12 @@ function SingleFavoriteApplyDialog(props: ApplyDialogProps) {
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm font-medium">{t('favorites.targetTools')}</p>
-                  <RadioGroup
-                    aria-label={t('favorites.mode')}
-                    className="flex flex-wrap items-center gap-x-6 gap-y-3"
-                    value={mode}
-                    onValueChange={(value) => {
-                      const next = value === 'activate' ? 'activate' : 'save';
-                      flow.setMode(next);
-                      flow.clear();
-                      flow.setItems(items.map((item) => ({ ...item, mode: next })));
-                    }}
-                  >
-                    {(['save', 'activate'] as const).map((value) => (
-                      <label
-                        key={value}
-                        className="flex cursor-pointer items-center gap-2.5 py-2 text-sm font-medium"
-                        htmlFor={`favorite-mode-${value}`}
-                      >
-                        <RadioGroupItem value={value} id={`favorite-mode-${value}`} />
-                        {t(`favorites.modeLabel.${value}`)}
-                      </label>
-                    ))}
-                  </RadioGroup>
                 </div>
-                <p className="text-sm text-muted-foreground">{t(`favorites.modeHint.${mode}`)}</p>
+                <p className="text-sm text-muted-foreground">{t('favorites.modeHint.activate')}</p>
                 <ToolSelection
                   favorite={favorite}
                   items={items}
                   setItems={flow.setItems}
-                  mode={mode}
                   plan={plan}
                   targets={flow.targets}
                   clear={flow.clear}
@@ -169,7 +145,7 @@ function SingleFavoriteApplyDialog(props: ApplyDialogProps) {
                 className="flex h-full w-1/2 shrink-0 flex-col gap-4 overflow-y-auto overscroll-contain bg-muted/20 p-6 sm:px-8"
               >
                 <p className="shrink-0 text-sm text-muted-foreground">
-                  {t(`favorites.modeHint.${mode}`)}
+                  {t('favorites.modeHint.activate')}
                 </p>
                 {quickHarness ? (
                   <QuickPreview
@@ -190,7 +166,7 @@ function SingleFavoriteApplyDialog(props: ApplyDialogProps) {
                     <p className="shrink-0 text-sm font-medium">
                       {t('favorites.batchSummary', {
                         count: plan.items.length,
-                        activate: plan.items.filter((item) => item.mode === 'activate').length,
+                        activate: plan.items.length,
                         files: plan.items.reduce(
                           (sum, item) =>
                             sum + item.nativeFiles.filter((file) => file.changed).length,

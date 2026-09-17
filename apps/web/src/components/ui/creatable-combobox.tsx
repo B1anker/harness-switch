@@ -15,6 +15,8 @@ export function CreatableCombobox({
   emptyHint,
   customLabel,
   getLabel = (item: string) => item,
+  isOptionDisabled,
+  disabledHint,
   disabled,
   trigger,
   selectedValues,
@@ -28,6 +30,9 @@ export function CreatableCombobox({
   emptyHint: string;
   customLabel?(value: string): string;
   getLabel?(value: string): string;
+  /** Options that stay visible but cannot be chosen. */
+  isOptionDisabled?(value: string): boolean;
+  disabledHint?: string;
   disabled?: boolean;
   trigger?: ReactNode;
   selectedValues?: string[];
@@ -42,6 +47,9 @@ export function CreatableCombobox({
   );
   const custom = query.trim();
   const select = (next: string) => {
+    if (isOptionDisabled?.(next)) {
+      return;
+    }
     onChange(next);
     if (!selectedValues) {
       setOpen(false);
@@ -101,23 +109,35 @@ export function CreatableCombobox({
               {!filtered.length && (!custom || !customLabel) ? (
                 <p className="px-3 py-4 text-xs text-muted-foreground">{emptyHint}</p>
               ) : null}
-              {filtered.map((item) => (
-                <Command.Item
-                  key={item}
-                  value={item}
-                  onSelect={() => select(item)}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2.5 text-sm data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
-                >
-                  <Check
+              {filtered.map((item) => {
+                const optionDisabled = !!isOptionDisabled?.(item);
+                return (
+                  <Command.Item
+                    key={item}
+                    value={item}
+                    disabled={optionDisabled}
+                    title={optionDisabled ? disabledHint : undefined}
+                    onSelect={() => select(item)}
                     className={cn(
-                      'size-4 shrink-0',
-                      !(selectedValues ? selectedValues.includes(item) : value === item) &&
-                        'invisible',
+                      'flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2.5 text-sm data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground',
+                      optionDisabled &&
+                        'cursor-not-allowed opacity-50 data-[selected=true]:bg-transparent',
                     )}
-                  />
-                  <span className="break-all">{getLabel(item)}</span>
-                </Command.Item>
-              ))}
+                  >
+                    <Check
+                      className={cn(
+                        'size-4 shrink-0',
+                        !(selectedValues ? selectedValues.includes(item) : value === item) &&
+                          'invisible',
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 break-all">{getLabel(item)}</span>
+                    {optionDisabled && disabledHint ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">{disabledHint}</span>
+                    ) : null}
+                  </Command.Item>
+                );
+              })}
               {customLabel && custom && !candidates.includes(custom) ? (
                 <Command.Item
                   value={custom}

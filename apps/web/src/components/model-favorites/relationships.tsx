@@ -6,7 +6,6 @@ import type {
 import { useState } from 'react';
 import { ConfigurationFlow, flowEdge, flowNode } from '@/components/configuration-flow';
 import { Alert } from '@/components/ui/alert';
-import { SegmentedControl } from '@/components/ui/tabs';
 import { compatibleConnections, favoriteSelection } from '@/lib/favorite-selection';
 import { useTranslation } from '@/lib/i18n';
 import { useFavoriteTargets } from '@/lib/use-favorite-targets';
@@ -32,7 +31,6 @@ export function FavoriteRelationships({
   const [channel, setChannel] = useState(
     favorite.defaultConnectionId ?? favorite.connections[0]?.id,
   );
-  const [mode, setMode] = useState<'save' | 'activate'>('activate');
   const connection = favorite.connections.find((entry) => entry.id === channel);
   // Same account + same models under two protocols (cpa / cpa · codex) collapse to one
   // node; the tool's apply path picks the protocol it can speak.
@@ -141,7 +139,7 @@ export function FavoriteRelationships({
         action: () =>
           onApply([
             {
-              ...favoriteSelection(favorite, harness, targets, mode),
+              ...favoriteSelection(favorite, harness, targets),
               connectionId: compatible ? channel! : fallback!.id,
             },
           ]),
@@ -168,16 +166,6 @@ export function FavoriteRelationships({
       </div>
       {error ? <Alert>{error}</Alert> : null}
       <div className="flex flex-wrap items-end gap-4">
-        <SegmentedControl
-          options={['save', 'activate'] as const}
-          value={mode}
-          onChange={setMode}
-          className="w-full max-w-sm"
-        >
-          {(value) =>
-            t(value === 'save' ? 'favorites.modeLabel.save' : 'favorites.modeLabel.activate')
-          }
-        </SegmentedControl>
         {models.length > 1 ? (
           <FavoriteSelect
             id="relationship-model"

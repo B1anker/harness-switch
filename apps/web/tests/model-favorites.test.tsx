@@ -92,7 +92,7 @@ test('selection and review are separate steps, and going back preserves choices 
   fireEvent.click(screen.getByRole('checkbox', { name: 'Pi' }));
   fireEvent.click(screen.getByRole('button', { name: '生成预览' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: '保存 1 份备用配置' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: '确认保存并切换 1 个工具' })).toBeEnabled(),
   );
   expect(screen.queryByRole('checkbox', { name: 'Pi' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '查看保存档案的变更' }));
@@ -127,7 +127,7 @@ test('a single channel only requires selecting a tool and leaves advanced choice
           connectionId: favorite.connections[0]!.id,
           existing: false,
           profile: undefined,
-          mode: 'save',
+          mode: 'activate',
           ignorePreference: false,
           overwriteDiverged: false,
         },
@@ -136,7 +136,7 @@ test('a single channel only requires selecting a tool and leaves advanced choice
   ]);
 });
 
-test('save mode uses mutually exclusive radio options and sends the selected activation mode', async () => {
+test('apply dialog defaults to activate with no save-or-switch choice', async () => {
   const favorite = favoriteFixture('daily', 'model');
   setStoreState({
     favoriteTargets: { [favorite.id]: [favoriteTargetFixture(favorite)] },
@@ -144,10 +144,8 @@ test('save mode uses mutually exclusive radio options and sends the selected act
   });
   const actions = stubStoreActions(['loadFavoriteTargets', 'planFavorite']);
   renderWithI18n(<ModelFavoriteApplyDialog favorite={favorite} onClose={() => undefined} />);
-  expect(screen.getByRole('radio', { name: '保存备用' })).toBeChecked();
-  fireEvent.click(screen.getByRole('radio', { name: '保存并立即切换' }));
-  expect(screen.getByRole('radio', { name: '保存备用' })).toHaveAttribute('aria-checked', 'false');
-  expect(screen.getByRole('radio', { name: '保存并立即切换' })).toBeChecked();
+  expect(screen.queryByRole('radio', { name: '保存备用' })).toBeNull();
+  expect(screen.queryByRole('radio', { name: '保存并立即切换' })).toBeNull();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Pi' }));
   fireEvent.click(screen.getByRole('button', { name: '生成预览' }));
   await waitFor(() => expect(actions.planFavorite).toHaveLength(1));

@@ -1,12 +1,17 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import {
+  connectionProtocols,
   createFavoriteRequestSchema,
   ERROR_CODES,
+  FAVORITE_PROTOCOL_SUPPORT,
+  type FavoriteConnection,
   type FavoriteInput,
   HARNESS_IDS,
   type HarnessId,
   type ModelFavorite,
   type ModelFavoriteLink,
+  pickProtocolForHarness,
+  syncConnectionProtocols,
   type UpdateFavoriteRequest,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
@@ -91,20 +96,72 @@ export class ModelFavoriteService implements IModelFavoriteService {
   update(id: string, input: UpdateFavoriteRequest): ModelFavorite {
     this.store.assertRevision(id, input.expectedRevision);
     const current = this.store.get(id);
-    const next = createFavoriteRequestSchema.parse({ ...current, ...input });
+    let next = createFavoriteRequestSchema.parse({ ...current, ...input });
     this.validateConnections(next);
-    if (
-      this.references(id).some(
-        (ref) => !next.connections.some((connection) => connection.id === ref.link.connectionId),
-      )
-    ) {
-      throw new HttpError(409, ERROR_CODES.favoriteConnectionInUse, {
-        code: ERROR_CODES.favoriteConnectionInUse,
+    // Protocol copies (cpa / cpa · codex) collapse into one connection: absorb the
+    // removed copy's protocols onto the survivor, then retarget linked profiles.
+    const remaps: Array<{ ref: FavoriteReference; connectionId: string }> = [];
+    const absorbed = new Map<string, FavoriteConnection>();
+    for (const ref of this.references(id)) {
+      if (next.connections.some((connection) => connection.id === ref.link.connectionId)) {
+        continue;
+      }
+      const previous = current.connections.find(
+        (connection) => connection.id === ref.link.connectionId,
+      );
+      const target = previous ?? {
+        providerId: ref.link.baseline.providerId,
+        endpointKey: ref.link.baseline.providerEndpoint,
+        requestModelId: ref.link.baseline.model,
+        protocol: undefined,
+        protocols: undefined,
+      };
+      const survivor = sameAccountModel(target, next.connections);
+      if (!survivor) {
+        throw new HttpError(409, ERROR_CODES.favoriteConnectionInUse, {
+          code: ERROR_CODES.favoriteConnectionInUse,
+        });
+      }
+      const merged = {
+        ...survivor,
+        ...syncConnectionProtocols([
+          ...connectionProtocols(survivor),
+          ...(previous ? connectionProtocols(previous) : []),
+          // Prefer the protocol this harness was already using when the copy is gone.
+          ...(pickProtocolForHarness(survivor, ref.harness)
+            ? []
+            : [FAVORITE_PROTOCOL_SUPPORT[ref.harness][0]!]),
+        ]),
+      };
+      if (!pickProtocolForHarness(merged, ref.harness)) {
+        throw new HttpError(409, ERROR_CODES.favoriteConnectionInUse, {
+          code: ERROR_CODES.favoriteConnectionInUse,
+        });
+      }
+      absorbed.set(merged.id, merged);
+      remaps.push({ ref, connectionId: merged.id });
+    }
+    if (absorbed.size) {
+      next = createFavoriteRequestSchema.parse({
+        ...next,
+        connections: next.connections.map(
+          (connection) => absorbed.get(connection.id) ?? connection,
+        ),
       });
+      this.validateConnections(next);
     }
     return this.backups.protect(
       'change',
-      () => this.store.update(id, next, input.expectedRevision),
+      () => {
+        const updated = this.store.update(id, next, input.expectedRevision);
+        for (const { ref, connectionId } of remaps) {
+          this.profiles.setFavoriteLink(ref.harness, ref.name, {
+            ...ref.link,
+            connectionId,
+          });
+        }
+        return updated;
+      },
       { action: 'update', name: current.name },
     );
   }
@@ -196,7 +253,7 @@ export class ModelFavoriteService implements IModelFavoriteService {
                   label: provider.name,
                   providerId: provider.id,
                   endpointKey,
-                  protocol: extracted.protocol,
+                  ...syncConnectionProtocols([extracted.protocol]),
                   requestModelId: extracted.requestModelId,
                   factOverrides: {},
                   preferenceOverrides: {},
@@ -274,4 +331,16 @@ export class ModelFavoriteService implements IModelFavoriteService {
       }
     }
   }
+}
+
+function sameAccountModel(
+  previous: Pick<FavoriteConnection, 'providerId' | 'endpointKey' | 'requestModelId'>,
+  connections: FavoriteConnection[],
+) {
+  return connections.find(
+    (connection) =>
+      connection.providerId === previous.providerId &&
+      connection.endpointKey === previous.endpointKey &&
+      connection.requestModelId === previous.requestModelId,
+  );
 }

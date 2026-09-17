@@ -1,4 +1,9 @@
-import type { FavoriteInput, HarnessId } from '@seaveyon/harness-switch-shared';
+import {
+  connectionProtocols,
+  type FavoriteInput,
+  type HarnessId,
+  syncConnectionProtocols,
+} from '@seaveyon/harness-switch-shared';
 import type { Dispatch, SetStateAction } from 'react';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/lib/i18n';
@@ -22,7 +27,9 @@ export function ToolConnectionPicker({
   const protocol: FavoriteInput['connections'][number]['protocol'] =
     tool === 'codex' ? 'openai-responses' : 'anthropic-messages';
   const groups = modelGroups(draft.connections);
-  const compatible = groups.filter(([first]) => first?.protocol === protocol);
+  const compatible = groups.filter(
+    ([first]) => first && connectionProtocols(first).includes(protocol),
+  );
   if (compatible.length) {
     return (
       <FavoriteSelect
@@ -54,29 +61,28 @@ export function ToolConnectionPicker({
             variant="outline"
             className="h-auto max-w-full whitespace-normal text-left"
             onClick={() => {
-              const id = crypto.randomUUID();
-              const copies = group
-                .filter((entry) => entry.requestModelId)
-                .map((entry) => ({
-                  ...entry,
-                  id: crypto.randomUUID(),
-                  groupId: id,
-                  protocol,
-                  label: `${entry.label} · ${tool}`,
-                }));
+              const groupKey = group[0]!.groupId ?? group[0]!.id;
+              const defaultModelId = group.find((entry) => entry.requestModelId)?.id;
               setDraft((current) => ({
                 ...current,
-                connections: [...current.connections, ...copies],
+                connections: current.connections.map((entry) =>
+                  group.some((member) => member.id === entry.id)
+                    ? {
+                        ...entry,
+                        ...syncConnectionProtocols([...connectionProtocols(entry), protocol]),
+                      }
+                    : entry,
+                ),
                 toolBindings: {
                   ...current.toolBindings,
-                  [tool]: { connectionId: id, defaultModelId: copies[0]!.id },
+                  [tool]: { connectionId: groupKey, defaultModelId },
                 },
               }));
             }}
           >
-            {t('favorites.scheme.addProtocolConnection', {
+            {t('favorites.scheme.enableProtocolOnConnection', {
               name: group[0]!.label || group[0]!.requestModelId,
-              tool: t(`favorites.scheme.tools.${tool}`),
+              protocol,
             })}
           </Button>
         ))}

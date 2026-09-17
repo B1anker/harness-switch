@@ -1,4 +1,5 @@
 import {
+  connectionProtocols,
   type FavoriteInput,
   favoriteEffortSchema,
   type HarnessId,
@@ -25,12 +26,14 @@ export function ToolBindings({
   const [tool, setTool] = useState<HarnessId>('claude');
   const binding = draft.toolBindings?.[tool] ?? {};
   const multi = tool === 'kimi' || tool === 'dsh';
+  const requiredProtocol =
+    tool === 'claude' ? 'anthropic-messages' : tool === 'codex' ? 'openai-responses' : undefined;
   const groups = modelGroups(draft.connections).filter(
     ([connection]) =>
       connection &&
       (multi ||
         tool === 'pi' ||
-        connection.protocol === (tool === 'claude' ? 'anthropic-messages' : 'openai-responses')),
+        (requiredProtocol && connectionProtocols(connection).includes(requiredProtocol))),
   );
   const templateDefault = draft.connections.find(
     (connection) => connection.id === draft.defaultConnectionId,

@@ -52,10 +52,10 @@ type Editing = {
 };
 
 /**
- * Where templates open to: a selected template, or the create dialog straight away when
- * the tool page suggested making one.
+ * Where templates open to: a selected template, optionally straight into its editor, or
+ * the create dialog when the tool page suggested making one.
  */
-type TemplateEntry = { id: string; create: boolean };
+type TemplateEntry = { id: string; create: boolean; edit?: boolean };
 
 export function DashboardPage() {
   const currentUser = useAppStore((state) => state.currentUser);
@@ -154,9 +154,10 @@ export function DashboardPage() {
               {t('workspace.nav.favorites')}
             </Breadcrumb>
             <ModelFavorites
-              key={`${currentUser}/${templateEntry.id}/${templateEntry.create}`}
+              key={`${currentUser}/${templateEntry.id}/${templateEntry.create}/${templateEntry.edit}`}
               initialSelectedId={templateEntry.id}
               startCreating={templateEntry.create}
+              startEditing={!!templateEntry.edit && !!templateEntry.id}
             />
           </>
         ) : view === 'history' ? (
@@ -192,7 +193,7 @@ export function DashboardPage() {
                   onCopyProfile={(copySource) =>
                     setEditing({ harnessId: selectedHarness.id, profile: null, copySource })
                   }
-                  onOpenTemplate={(id) => openTemplates({ id, create: false })}
+                  onOpenTemplate={(id) => openTemplates({ id, create: false, edit: true })}
                   onManageTemplates={() => openTemplates({ id: '', create: false })}
                   onCreateTemplate={() => openTemplates({ id: '', create: true })}
                 />

@@ -95,6 +95,10 @@ export function ConfigurationSwitcher({
                 value=""
                 options={(favorites ?? []).map((entry) => entry.id)}
                 getLabel={(id) => favorites?.find((entry) => entry.id === id)?.name ?? id}
+                isOptionDisabled={(id) =>
+                  harness.profiles.some((profile) => profile.modelFavorite?.favoriteId === id)
+                }
+                disabledHint={t('workspace.templateAlreadyLinked')}
                 onChange={setTemplateId}
                 placeholder={t('workspace.chooseTemplate')}
                 searchLabel={t('favorites.search')}

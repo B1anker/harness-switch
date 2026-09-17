@@ -335,3 +335,40 @@ test('keeps legacy duplicate DSH official records manageable after pinning the p
   fireEvent.click(screen.getByRole('button', { name: '删除' }));
   expect(calls.deleteProfile).toEqual([['dsh', 'legacy-official']]);
 });
+
+test('a template-linked profile opens the template instead of the profile editor', () => {
+  const favoriteId = '00000000-0000-4000-8000-000000000001';
+  const opened: string[] = [];
+  const edited: ProfilePublic[] = [];
+  render(
+    <HarnessCard
+      harness={harnessFixture({
+        profiles: [
+          profileFixture({
+            modelFavorite: {
+              favoriteId,
+              connectionId: '00000000-0000-4000-8000-000000000002',
+              appliedRevision: 1,
+              projectionVersion: 1,
+              baseline: {
+                harness: 'claude',
+                model: 'claude-sonnet-4-5',
+                providerId: '',
+                providerEndpoint: '',
+                extras: {},
+              },
+            },
+          }),
+        ],
+      })}
+      onAdd={() => {}}
+      onEdit={(profile) => edited.push(profile)}
+      onOpenTemplate={(id) => opened.push(id)}
+    />,
+  );
+
+  expect(screen.queryByRole('button', { name: '编辑 openrouter-main' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '编辑模板' }));
+  expect(opened).toEqual([favoriteId]);
+  expect(edited).toEqual([]);
+});

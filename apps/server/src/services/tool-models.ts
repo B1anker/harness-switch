@@ -3,6 +3,7 @@ import {
   createFavoriteRequestSchema,
   ERROR_CODES,
   type ModelFavoriteLink,
+  pickProtocolForHarness,
   type ToolModelItem,
   type ToolModelsHarness,
   type ToolModelsPreview,
@@ -360,7 +361,11 @@ export class ToolModelsService implements IToolModelsService {
       if (!endpoint) {
         throw failure(ERROR_CODES.favoriteEndpointMissing);
       }
-      const route = `${provider.id}/${endpoint.key}/${connection.protocol}`;
+      const protocol = pickProtocolForHarness(connection, harness);
+      if (!protocol) {
+        throw failure(ERROR_CODES.favoriteProtocolUnsupported);
+      }
+      const route = `${provider.id}/${endpoint.key}/${protocol}`;
       const identity = `${route}/${connection.requestModelId}`;
       if (seen.has(identity)) {
         throw failure(ERROR_CODES.toolModelsConflict);
@@ -456,7 +461,7 @@ export class ToolModelsService implements IToolModelsService {
           id: item.id,
           name: favorite.name,
           model: profile.model,
-          connection: `${provider.name} · ${connection.protocol}`,
+          connection: `${provider.name} · ${protocol}`,
           warnings: projection.warnings,
           notRepresented: projection.notRepresented,
         },

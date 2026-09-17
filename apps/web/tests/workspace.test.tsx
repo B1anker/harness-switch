@@ -247,6 +247,58 @@ test('once a template exists the page offers it and a way to manage templates', 
   expect(opened).toEqual(['manage']);
 });
 
+test('templates already linked on this tool stay visible but marked as already configured', () => {
+  const favorite = favoriteFixture('daily', 'model');
+  const other = {
+    ...favoriteFixture('spare', 'other'),
+    id: '00000000-0000-4000-8000-000000000099',
+  };
+  const harness = harnessFixture({
+    id: 'pi',
+    label: 'Pi',
+    profiles: [
+      profileFixture({
+        harness: 'pi',
+        name: 'main',
+        modelFavorite: {
+          favoriteId: favorite.id,
+          connectionId: favorite.connections[0]!.id,
+          appliedRevision: 1,
+          projectionVersion: 1,
+          baseline: {
+            harness: 'pi',
+            model: 'model',
+            providerId: '',
+            providerEndpoint: '',
+            extras: {},
+          },
+        },
+      }),
+    ],
+  });
+  setStoreState({
+    favorites: [favorite, other],
+    providers: [],
+    harnesses: [harness],
+  });
+  stubStoreActions(['loadFavorites', 'loadProviders', 'loadFavoriteBackups']);
+  renderWithI18n(
+    <ConfigurationSwitcher
+      harness={harness}
+      onNewProfile={() => {}}
+      onOpenTemplate={() => {}}
+      onManageTemplates={() => {}}
+      onCreateTemplate={() => {}}
+      onEditProfile={() => {}}
+      onCopyProfile={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));
+  expect(document.body.textContent?.includes('daily')).toBe(true);
+  expect(document.body.textContent?.includes('spare')).toBe(true);
+  expect(document.body.textContent?.includes('已有配置')).toBe(true);
+});
+
 test('rapid timeline selection keeps the latest preview and restores that exact fingerprint', async () => {
   const pending = new Map<string, (value: unknown) => void>();
   stubFetch(

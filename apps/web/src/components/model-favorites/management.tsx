@@ -105,19 +105,19 @@ export function FavoriteManagement({
                       variant="outline"
                       size="sm"
                       disabled={busy}
-                      onClick={() =>
+                      onClick={() => {
                         onApply([
                           {
                             harness: ref.harness,
                             profile: ref.name,
                             connectionId: connection.id,
                             existing: true,
-                            mode: 'save',
+                            mode: 'activate',
                             ignorePreference: false,
                             overwriteDiverged: false,
                           },
-                        ])
-                      }
+                        ]);
+                      }}
                     >
                       {t('favorites.onboarding.reviewUpdates', { count: 1 })}
                     </Button>

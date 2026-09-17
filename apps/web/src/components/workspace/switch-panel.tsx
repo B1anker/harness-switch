@@ -35,7 +35,7 @@ export function SwitchPanel({
   const [error, setError] = useState('');
   const [review, setReview] = useState<FavoritePlanRequest['items'] | null>(null);
   const compatible = compatibleConnections(favorite, harness.id, targets);
-  const selection = favoriteSelection(favorite, harness, targets, 'activate');
+  const selection = favoriteSelection(favorite, harness, targets);
   const connectionId = chosen ?? selection.connectionId;
   const connection = compatible.find((entry) => entry.id === connectionId);
   const preview = async () => {

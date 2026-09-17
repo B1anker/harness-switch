@@ -1,3 +1,4 @@
+import { catalogKey } from '@seaveyon/harness-switch-shared';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,13 @@ export function ApplyFooter({
 }) {
   const { t } = useTranslation();
   const { step, busy, plan, items } = flow;
+  const blockers =
+    plan?.items.flatMap((item) =>
+      item.projection.blockers.map((blocker) => ({
+        harness: item.harness,
+        ...blocker,
+      })),
+    ) ?? [];
   return (
     <div className="shrink-0 space-y-3 border-t bg-card px-6 py-4 sm:px-8">
       {flow.error ? (
@@ -41,7 +49,17 @@ export function ApplyFooter({
       ) : null}
       {flow.uncertain ? <Alert variant="warning">{t('favorites.unconfirmedResult')}</Alert> : null}
       {step === 1 && blocked ? (
-        <Alert variant="warning">{t('favorites.resolveBeforeApply')}</Alert>
+        <Alert variant="warning">
+          <div className="space-y-2">
+            <p>{t('favorites.resolveBeforeApply')}</p>
+            {blockers.map((blocker, index) => (
+              <p key={`${blocker.harness}-${blocker.code}-${index}`} className="text-sm">
+                {t(`favorites.toolNames.${blocker.harness}`)} ·{' '}
+                {t(catalogKey(blocker.code), blocker.data)}
+              </p>
+            ))}
+          </div>
+        </Alert>
       ) : null}
       {quick && step === 1 && !!flow.targets && !flow.connections.length && onEditConnections ? (
         <Button variant="outline" onClick={onEditConnections}>
@@ -108,14 +126,9 @@ export function ApplyFooter({
             onClick={() => void flow.submit()}
           >
             {busy ? <Loader2 className="animate-spin" /> : <Check />}
-            {t(
-              flow.uncertain
-                ? 'favorites.checkResult'
-                : flow.mode === 'activate'
-                  ? 'favorites.confirmBatchActivate'
-                  : 'favorites.confirmBatchSave',
-              { count: plan?.items.length ?? 0 },
-            )}
+            {t(flow.uncertain ? 'favorites.checkResult' : 'favorites.confirmBatchActivate', {
+              count: plan?.items.length ?? 0,
+            })}
           </Button>
         )}
       </div>

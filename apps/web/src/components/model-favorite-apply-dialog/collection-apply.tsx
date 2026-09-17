@@ -1,6 +1,10 @@
 import type { ToolModelsHarness, ToolModelsRequest } from '@seaveyon/harness-switch-shared';
 import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import {
+  collapseProtocolCopies,
+  resolveCollapsedDefault,
+} from '@/components/model-favorites/editor/model-groups';
 import { FavoriteSelect } from '@/components/model-favorites/fields';
 import { ModelsPreview } from '@/components/tool-models/preview';
 import { Alert } from '@/components/ui/alert';
@@ -9,7 +13,6 @@ import { Disclosure } from '@/components/ui/disclosure';
 import { useTranslation } from '@/lib/i18n';
 import { errorLine, lineText } from '@/lib/messages';
 import { useAppStore } from '@/stores/app-store';
-import { type ApplyMode, ModeRadio } from './mode-radio';
 import type { ApplyDialogProps } from './use-apply-workflow';
 
 /**
@@ -21,15 +24,11 @@ import type { ApplyDialogProps } from './use-apply-workflow';
 export function CollectionApply({
   harness,
   favorite,
-  mode,
-  onModeChange,
   onApplied,
   onBusyChange,
   onClose,
 }: ApplyDialogProps & {
   harness: ToolModelsHarness;
-  mode: ApplyMode;
-  onModeChange(mode: ApplyMode): void;
   onBusyChange(busy: boolean): void;
 }) {
   const { t } = useTranslation();
@@ -37,22 +36,22 @@ export function CollectionApply({
   const preview = useAppStore((state) => state.toolModelsPreview);
   const makePreview = useAppStore((state) => state.previewToolModels);
   const apply = useAppStore((state) => state.applyToolModels);
-  const save = useAppStore((state) => state.saveToolModels);
   const clear = useAppStore((state) => state.clearToolModelsPreview);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [step, setStep] = useState<'choose' | 'review'>('choose');
-  const [request, setRequest] = useState<ToolModelsRequest | null>(null);
   const [done, setDone] = useState(false);
   const binding = favorite.toolBindings?.[harness];
-  const candidates = favorite.connections.filter(
+  const preferredId = binding?.defaultModelId ?? favorite.defaultConnectionId;
+  const selected = favorite.connections.filter(
     (entry) => entry.requestModelId && (!binding?.modelIds || binding.modelIds.includes(entry.id)),
   );
+  // Protocol copies (anthropic + openai_responses for the same account) collapse to one
+  // provider — Kimi can speak both, but writing both only duplicates type.
+  const candidates = collapseProtocolCopies(selected, preferredId);
   // A lone model needs no choice; several without a template default do.
   const [defaultId, setDefaultId] = useState(
-    binding?.defaultModelId ??
-      favorite.defaultConnectionId ??
-      (candidates.length === 1 ? candidates[0]!.id : ''),
+    resolveCollapsedDefault(preferredId, candidates, favorite.connections),
   );
   const chosen = candidates.find((entry) => entry.id === defaultId);
   useEffect(() => {
@@ -116,32 +115,20 @@ export function CollectionApply({
       if (!next) {
         return;
       }
-      setRequest(next);
-      // Saving a draft leaves the tool's files alone, so there is nothing to diff.
-      if (mode === 'activate') {
-        await makePreview(harness, next);
-      }
+      await makePreview(harness, next);
       setStep('review');
     });
   const confirm = () =>
     run(async () => {
-      if (mode === 'activate') {
-        if (!preview) {
-          return;
-        }
-        await apply(harness, preview.id);
-      } else {
-        if (!request) {
-          return;
-        }
-        await save(harness, request);
+      if (!preview) {
+        return;
       }
+      await apply(harness, preview.id);
       setDone(true);
       onApplied?.();
     });
   const back = () => {
     clear();
-    setRequest(null);
     setError('');
     setStep('choose');
   };
@@ -156,7 +143,6 @@ export function CollectionApply({
             <p className="text-sm text-muted-foreground">
               {t('favorites.scheme.collectionApplyHint')}
             </p>
-            <ModeRadio value={mode} onChange={onModeChange} />
             <Disclosure title={t('favorites.scheme.selectedCount', { count: candidates.length })}>
               {candidates.map((entry) => (
                 <p key={entry.id} className="break-all font-mono text-sm">
@@ -178,45 +164,20 @@ export function CollectionApply({
           </>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">{t(`favorites.modeHint.${mode}`)}</p>
-            {mode === 'activate' ? (
-              preview ? (
-                <ModelsPreview preview={preview} />
-              ) : (
-                <p role="status">{t('activate.loading')}</p>
-              )
+            <p className="text-sm text-muted-foreground">{t('favorites.modeHint.activate')}</p>
+            {preview ? (
+              <ModelsPreview preview={preview} />
             ) : (
-              <div className="space-y-3 rounded-xl border bg-card p-4">
-                <p className="text-sm">
-                  {t('favorites.scheme.selectedCount', { count: candidates.length })}
-                  {chosen
-                    ? ` · ${t('toolModels.defaultChanged', { name: favorite.name, model: chosen.requestModelId })}`
-                    : ''}
-                </p>
-                {candidates.map((entry) => (
-                  <p key={entry.id} className="break-all font-mono text-sm">
-                    {entry.label} / {entry.requestModelId}
-                  </p>
-                ))}
-                <p className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-                  {t('favorites.saveOnlyHint')}
-                </p>
-              </div>
+              <p role="status">{t('activate.loading')}</p>
             )}
           </>
         )}
         {error ? <Alert>{error}</Alert> : null}
         <p role="status" className="min-h-5 text-sm">
           {busy
-            ? t(
-                step === 'choose'
-                  ? 'toolModels.previewing'
-                  : mode === 'activate'
-                    ? 'toolModels.applying'
-                    : 'toolModels.saving',
-              )
+            ? t(step === 'choose' ? 'toolModels.previewing' : 'toolModels.applying')
             : done
-              ? t(mode === 'activate' ? 'toolModels.applied' : 'favorites.scheme.draftSaved')
+              ? t('toolModels.applied')
               : ''}
         </p>
       </fieldset>
@@ -245,17 +206,9 @@ export function CollectionApply({
               <ArrowLeft />
               {t('favorites.backToSelection')}
             </Button>
-            <Button
-              disabled={busy || (mode === 'activate' && !preview)}
-              onClick={() => void confirm()}
-            >
+            <Button disabled={busy || !preview} onClick={() => void confirm()}>
               {busy ? <Loader2 className="animate-spin" /> : <Check />}
-              {t(
-                mode === 'activate'
-                  ? 'favorites.confirmBatchActivate'
-                  : 'favorites.confirmBatchSave',
-                { count: 1 },
-              )}
+              {t('favorites.confirmBatchActivate', { count: 1 })}
             </Button>
           </>
         )}

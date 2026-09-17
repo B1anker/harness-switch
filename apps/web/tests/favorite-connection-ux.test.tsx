@@ -24,14 +24,21 @@ test('custom routes show address and protocol directly and allow optional editin
   );
   const toggle = screen.getByRole('button', { name: '更改协议' });
   expect(screen.getByText('https://custom.example/v1')).toBeVisible();
-  expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
+  expect(screen.queryByRole('checkbox', { name: 'OpenAI Responses' })).toBeNull();
   fireEvent.click(toggle);
   expect(screen.getByText('https://custom.example/v1')).toBeVisible();
-  expect(screen.getByRole('combobox', { name: '协议' })).toBeVisible();
+  expect(screen.getByRole('checkbox', { name: 'OpenAI Responses' })).toHaveAttribute(
+    'data-state',
+    'checked',
+  );
+  expect(screen.getByRole('checkbox', { name: 'Anthropic Messages' })).toHaveAttribute(
+    'data-state',
+    'unchecked',
+  );
   fireEvent.click(screen.getByRole('button', { name: '完成' }));
-  expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
+  expect(screen.queryByRole('checkbox', { name: 'OpenAI Responses' })).toBeNull();
   fireEvent.click(toggle);
-  expect(screen.getByRole('combobox', { name: '协议' })).toBeVisible();
+  expect(screen.getByRole('checkbox', { name: 'OpenAI Responses' })).toBeVisible();
 });
 
 test('opening an existing template preserves explicit capacities, false reasoning and per-connection unknowns', () => {
@@ -97,7 +104,12 @@ test('selecting a known endpoint changes its protocol together and keeps the exa
   fireEvent.click(screen.getByRole('combobox', { name: '服务商账号' }));
   fireEvent.click(await screen.findByRole('option', { name: 'Kimi · Messages' }));
   expect(patches).toEqual([
-    { providerId: 'kimi', endpointKey: 'messages', protocol: 'anthropic-messages' },
+    {
+      providerId: 'kimi',
+      endpointKey: 'messages',
+      protocol: 'anthropic-messages',
+      protocols: ['anthropic-messages'],
+    },
   ]);
   expect(screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ })).toHaveTextContent(
     'Vendor/Exact:ID',
@@ -146,6 +158,7 @@ test('a failed catalog explains that preset candidates and manual IDs are still 
 test('an endpoint with one preset protocol shows its address and protocol without extra controls', () => {
   const connection = favoriteFixture('official', 'model').connections[0]!;
   connection.protocol = 'anthropic-messages';
+  connection.protocols = ['anthropic-messages'];
   renderWithI18n(
     <ConnectionSettings
       connection={connection}

@@ -395,3 +395,15 @@
     animation: none;
   }
 }
+
+/* Keep CJK toast copy from wrapping mid-phrase when an action button squeezes the title. */
+[data-sonner-toast][data-styled="true"] {
+  align-items: flex-start !important;
+}
+[data-sonner-toast][data-styled="true"] [data-content] {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+[data-sonner-toast][data-styled="true"] [data-title] {
+  line-height: 1.45;
+}
