@@ -65,6 +65,11 @@ export interface IToolModelsService {
     session: string,
   ): ToolModelsPreview;
   apply(harness: ToolModelsHarness, planId: string, session: string): ToolModelsState;
+  /**
+   * Retarget draft favorite sources after protocol copies collapse. Caller owns the
+   * surrounding liveWrite transaction — this only mutates the tool-models store.
+   */
+  remapFavoriteConnections(favoriteId: string, remaps: ReadonlyMap<string, string>): void;
 }
 export const IToolModelsService = createDecorator<IToolModelsService>('toolModelsService');
 
@@ -255,6 +260,46 @@ export class ToolModelsService implements IToolModelsService {
       preview,
     });
     return preview;
+  }
+
+  remapFavoriteConnections(favoriteId: string, remaps: ReadonlyMap<string, string>): void {
+    if (!remaps.size) {
+      return;
+    }
+    const store = this.read();
+    let changed = false;
+    for (const harness of toolModelsHarnessSchema.options) {
+      const state = store.collections[harness];
+      if (!state) {
+        continue;
+      }
+      let dirty = false;
+      const items = state.draft.items.map((item) => {
+        if (item.source.kind !== 'favorite' || item.source.favoriteId !== favoriteId) {
+          return item;
+        }
+        const nextId = remaps.get(item.source.connectionId);
+        if (!nextId || nextId === item.source.connectionId) {
+          return item;
+        }
+        dirty = true;
+        return {
+          ...item,
+          source: { ...item.source, connectionId: nextId },
+        };
+      });
+      if (dirty) {
+        changed = true;
+        store.collections[harness] = {
+          ...state,
+          revision: state.revision + 1,
+          draft: { ...state.draft, items },
+        };
+      }
+    }
+    if (changed) {
+      this.files.writeJson(this.environment.files.toolModels, store);
+    }
   }
 
   apply(harness: ToolModelsHarness, planId: string, session: string): ToolModelsState {

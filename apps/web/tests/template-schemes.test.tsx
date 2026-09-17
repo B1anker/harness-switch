@@ -72,6 +72,40 @@ test('Claude tier assignments persist with the template and can reuse a model', 
   expect(saved.connections[0]!.groupId).toBe(saved.connections[1]!.groupId);
 });
 
+test('incomplete Claude tiers stay in the draft and block save until filled', async () => {
+  const favorite = favoriteFixture('daily', 'vendor/main');
+  favorite.connections[0]!.protocol = 'anthropic-messages';
+  favorite.connections[0]!.protocols = ['anthropic-messages'];
+  setStoreState({ providers: [] });
+  const actions = stubStoreActions(['saveFavorite', 'loadFavoriteCatalog']);
+  renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
+  fireEvent.click(screen.getByRole('radio', { name: '按档位分配' }));
+  fireEvent.click(screen.getByRole('combobox', { name: 'Opus' }));
+  fireEvent.click(await screen.findByRole('option', { name: 'vendor/main' }));
+  fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
+  expect(actions.saveFavorite).toHaveLength(0);
+  expect(screen.getByRole('radio', { name: '按档位分配' })).toBeChecked();
+  expect(screen.getByRole('combobox', { name: 'Opus' })).toHaveTextContent('vendor/main');
+});
+
+test('explicit empty DSH model selection survives prune and save', async () => {
+  const favorite = favoriteFixture('daily', 'vendor/main');
+  favorite.connections.push({
+    ...favorite.connections[0]!,
+    id: '00000000-0000-4000-8000-000000000003',
+    groupId: favorite.connections[0]!.id,
+    requestModelId: 'vendor/fast',
+  });
+  favorite.connections[0]!.groupId = favorite.connections[0]!.id;
+  favorite.toolBindings = { dsh: { modelIds: [] } };
+  const actions = stubStoreActions(['saveFavorite', 'loadFavoriteCatalog']);
+  renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
+  fireEvent.click(screen.getByRole('button', { name: '保存模板' }));
+  await waitFor(() => expect(actions.saveFavorite).toHaveLength(1));
+  const saved = actions.saveFavorite[0]![0] as FavoriteInput;
+  expect(saved.toolBindings?.dsh?.modelIds).toEqual([]);
+});
+
 test('Codex explains incompatible routes and can enable Responses on the same connection', async () => {
   const favorite = favoriteFixture('daily', 'vendor/main');
   favorite.connections[0]!.protocol = 'anthropic-messages';

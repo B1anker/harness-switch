@@ -96,6 +96,11 @@ export function accountLabel(cluster: FavoriteConnection[], fallback: string) {
   return bases[0] || fallback;
 }
 
+/** Stable React Flow id — never fall back to providerId alone (collides across clusters). */
+export function accountClusterId(cluster: FavoriteConnection[]) {
+  return [...new Set(cluster.map((entry) => entry.id))].sort().join(':');
+}
+
 export function selectGroupModels(
   draft: FavoriteInput,
   group: FavoriteConnection[],
@@ -159,7 +164,9 @@ export function pruneFavoriteDraft(draft: FavoriteInput): FavoriteInput {
         }
         return selected.some((entry) => entry.id === id);
       };
-      const modelIds = binding.modelIds?.filter(inScope);
+      // Preserve `[]` — undefined means "all models", empty means an explicit clear.
+      const modelIds =
+        binding.modelIds === undefined ? undefined : binding.modelIds.filter(inScope);
       const tiers = binding.tiers
         ? {
             opus: inScope(binding.tiers.opus) ? binding.tiers.opus : undefined,
@@ -167,20 +174,21 @@ export function pruneFavoriteDraft(draft: FavoriteInput): FavoriteInput {
             haiku: inScope(binding.tiers.haiku) ? binding.tiers.haiku : undefined,
           }
         : undefined;
-      const tiersComplete = !!tiers?.opus && !!tiers.sonnet && !!tiers.haiku;
+      // Keep incomplete Claude tiers so save validation can ask the user to finish them.
       const next = {
         ...binding,
         connectionId,
         defaultModelId: inScope(binding.defaultModelId) ? binding.defaultModelId : undefined,
-        modelIds: modelIds?.length ? modelIds : undefined,
-        mode: binding.mode === 'tiers' && !tiersComplete ? 'default' : binding.mode,
-        tiers: binding.mode === 'tiers' && tiersComplete ? tiers : undefined,
+        modelIds,
+        mode: binding.mode,
+        tiers: binding.mode === 'tiers' ? tiers : undefined,
       };
       if (
         !next.connectionId &&
         !next.defaultModelId &&
-        !next.modelIds &&
+        next.modelIds === undefined &&
         !next.tiers &&
+        next.mode !== 'tiers' &&
         !next.reasoningEffort
       ) {
         return [];

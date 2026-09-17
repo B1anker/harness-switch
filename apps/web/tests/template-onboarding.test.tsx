@@ -284,6 +284,33 @@ test('relationship graph shows one node per account and picks the model beside i
   expect(requests[0]?.[0]?.connectionId).toBe(second.id);
 });
 
+test('ungrouped models from the same provider keep distinct graph nodes', async () => {
+  const { favorite } = linkedSetup();
+  const first = favorite.connections[0]!;
+  const second = {
+    ...first,
+    id: '00000000-0000-4000-8000-000000000003',
+    endpointKey: 'other',
+    requestModelId: 'vendor/other',
+    label: 'other-route',
+  };
+  favorite.connections = [first, second];
+  const target = favoriteTargetFixture(favorite);
+  setStoreState({
+    favoriteTargets: {
+      [favorite.id]: [
+        {
+          ...target,
+          connections: [...target.connections, { ...target.connections[0]!, id: second.id }],
+        },
+      ],
+    },
+  });
+  renderWithI18n(<FavoriteRelationships favorite={favorite} onApply={() => undefined} />);
+  expect(screen.getByRole('button', { name: /^route · / })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /^other-route · / })).toBeInTheDocument();
+});
+
 test('refreshed reference status shows pending updates and previews one profile per tool without activation', () => {
   const { favorite, profile, harness } = linkedSetup();
   favorite.references = [

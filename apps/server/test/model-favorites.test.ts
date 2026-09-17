@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import {
   ERROR_CODES,
@@ -14,6 +14,7 @@ import { IModelFavoriteService } from '../src/services/model-favorite';
 import { IModelFavoriteApplyService } from '../src/services/model-favorite-apply';
 import { IModelFavoriteStore } from '../src/services/model-favorite-store';
 import { IProfileService } from '../src/services/profiles';
+import { IToolModelsService } from '../src/services/tool-models';
 import { ITransferService } from '../src/services/transfer';
 import { createSandbox, createTestApp, type Sandbox } from './support';
 import { expectResponseError } from './support/http-error';
@@ -554,4 +555,213 @@ test('active save updates are blocked, but a metadata-only favorite revision can
   expect(blocked.items[0]!.projection.blockers.map((item) => item.code)).toContain(
     ERROR_CODES.favoriteActiveUpdateRequiresApply,
   );
+});
+
+test('collapsing protocol copies remaps tool-models drafts and bumps their revision', async () => {
+  const { app, favorite } = await setup();
+  const favorites = app.services.get(IModelFavoriteService);
+  const anthropic = favorite.connections[0]!;
+  const responsesId = randomUUID();
+  const withCopy = favorites.update(favorite.id, {
+    expectedRevision: favorite.revision,
+    connections: [
+      { ...anthropic, protocol: 'anthropic-messages', protocols: ['anthropic-messages'] },
+      {
+        ...anthropic,
+        id: responsesId,
+        groupId: responsesId,
+        label: `${anthropic.label} · codex`,
+        protocol: 'openai-responses',
+        protocols: ['openai-responses'],
+      },
+    ],
+  });
+  const models = app.services.get(IToolModelsService);
+  const itemId = randomUUID();
+  models.save('kimi', {
+    expectedRevision: 0,
+    draft: {
+      items: [
+        {
+          id: itemId,
+          source: {
+            kind: 'favorite',
+            favoriteId: withCopy.id,
+            connectionId: responsesId,
+          },
+          factOverrides: {},
+          preferenceOverrides: {},
+        },
+      ],
+      defaultItemId: null,
+    },
+  });
+  expect(models.get('kimi').revision).toBe(1);
+  const collapsed = favorites.update(withCopy.id, {
+    expectedRevision: withCopy.revision,
+    connections: [
+      {
+        ...anthropic,
+        protocol: 'anthropic-messages',
+        protocols: ['anthropic-messages'],
+      },
+    ],
+  });
+  const state = models.get('kimi');
+  expect(state.revision).toBe(2);
+  expect(state.draft.items[0]!.source).toEqual({
+    kind: 'favorite',
+    favoriteId: collapsed.id,
+    connectionId: anthropic.id,
+  });
+  const preview = await app.postJson<{ data: unknown }>(`/api/tool-models/kimi/preview`, {
+    expectedRevision: state.revision,
+    draft: state.draft,
+  });
+  expect(preview).toBeDefined();
+});
+
+test('a failed profile remap rolls back the favorite store via liveWrite.transaction', async () => {
+  const { app, favorite } = await setup();
+  const favorites = app.services.get(IModelFavoriteService);
+  const profiles = app.services.get(IProfileService);
+  const anthropic = favorite.connections[0]!;
+  const responsesId = randomUUID();
+  const withCopy = favorites.update(favorite.id, {
+    expectedRevision: favorite.revision,
+    connections: [
+      { ...anthropic, protocol: 'anthropic-messages', protocols: ['anthropic-messages'] },
+      {
+        ...anthropic,
+        id: responsesId,
+        groupId: responsesId,
+        label: `${anthropic.label} · codex`,
+        protocol: 'openai-responses',
+        protocols: ['openai-responses'],
+      },
+    ],
+  });
+  const apply = app.services.get(IModelFavoriteApplyService);
+  apply.apply(
+    apply.plan(
+      {
+        favoriteId: withCopy.id,
+        expectedRevision: withCopy.revision,
+        items: [
+          {
+            harness: 'codex',
+            connectionId: responsesId,
+            profile: 'daily',
+            existing: false,
+            mode: 'save',
+            overwriteDiverged: false,
+            ignorePreference: false,
+          },
+        ],
+      },
+      'session',
+    ).id,
+    randomUUID(),
+    'session',
+  );
+  const before = favorites.list().find((entry) => entry.id === withCopy.id)!;
+  const link = spyOn(profiles, 'setFavoriteLink').mockImplementation(() => {
+    throw new Error('simulated profile write failure');
+  });
+  expect(() =>
+    favorites.update(withCopy.id, {
+      expectedRevision: withCopy.revision,
+      connections: [
+        {
+          ...anthropic,
+          protocol: 'anthropic-messages',
+          protocols: ['anthropic-messages'],
+        },
+      ],
+    }),
+  ).toThrow('simulated profile write failure');
+  link.mockRestore();
+  const after = favorites.list().find((entry) => entry.id === withCopy.id)!;
+  expect(after.revision).toBe(before.revision);
+  expect(after.connections.map((entry) => entry.id).sort()).toEqual(
+    before.connections.map((entry) => entry.id).sort(),
+  );
+  expect(profiles.get('codex', 'daily')!.modelFavorite!.connectionId).toBe(responsesId);
+});
+
+test('absorbing Responses and Chat copies accumulates protocols onto the survivor', async () => {
+  const { app, favorite } = await setup();
+  const favorites = app.services.get(IModelFavoriteService);
+  const anthropic = favorite.connections[0]!;
+  const responsesId = randomUUID();
+  const chatId = randomUUID();
+  const withCopies = favorites.update(favorite.id, {
+    expectedRevision: favorite.revision,
+    connections: [
+      { ...anthropic, protocol: 'anthropic-messages', protocols: ['anthropic-messages'] },
+      {
+        ...anthropic,
+        id: responsesId,
+        groupId: responsesId,
+        label: `${anthropic.label} · codex`,
+        protocol: 'openai-responses',
+        protocols: ['openai-responses'],
+      },
+      {
+        ...anthropic,
+        id: chatId,
+        groupId: chatId,
+        label: `${anthropic.label} · kimi`,
+        protocol: 'openai-chat',
+        protocols: ['openai-chat'],
+      },
+    ],
+  });
+  const apply = app.services.get(IModelFavoriteApplyService);
+  for (const [harness, connectionId] of [
+    ['codex', responsesId],
+    ['kimi', chatId],
+  ] as const) {
+    apply.apply(
+      apply.plan(
+        {
+          favoriteId: withCopies.id,
+          expectedRevision: withCopies.revision,
+          items: [
+            {
+              harness,
+              connectionId,
+              profile: 'daily',
+              existing: false,
+              mode: 'save',
+              overwriteDiverged: false,
+              ignorePreference: false,
+            },
+          ],
+        },
+        'session',
+      ).id,
+      randomUUID(),
+      'session',
+    );
+  }
+  const collapsed = favorites.update(withCopies.id, {
+    expectedRevision: withCopies.revision,
+    connections: [
+      {
+        ...anthropic,
+        protocol: 'anthropic-messages',
+        protocols: ['anthropic-messages'],
+      },
+    ],
+  });
+  expect(collapsed.connections).toHaveLength(1);
+  expect(collapsed.connections[0]!.protocols?.slice().sort()).toEqual([
+    'anthropic-messages',
+    'openai-chat',
+    'openai-responses',
+  ]);
+  const profiles = app.services.get(IProfileService);
+  expect(profiles.get('codex', 'daily')!.modelFavorite!.connectionId).toBe(anthropic.id);
+  expect(profiles.get('kimi', 'daily')!.modelFavorite!.connectionId).toBe(anthropic.id);
 });

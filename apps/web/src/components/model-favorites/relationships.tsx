@@ -11,11 +11,8 @@ import { useTranslation } from '@/lib/i18n';
 import { useFavoriteTargets } from '@/lib/use-favorite-targets';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
-import { accountClusters, accountLabel } from './editor/model-groups';
+import { accountClusterId, accountClusters, accountLabel } from './editor/model-groups';
 import { FavoriteSelect } from './fields';
-
-const clusterNodeId = (cluster: FavoriteConnection[]) =>
-  cluster[0]!.groupId ?? cluster[0]!.providerId ?? cluster[0]!.id;
 
 export function FavoriteRelationships({
   favorite,
@@ -94,7 +91,7 @@ export function FavoriteRelationships({
         .filter(Boolean)
         .join(' · ');
       return flowNode(
-        clusterNodeId(cluster),
+        accountClusterId(cluster),
         24,
         middle - ((clusters.length - 1) * 88) / 2 + index * 88,
         {
@@ -148,7 +145,7 @@ export function FavoriteRelationships({
   ];
   const edges = connection
     ? [
-        flowEdge(clusterNodeId(selectedCluster), 'model'),
+        flowEdge(accountClusterId(selectedCluster), 'model'),
         ...harnesses
           .filter((harness) =>
             compatibleConnections(favorite, harness.id, targets).some(
