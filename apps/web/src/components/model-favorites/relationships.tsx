@@ -6,7 +6,6 @@ import type {
 import { useState } from 'react';
 import { ConfigurationFlow, flowEdge, flowNode } from '@/components/configuration-flow';
 import { Alert } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/ui/tabs';
 import { compatibleConnections, favoriteSelection } from '@/lib/favorite-selection';
 import { useTranslation } from '@/lib/i18n';
@@ -21,11 +20,9 @@ const groupNodeId = (group: FavoriteConnection[]) => group[0]!.groupId ?? group[
 export function FavoriteRelationships({
   favorite,
   onApply,
-  onEditConnections,
 }: {
   favorite: FavoriteListItem;
   onApply(items: FavoritePlanRequest['items']): void;
-  onEditConnections(): void;
 }) {
   const { t } = useTranslation();
   const harnesses = useAppStore((state) => state.harnesses);
@@ -76,8 +73,10 @@ export function FavoriteRelationships({
         providers?.find((item) => item.id === entry.providerId)?.name ??
         t('workspace.missingProvider');
       const title = entry.label || provider;
+      // Two groups on one account differ only by protocol, so that is what the caption
+      // carries; the account is already the title.
       const caption = [
-        title === provider ? '' : provider,
+        entry.protocol,
         group.length > 1 ? t('favorites.scheme.selectedCount', { count: group.length }) : '',
       ]
         .filter(Boolean)
@@ -88,11 +87,11 @@ export function FavoriteRelationships({
         middle - ((groups.length - 1) * 88) / 2 + index * 88,
         {
           kind: 'source',
-          label: caption || entry.protocol,
+          label: caption,
           value: title,
           selected: group.some((item) => item.id === channel),
           action: () => setChannel(pickFromGroup(group)),
-          actionLabel: title + ' · ' + (caption || entry.protocol),
+          actionLabel: title + ' · ' + caption,
         },
       );
     }),
@@ -102,28 +101,34 @@ export function FavoriteRelationships({
       value: connection?.requestModelId ?? t('favorites.pending'),
     }),
     ...harnesses.map((harness, index) => {
-      const compatible = compatibleConnections(favorite, harness.id, targets).some(
-        (entry) => entry.id === channel,
-      );
+      const usable = compatibleConnections(favorite, harness.id, targets);
+      const compatible = usable.some((entry) => entry.id === channel);
+      // A tool that cannot take the selected channel may still take the same model over
+      // another protocol (Codex's Responses copy of an account, say); offer that instead
+      // of a dead end, since the apply dialog would pick it anyway.
+      const fallback =
+        usable.find((entry) => entry.requestModelId === connection?.requestModelId) ?? usable[0];
       const label = t(
         loading
           ? 'favorites.loading'
           : compatible
             ? status(harness)
-            : 'favorites.noCompatibleChannel',
+            : fallback
+              ? 'favorites.otherChannelAvailable'
+              : 'favorites.noCompatibleChannel',
       );
       return flowNode(harness.id, 606, middle - ((harnesses.length - 1) * 88) / 2 + index * 88, {
         kind: 'tool',
         harnessId: harness.id,
         label,
         value: harness.label,
-        disabled: !compatible || loading,
+        disabled: loading || (!compatible && !fallback),
         actionLabel: harness.label + ' ' + label,
         action: () =>
           onApply([
             {
               ...favoriteSelection(favorite, harness, targets, mode),
-              connectionId: channel!,
+              connectionId: compatible ? channel! : fallback!.id,
             },
           ]),
       });
@@ -183,9 +188,6 @@ export function FavoriteRelationships({
           }
         </p>
       ) : null}
-      <Button variant="outline" size="sm" onClick={onEditConnections}>
-        {t('favorites.relationships.editConnection')}
-      </Button>
       {!favorite.connections.length ? (
         <p className="text-sm text-muted-foreground">{t('favorites.pending')}</p>
       ) : null}

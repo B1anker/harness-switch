@@ -1151,6 +1151,7 @@
     "fileDetails": "View native file changes",
     "activateSelected": "Activate in selected tools after saving",
     "noCompatibleChannel": "No compatible channel",
+    "otherChannelAvailable": "Configurable via another channel",
     "updateProfile": "Update existing profile",
     "backups": "Backup and restore",
     "backupHint": "Back up this user’s favorites, profiles, credentials and native tool files. The last 20 automatic checkpoints before favorite changes and one manual checkpoint are kept, encrypted locally.",
@@ -1316,8 +1317,7 @@
       "switch": "Save and switch",
       "savedCount": "{{count}} saved profiles",
       "requestModel": "Request model ID",
-      "noConnection": "Add a provider and model connection before saving to a tool.",
-      "editConnection": "Edit model connections"
+      "noConnection": "Add a provider and model connection before saving to a tool."
     },
     "management": {
       "view": "View profile",
@@ -1413,7 +1413,6 @@
       "filteredSelectionHint": "Bulk actions affect only models matching this filter.",
       "groupSelectionCount": "{{selected}} / {{count}} selected",
       "collectionProfile": "Multi-model configuration · {{count}} models",
-      "useCollection": "Use configuration and startup model",
       "manageCollection": "Manage template and models",
       "missingReasoningCount": "{{count}} models have unspecified reasoning levels",
       "selection": {

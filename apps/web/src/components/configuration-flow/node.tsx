@@ -136,7 +136,7 @@ export function RouteNode({ data }: NodeProps<Node<FlowNodeData>>) {
         <Network className="text-primary" />
       )}
       <span className="min-w-0">
-        <span className="block text-xs text-muted-foreground">{data.label}</span>
+        <span className="line-clamp-2 text-xs text-muted-foreground">{data.label}</span>
         {model ? (
           <Tooltip>
             <TooltipTrigger asChild>

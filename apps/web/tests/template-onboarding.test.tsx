@@ -181,11 +181,7 @@ test('graph mode separates save and switch actions and retain exact request iden
   const { favorite } = linkedSetup();
   const requests: FavoritePlanRequest['items'][] = [];
   renderWithI18n(
-    <FavoriteRelationships
-      favorite={favorite}
-      onApply={(items) => requests.push(items)}
-      onEditConnections={() => undefined}
-    />,
+    <FavoriteRelationships favorite={favorite} onApply={(items) => requests.push(items)} />,
   );
   fireEvent.click(screen.getByRole('button', { name: '保存备用' }));
   const tool = await screen.findByRole('button', { name: 'Pi 正在使用' });
@@ -200,7 +196,39 @@ test('graph mode separates save and switch actions and retain exact request iden
     connectionId: favorite.connections[0]!.id,
   });
   expect(screen.getByText('vendor/model')).toBeInTheDocument();
-  expect(screen.getByText(/openai-responses/)).toBeInTheDocument();
+  expect(screen.getByText(/^openai-responses ·/)).toBeInTheDocument();
+});
+
+test('a tool that cannot take the selected channel offers the compatible one instead', async () => {
+  const { favorite } = linkedSetup();
+  const responses = favorite.connections[0]!;
+  const anthropic = {
+    ...responses,
+    id: '00000000-0000-4000-8000-000000000003',
+    label: 'route · claude',
+    protocol: 'anthropic-messages' as const,
+  };
+  favorite.connections = [responses, anthropic];
+  const target = favoriteTargetFixture(favorite);
+  setStoreState({
+    favoriteTargets: {
+      [favorite.id]: [
+        { ...target, connections: [{ ...target.connections[0]!, id: anthropic.id }] },
+      ],
+    },
+  });
+  const requests: FavoritePlanRequest['items'][] = [];
+  renderWithI18n(
+    <FavoriteRelationships favorite={favorite} onApply={(items) => requests.push(items)} />,
+  );
+  expect(screen.getByRole('button', { name: /^route · .*openai-responses$/ })).toBeInTheDocument();
+  expect(
+    screen.getByRole('button', { name: /^route · claude · .*anthropic-messages$/ }),
+  ).toBeInTheDocument();
+  const tool = await screen.findByRole('button', { name: 'Pi 换渠道可配置' });
+  await waitFor(() => expect(tool).toBeEnabled());
+  fireEvent.click(tool);
+  expect(requests[0]?.[0]?.connectionId).toBe(anthropic.id);
 });
 
 test('relationship graph shows one node per account and picks the model beside it', async () => {
@@ -229,11 +257,7 @@ test('relationship graph shows one node per account and picks the model beside i
   });
   const requests: FavoritePlanRequest['items'][] = [];
   renderWithI18n(
-    <FavoriteRelationships
-      favorite={favorite}
-      onApply={(items) => requests.push(items)}
-      onEditConnections={() => undefined}
-    />,
+    <FavoriteRelationships favorite={favorite} onApply={(items) => requests.push(items)} />,
   );
   expect(screen.getByRole('button', { name: /^route · .*2 个模型$/ })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /vendor\/other/ })).toBeNull();

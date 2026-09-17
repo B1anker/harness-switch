@@ -246,7 +246,6 @@ export function ModelFavorites({
               <FavoriteRelationships
                 key={selected.id + '/' + selected.revision}
                 favorite={selected}
-                onEditConnections={() => setEditing({ kind: 'edit', favorite: selected })}
                 onApply={(items) => {
                   clear();
                   setApplying(items);

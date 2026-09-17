@@ -1151,6 +1151,7 @@
     "fileDetails": "查看原生文件差异",
     "activateSelected": "保存后立即激活到所选工具",
     "noCompatibleChannel": "暂无兼容渠道",
+    "otherChannelAvailable": "换渠道可配置",
     "updateProfile": "更新已有配置",
     "backups": "备份与恢复",
     "backupHint": "备份当前用户的收藏、配置、凭据和工具原生文件。收藏变更前自动保留最近 20 次备份，另可保留一个手动恢复点。备份加密保存在本机。",
@@ -1316,8 +1317,7 @@
       "switch": "保存并切换",
       "savedCount": "已保存 {{count}} 个配置",
       "requestModel": "实际请求模型",
-      "noConnection": "先添加服务商和模型连接，才能保存到工具。",
-      "editConnection": "编辑模型连接"
+      "noConnection": "先添加服务商和模型连接，才能保存到工具。"
     },
     "management": {
       "view": "查看配置",
@@ -1413,7 +1413,6 @@
       "filteredSelectionHint": "批量操作只影响当前筛选出的模型。",
       "groupSelectionCount": "已选 {{selected}} / {{count}}",
       "collectionProfile": "多模型配置 · {{count}} 个模型",
-      "useCollection": "使用此配置与启动模型",
       "manageCollection": "管理模板与模型",
       "missingReasoningCount": "{{count}} 个模型未填写推理档位",
       "selection": {
