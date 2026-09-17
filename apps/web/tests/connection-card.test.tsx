@@ -66,8 +66,14 @@ test('changing protocol reveals multi-select checkboxes instead of a single sele
   expect(model.className).not.toContain('min-h-11');
   fireEvent.click(screen.getByRole('button', { name: '更改协议' }));
   expect(screen.getByRole('group', { name: '协议' })).toBeInTheDocument();
-  expect(screen.getByRole('checkbox', { name: 'OpenAI Responses' })).toBeChecked();
-  expect(screen.getByRole('checkbox', { name: 'Anthropic Messages' })).not.toBeChecked();
+  expect(screen.getByRole('checkbox', { name: 'OpenAI Responses' })).toHaveAttribute(
+    'data-state',
+    'checked',
+  );
+  expect(screen.getByRole('checkbox', { name: 'Anthropic Messages' })).toHaveAttribute(
+    'data-state',
+    'unchecked',
+  );
   expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
 });
 
