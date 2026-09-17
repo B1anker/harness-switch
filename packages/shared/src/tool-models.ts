@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ERROR_CODES } from './errors';
-import { favoriteConnectionSchema } from './model-favorites';
+import { favoriteConnectionFieldsSchema } from './model-favorites';
 
 export const toolModelsHarnessSchema = z.enum(['kimi', 'dsh']);
 export type ToolModelsHarness = z.infer<typeof toolModelsHarnessSchema>;
@@ -10,8 +10,8 @@ export const toolModelItemSchema = z.object({
     z.object({ kind: z.literal('profile'), name: z.string().min(1).max(120) }),
     z.object({ kind: z.literal('favorite'), favoriteId: z.uuid(), connectionId: z.uuid() }),
   ]),
-  factOverrides: favoriteConnectionSchema.shape.factOverrides,
-  preferenceOverrides: favoriteConnectionSchema.shape.preferenceOverrides,
+  factOverrides: favoriteConnectionFieldsSchema.shape.factOverrides,
+  preferenceOverrides: favoriteConnectionFieldsSchema.shape.preferenceOverrides,
 });
 export type ToolModelItem = z.infer<typeof toolModelItemSchema>;
 export const toolModelDraftSchema = z

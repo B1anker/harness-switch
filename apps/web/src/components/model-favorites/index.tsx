@@ -5,9 +5,9 @@ import type {
   ProviderPreset,
   ProviderPublic,
 } from '@seaveyon/harness-switch-shared';
-import { remapFavoriteConnections } from '@seaveyon/harness-switch-shared';
+import { remapFavoriteConnections, syncConnectionProtocols } from '@seaveyon/harness-switch-shared';
 import { ArrowDownToLine, Box, Copy, Plus, Star } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ModelFavoriteApplyDialog } from '@/components/model-favorite-apply-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ import { FavoriteEditor } from './editor';
 import { FavoriteManagement } from './management';
 import { FavoriteNextStep } from './next-step';
 import { FavoriteRelationships } from './relationships';
+import { favoriteUpdateItems } from './update-items';
 
 type EditingState =
   | { kind: 'new' }
@@ -34,9 +35,21 @@ type EditingState =
       draft: FavoriteInput;
       modelHints?: Record<string, string[]>;
       hintFacts?: Record<string, ModelFacts>;
+      /** A preset start opens the editor in its guided form; a clone shows everything. */
+      guided?: boolean;
     };
 
-export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?: string }) {
+export function ModelFavorites({
+  initialSelectedId = '',
+  startCreating = false,
+  startEditing = false,
+}: {
+  initialSelectedId?: string;
+  /** Opens the create dialog on mount, for the tool page's "make a template" suggestion. */
+  startCreating?: boolean;
+  /** Opens the editor for `initialSelectedId` once favorites are loaded. */
+  startEditing?: boolean;
+}) {
   const { t } = useTranslation();
   const favorites = useAppStore((state) => state.favorites);
   const loading = useAppStore((state) => state.favoritesLoading);
@@ -47,13 +60,24 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [editing, setEditing] = useState<EditingState | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(startCreating);
   const [applying, setApplying] = useState<FavoritePlanRequest['items'] | null>(null);
   const [capturing, setCapturing] = useState(false);
+  const startedEditing = useRef(false);
   useEffect(() => {
     void load();
     void loadProviders();
   }, [load, loadProviders]);
+  useEffect(() => {
+    if (!startEditing || !initialSelectedId || !favorites || startedEditing.current) {
+      return;
+    }
+    const favorite = favorites.find((entry) => entry.id === initialSelectedId);
+    if (favorite) {
+      startedEditing.current = true;
+      setEditing({ kind: 'edit', favorite });
+    }
+  }, [startEditing, initialSelectedId, favorites]);
   const startFromPreset = (
     preset: ProviderPreset,
     provider: ProviderPublic,
@@ -63,6 +87,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
     setCreating(false);
     setEditing({
       kind: 'draft',
+      guided: true,
       draft: {
         name: '',
         notes: '',
@@ -74,7 +99,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
             label: '',
             providerId: provider.id,
             endpointKey,
-            protocol,
+            ...syncConnectionProtocols([protocol]),
             requestModelId: '',
             factOverrides: {},
             preferenceOverrides: {},
@@ -155,11 +180,12 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
           <aside className="space-y-4">
-            <FormField id="favorite-search" label={t('favorites.search')}>
+            <FormField id="favorite-search" label={t('favorites.search')} labelClassName="sr-only">
               {(control) => (
                 <Input
                   {...control}
                   value={search}
+                  placeholder={t('favorites.search')}
                   onChange={(event) => setSearch(event.target.value)}
                 />
               )}
@@ -236,7 +262,6 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
               <FavoriteRelationships
                 key={selected.id + '/' + selected.revision}
                 favorite={selected}
-                onEditConnections={() => setEditing({ kind: 'edit', favorite: selected })}
                 onApply={(items) => {
                   clear();
                   setApplying(items);
@@ -274,6 +299,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
           initialDraft={editing.kind === 'draft' ? editing.draft : undefined}
           modelHints={editing.kind === 'draft' ? editing.modelHints : undefined}
           hintFacts={editing.kind === 'draft' ? editing.hintFacts : undefined}
+          guided={editing.kind === 'draft' && editing.guided === true}
           onClose={() => setEditing(null)}
           onSaved={(saved, next) => {
             setSearch('');
@@ -281,6 +307,15 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
             if (next === 'configure') {
               clear();
               setApplying([]);
+            } else if (next === 'review') {
+              const refreshed =
+                useAppStore.getState().favorites?.find((entry) => entry.id === saved.id) ?? saved;
+              const harnesses = useAppStore.getState().harnesses;
+              const items = favoriteUpdateItems(refreshed as FavoriteListItem, harnesses);
+              if (items.length) {
+                clear();
+                setApplying(items);
+              }
             }
           }}
         />
@@ -298,7 +333,7 @@ export function ModelFavorites({ initialSelectedId = '' }: { initialSelectedId?:
         <ModelFavoriteApplyDialog
           favorite={selected}
           initialItems={applying}
-          initialMode={applying.some((item) => item.mode === 'activate') ? 'activate' : 'save'}
+          initialMode="activate"
           onClose={() => setApplying(null)}
           onEditConnections={() => {
             setApplying(null);

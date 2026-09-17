@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { TabList, TabPanel } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
@@ -28,12 +27,11 @@ export function SchemeApply({
     props.quickHarness?.id ?? props.initialItems?.[0]?.harness ?? 'claude',
   );
   const [single, setSingle] = useState(false);
-  const [mode, setMode] = useState(props.initialMode ?? 'save');
   const [busy, setBusy] = useState(false);
   if (single && tool) {
     return renderSingle({
       ...props,
-      initialMode: mode,
+      initialMode: 'activate',
       quickHarness: harnesses.find((entry) => entry.id === tool),
       initialItems: props.initialItems?.filter((entry) => entry.harness === tool),
       onClose: props.onClose,
@@ -92,20 +90,9 @@ export function SchemeApply({
                 <p className="text-sm text-muted-foreground">
                   {t('favorites.scheme.reviewTool', { tool: t(`favorites.scheme.tools.${tool}`) })}
                 </p>
-                <RadioGroup
-                  aria-label={t('favorites.mode')}
-                  value={mode}
-                  onValueChange={(value) => setMode(value === 'activate' ? 'activate' : 'save')}
-                >
-                  {(['save', 'activate'] as const).map((value) => (
-                    <label key={value} className="flex items-center gap-2 text-sm">
-                      <RadioGroupItem value={value} />
-                      {t(`favorites.modeLabel.${value}`)}
-                    </label>
-                  ))}
-                </RadioGroup>
+                <p className="text-sm text-muted-foreground">{t('favorites.modeHint.activate')}</p>
               </div>
-              <div className="flex shrink-0 justify-between gap-3 border-t p-6">
+              <div className="flex shrink-0 justify-between gap-3 border-t bg-card px-6 py-4">
                 <Button variant="outline" onClick={props.onClose}>
                   {t('common.cancel')}
                 </Button>

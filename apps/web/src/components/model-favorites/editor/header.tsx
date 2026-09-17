@@ -1,5 +1,7 @@
 import type { FavoriteInput } from '@seaveyon/harness-switch-shared';
+import { SlidersHorizontal } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
+import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
@@ -12,6 +14,8 @@ export function EditorHeader({
   setDraft,
   tab,
   setTab,
+  advanced,
+  onAdvanced,
   busy,
   error,
 }: {
@@ -20,6 +24,9 @@ export function EditorHeader({
   setDraft: Dispatch<SetStateAction<FavoriteInput>>;
   tab: string;
   setTab(value: string): void;
+  /** Whether the capabilities tab and the secondary connection controls are shown. */
+  advanced: boolean;
+  onAdvanced(): void;
   busy: boolean;
   error?: string;
 }) {
@@ -48,19 +55,32 @@ export function EditorHeader({
             />
           )}
         </FormField>
-        <TabList
-          idPrefix="favorite-editor"
-          label={t('favorites.editorSections')}
-          items={[{ id: 'connections' }, { id: 'capabilities' }]}
-          value={tab}
-          onChange={setTab}
-          className="flex gap-1 sm:ml-auto"
-          tabClassName="px-3 py-2 text-sm font-medium"
-        >
-          {(item) =>
-            t(item.id === 'connections' ? 'favorites.connectionTab' : 'favorites.capabilitiesTab')
-          }
-        </TabList>
+        {advanced ? (
+          <TabList
+            idPrefix="favorite-editor"
+            label={t('favorites.editorSections')}
+            items={[{ id: 'connections' }, { id: 'capabilities' }]}
+            value={tab}
+            onChange={setTab}
+            className="flex gap-1 sm:ml-auto"
+            tabClassName="px-3 py-2 text-sm font-medium"
+          >
+            {(item) =>
+              t(item.id === 'connections' ? 'favorites.connectionTab' : 'favorites.capabilitiesTab')
+            }
+          </TabList>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="sm:ml-auto"
+            title={t('favorites.advancedHint')}
+            onClick={onAdvanced}
+          >
+            <SlidersHorizontal />
+            {t('favorites.advanced')}
+          </Button>
+        )}
       </div>
       <DialogDescription>{t('favorites.scheme.editorHint')}</DialogDescription>
     </DialogHeader>

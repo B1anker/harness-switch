@@ -171,6 +171,7 @@
   stroke-dasharray: 6 6;
 }
 .switch-flow-node {
+  position: relative;
   display: flex;
   width: 190px;
   min-height: 66px;
@@ -181,13 +182,45 @@
   border-radius: 14px;
   background: var(--card);
   box-shadow: 0 8px 28px -22px color-mix(in srgb, var(--primary) 45%, transparent);
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
 }
 .switch-flow-node > svg {
   flex: none;
 }
+.switch-flow-hit {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+.switch-flow-hit:disabled {
+  cursor: not-allowed;
+}
+.switch-flow-hit:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ring) 55%, transparent);
+}
+.switch-flow-node:has(.switch-flow-hit:hover:not(:disabled)),
+.switch-flow-node:has(.switch-flow-hit:focus-visible:not(:disabled)) {
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+  background: color-mix(in srgb, var(--primary) 7%, var(--card));
+  box-shadow: 0 10px 28px -20px color-mix(in srgb, var(--primary) 55%, transparent);
+}
 .switch-flow-node-next {
-  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
-  background: color-mix(in srgb, var(--primary) 4%, var(--card));
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border));
+  background: color-mix(in srgb, var(--primary) 10%, var(--card));
+  box-shadow: 0 12px 30px -20px color-mix(in srgb, var(--primary) 60%, transparent);
+}
+.switch-flow-node[data-disabled="true"] {
+  opacity: 0.55;
 }
 .switch-flow-handle {
   width: 8px;
@@ -361,4 +394,16 @@
   .switch-flow-canvas .react-flow__edge.animated .react-flow__edge-path {
     animation: none;
   }
+}
+
+/* Keep CJK toast copy from wrapping mid-phrase when an action button squeezes the title. */
+[data-sonner-toast][data-styled="true"] {
+  align-items: flex-start !important;
+}
+[data-sonner-toast][data-styled="true"] [data-content] {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+[data-sonner-toast][data-styled="true"] [data-title] {
+  line-height: 1.45;
 }

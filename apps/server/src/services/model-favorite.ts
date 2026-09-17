@@ -1,12 +1,17 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import {
+  connectionProtocols,
   createFavoriteRequestSchema,
   ERROR_CODES,
+  FAVORITE_PROTOCOL_SUPPORT,
+  type FavoriteConnection,
   type FavoriteInput,
   HARNESS_IDS,
   type HarnessId,
   type ModelFavorite,
   type ModelFavoriteLink,
+  pickProtocolForHarness,
+  syncConnectionProtocols,
   type UpdateFavoriteRequest,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../common/errors';
@@ -16,6 +21,7 @@ import { IFavoriteBackupService } from './favorite-backup';
 import { ILiveWriteService } from './live-write';
 import { IModelFavoriteStore } from './model-favorite-store';
 import { IProfileService } from './profiles';
+import { IToolModelsService } from './tool-models';
 import { IVaultService } from './vault';
 
 export type FavoriteReference = { harness: HarnessId; name: string; link: ModelFavoriteLink };
@@ -48,6 +54,7 @@ export const IModelFavoriteService = createDecorator<IModelFavoriteService>('mod
   IAdapterRegistry,
   ILiveWriteService,
   IFavoriteBackupService,
+  IToolModelsService,
 )
 export class ModelFavoriteService implements IModelFavoriteService {
   private readonly sourceSalt = randomUUID();
@@ -59,6 +66,7 @@ export class ModelFavoriteService implements IModelFavoriteService {
     private readonly adapters: IAdapterRegistry,
     private readonly liveWrite: ILiveWriteService,
     private readonly backups: IFavoriteBackupService,
+    private readonly toolModels: IToolModelsService,
   ) {}
 
   list() {
@@ -91,20 +99,125 @@ export class ModelFavoriteService implements IModelFavoriteService {
   update(id: string, input: UpdateFavoriteRequest): ModelFavorite {
     this.store.assertRevision(id, input.expectedRevision);
     const current = this.store.get(id);
-    const next = createFavoriteRequestSchema.parse({ ...current, ...input });
+    let next = createFavoriteRequestSchema.parse({ ...current, ...input });
     this.validateConnections(next);
-    if (
-      this.references(id).some(
-        (ref) => !next.connections.some((connection) => connection.id === ref.link.connectionId),
-      )
-    ) {
-      throw new HttpError(409, ERROR_CODES.favoriteConnectionInUse, {
-        code: ERROR_CODES.favoriteConnectionInUse,
-      });
+    // Protocol copies (cpa / cpa · codex) collapse into one connection: absorb the
+    // removed copy's protocols onto the survivor, then retarget linked profiles and
+    // tool-models drafts. Accumulate across remaps so a later Chat absorb does not
+    // wipe protocols collected for Responses.
+    const remaps: Array<{ ref: FavoriteReference; connectionId: string }> = [];
+    const absorbed = new Map<string, FavoriteConnection>();
+    const absorbRemoved = (
+      previous: {
+        providerId: string;
+        endpointKey: string;
+        requestModelId: string;
+        protocol?: FavoriteConnection['protocol'];
+        protocols?: FavoriteConnection['protocols'];
+      },
+      harness?: HarnessId,
+    ) => {
+      const survivor = sameAccountModel(previous, next.connections);
+      if (!survivor) {
+        return undefined;
+      }
+      const base = absorbed.get(survivor.id) ?? survivor;
+      const merged = {
+        ...base,
+        ...syncConnectionProtocols([
+          ...connectionProtocols(base),
+          ...connectionProtocols(previous),
+          ...(harness && !pickProtocolForHarness(base, harness)
+            ? [FAVORITE_PROTOCOL_SUPPORT[harness][0]!]
+            : []),
+        ]),
+      };
+      absorbed.set(merged.id, merged);
+      return merged;
+    };
+    for (const ref of this.references(id)) {
+      if (next.connections.some((connection) => connection.id === ref.link.connectionId)) {
+        continue;
+      }
+      const previous = current.connections.find(
+        (connection) => connection.id === ref.link.connectionId,
+      );
+      const target = previous ?? {
+        providerId: ref.link.baseline.providerId,
+        endpointKey: ref.link.baseline.providerEndpoint,
+        requestModelId: ref.link.baseline.model,
+        protocol: undefined,
+        protocols: undefined,
+      };
+      const merged = absorbRemoved(target, ref.harness);
+      if (!merged || !pickProtocolForHarness(merged, ref.harness)) {
+        throw new HttpError(409, ERROR_CODES.favoriteConnectionInUse, {
+          code: ERROR_CODES.favoriteConnectionInUse,
+        });
+      }
+      remaps.push({ ref, connectionId: merged.id });
     }
+    // Tool-models drafts may point at a removed copy with no profile link — still fold
+    // that row onto the same-account survivor so previews do not see a missing endpoint.
+    const connectionRemaps = new Map(
+      remaps.map(({ ref, connectionId }) => [ref.link.connectionId, connectionId] as const),
+    );
+    for (const previous of current.connections) {
+      if (next.connections.some((connection) => connection.id === previous.id)) {
+        continue;
+      }
+      if (connectionRemaps.has(previous.id)) {
+        continue;
+      }
+      const merged = absorbRemoved(previous);
+      if (merged) {
+        connectionRemaps.set(previous.id, merged.id);
+      }
+    }
+    if (absorbed.size) {
+      next = createFavoriteRequestSchema.parse({
+        ...next,
+        connections: next.connections.map(
+          (connection) => absorbed.get(connection.id) ?? connection,
+        ),
+      });
+      this.validateConnections(next);
+      for (const { ref, connectionId } of remaps) {
+        const connection = next.connections.find((entry) => entry.id === connectionId);
+        if (!connection || !pickProtocolForHarness(connection, ref.harness)) {
+          throw new HttpError(409, ERROR_CODES.favoriteConnectionInUse, {
+            code: ERROR_CODES.favoriteConnectionInUse,
+          });
+        }
+      }
+    }
+    // liveWrite snapshots favorites/profiles/toolModels and restores them if any step
+    // fails — backups.protect alone only records a restore point, it does not roll back.
     return this.backups.protect(
       'change',
-      () => this.store.update(id, next, input.expectedRevision),
+      () =>
+        this.liveWrite.transaction(
+          {
+            kind: 'favorite-apply',
+            harness: remaps[0]?.ref.harness ?? 'claude',
+            profile: current.name,
+            writes: [],
+            metadata: connectionRemaps.size
+              ? ['favorites', 'profiles', 'toolModels']
+              : ['favorites'],
+          },
+          () => {
+            const updated = this.store.update(id, next, input.expectedRevision);
+            for (const { ref, connectionId } of remaps) {
+              this.profiles.setFavoriteLink(ref.harness, ref.name, {
+                ...ref.link,
+                connectionId,
+              });
+            }
+            this.toolModels.remapFavoriteConnections(id, connectionRemaps);
+            return updated;
+          },
+        ),
       { action: 'update', name: current.name },
     );
   }
@@ -196,7 +309,7 @@ export class ModelFavoriteService implements IModelFavoriteService {
                   label: provider.name,
                   providerId: provider.id,
                   endpointKey,
-                  protocol: extracted.protocol,
+                  ...syncConnectionProtocols([extracted.protocol]),
                   requestModelId: extracted.requestModelId,
                   factOverrides: {},
                   preferenceOverrides: {},
@@ -274,4 +387,16 @@ export class ModelFavoriteService implements IModelFavoriteService {
       }
     }
   }
+}
+
+function sameAccountModel(
+  previous: Pick<FavoriteConnection, 'providerId' | 'endpointKey' | 'requestModelId'>,
+  connections: FavoriteConnection[],
+) {
+  return connections.find(
+    (connection) =>
+      connection.providerId === previous.providerId &&
+      connection.endpointKey === previous.endpointKey &&
+      connection.requestModelId === previous.requestModelId,
+  );
 }

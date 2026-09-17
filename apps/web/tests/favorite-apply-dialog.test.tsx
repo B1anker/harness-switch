@@ -82,18 +82,18 @@ test('partial success remains visible and retry previews only unfinished tools w
       }}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '保存 3 份备用配置' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认保存并切换 3 个工具' }));
   await waitFor(() =>
     expect(screen.getByRole('heading', { name: '还有配置需要处理' })).toBeInTheDocument(),
   );
   const results = screen.getByRole('region', { name: '查看结果' });
-  expect(within(results).getByText('已保存备用')).toBeInTheDocument();
+  expect(within(results).getByText('已切换')).toBeInTheDocument();
   expect(within(results).getByText('未完成')).toBeInTheDocument();
   expect(within(results).getByText('未执行')).toBeInTheDocument();
   expect(closed).toBe(0);
   fireEvent.click(screen.getByRole('button', { name: '重新预览未完成项' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: '保存 2 份备用配置' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: '确认保存并切换 2 个工具' })).toBeEnabled(),
   );
   const preview = capture.requests.find((request) => request.path === favoritePlansPath())!;
   expect(
@@ -101,11 +101,11 @@ test('partial success remains visible and retry previews only unfinished tools w
       (item: FavoritePlanRequest['items'][number]) => item.harness,
     ),
   ).toEqual(['codex', 'kimi']);
-  fireEvent.click(screen.getByRole('button', { name: '保存 2 份备用配置' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认保存并切换 2 个工具' }));
   await waitFor(() =>
     expect(screen.getByRole('heading', { name: '配置已完成' })).toBeInTheDocument(),
   );
-  expect(screen.getAllByText('已保存备用')).toHaveLength(3);
+  expect(screen.getAllByText('已切换')).toHaveLength(3);
   const applies = capture.requests.filter((request) => request.path.endsWith('/apply'));
   expect(JSON.parse(applies[0]!.body).requestId).not.toBe(JSON.parse(applies[1]!.body).requestId);
   expect(applies).toHaveLength(2);
@@ -114,7 +114,7 @@ test('partial success remains visible and retry previews only unfinished tools w
   expect(closed).toBe(1);
 });
 
-test('quick save keeps save mode and produces a usable fresh preview after a failed result', async () => {
+test('quick activate produces a usable fresh preview after a failed result', async () => {
   const favorite = favoriteFixture('daily', 'model');
   const base = favoritePlanFixture(favorite);
   const harness = harnessFixture({ id: 'pi', label: 'Pi' });
@@ -150,27 +150,26 @@ test('quick save keeps save mode and produces a usable fresh preview after a fai
     <ModelFavoriteApplyDialog
       favorite={favorite}
       quickHarness={harness}
-      initialMode="save"
       onClose={() => undefined}
     />,
   );
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: '保存 1 份备用配置' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: '确认保存并切换 1 个工具' })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole('button', { name: '保存 1 份备用配置' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认保存并切换 1 个工具' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: '重新预览未完成项' })).toBeEnabled(),
   );
   fireEvent.click(screen.getByRole('button', { name: '重新预览未完成项' }));
   await waitFor(() =>
-    expect(screen.getByRole('button', { name: '保存 1 份备用配置' })).toBeEnabled(),
+    expect(screen.getByRole('button', { name: '确认保存并切换 1 个工具' })).toBeEnabled(),
   );
-  fireEvent.click(screen.getByRole('button', { name: '保存 1 份备用配置' }));
-  await waitFor(() => expect(screen.getByText('已保存备用')).toBeInTheDocument());
-  expect(screen.getByText('已保存到工具的配置列表，当前使用的配置保持不变。')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '确认保存并切换 1 个工具' }));
+  await waitFor(() => expect(screen.getByText('已切换')).toBeInTheDocument());
+  expect(screen.getByText('已更新工具当前使用的配置。')).toBeInTheDocument();
   const requests = capture.requests.filter((entry) => entry.path === favoritePlansPath());
   expect(requests).toHaveLength(2);
-  expect(requests.every((entry) => JSON.parse(entry.body).items[0].mode === 'save')).toBe(true);
+  expect(requests.every((entry) => JSON.parse(entry.body).items[0].mode === 'activate')).toBe(true);
   const writes = capture.requests.filter((entry) => entry.path.endsWith('/apply'));
   expect(writes.map((entry) => entry.path)).toEqual([
     favoriteApplyPath('plan-1'),
@@ -204,13 +203,13 @@ test('an uncertain request is checked with the same id instead of replayed throu
       onClose={() => undefined}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '保存 1 份备用配置' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认保存并切换 1 个工具' }));
   await waitFor(() =>
     expect(screen.getByRole('button', { name: '重新检查结果并重试' })).toBeEnabled(),
   );
   expect(screen.getByRole('button', { name: '返回选择' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '重新检查结果并重试' }));
-  await waitFor(() => expect(screen.getByText('已保存备用')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText('已切换')).toBeInTheDocument());
   expect(capture.requests[0]).toEqual(capture.requests[1]);
 });
 
@@ -233,10 +232,10 @@ test('an expired plan offers a fresh preview and does not report completion', as
       onClose={() => undefined}
     />,
   );
-  fireEvent.click(screen.getByRole('button', { name: '保存 1 份备用配置' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认保存并切换 1 个工具' }));
   await waitFor(() => expect(screen.getByRole('button', { name: '重新生成预览' })).toBeEnabled());
   expect(screen.queryByRole('heading', { name: '配置已完成' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: '重新生成预览' }));
   await waitFor(() => expect(useAppStore.getState().favoritePlan?.id).toBe('fresh-plan'));
-  expect(screen.getByRole('button', { name: '保存 1 份备用配置' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '确认保存并切换 1 个工具' })).toBeEnabled();
 });

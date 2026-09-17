@@ -4,6 +4,7 @@ import { useTranslation } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
 import { IgnoreUpdates } from './ignore-updates';
+import { favoriteUpdateItems } from './update-items';
 
 export function FavoriteNextStep({
   favorite,
@@ -36,32 +37,7 @@ export function FavoriteNextStep({
       })
       .map(configurationKey),
   ).size;
-  const updates: FavoritePlanRequest['items'] = favorite.references
-    .filter((ref) => ref.needsUpdate)
-    .flatMap((ref) => {
-      const profile = harnesses
-        .find((item) => item.id === ref.harness)
-        ?.profiles.find((item) => item.name === ref.name);
-      const connection = favorite.connections.find(
-        (item) => item.id === profile?.modelFavorite?.connectionId,
-      );
-      return connection
-        ? [
-            {
-              harness: ref.harness,
-              connectionId: connection.id,
-              profile: ref.name,
-              existing: true,
-              mode: 'save' as const,
-              ignorePreference: false,
-              overwriteDiverged: false,
-            },
-          ]
-        : [];
-    })
-    .filter(
-      (item, index, items) => items.findIndex((other) => other.harness === item.harness) === index,
-    );
+  const updates = favoriteUpdateItems(favorite, harnesses);
   const updateCount = new Set(
     favorite.references.filter((ref) => ref.needsUpdate).map(configurationKey),
   ).size;

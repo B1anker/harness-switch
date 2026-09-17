@@ -4,7 +4,7 @@ import type {
   DriftSummary,
   HarnessSummary,
 } from '@seaveyon/harness-switch-shared';
-import { RefreshCcw, Stethoscope } from 'lucide-react';
+import { RefreshCcw, Stethoscope, TriangleAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { DoctorDialog } from '@/components/doctor-dialog';
 import { DriftDialog, driftStatusClasses } from '@/components/drift-dialog';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from '@/lib/i18n';
 import { lineText } from '@/lib/messages';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 type DoctorPanelProps = {
@@ -19,10 +20,11 @@ type DoctorPanelProps = {
 };
 
 /**
- * Right-column card: local health checks plus live-vs-active drift for one harness.
+ * Doctor and drift for one harness, read from the store. `HealthBanner` is the one that
+ * loads them: it is always mounted on the tool page, so `DoctorRow` inside the folded
+ * details can stay effect-free and never fetch a second time.
  */
-export function DoctorPanel({ harness }: DoctorPanelProps) {
-  const { t } = useTranslation();
+function useHarnessHealth(harness: HarnessSummary) {
   const doctor = useAppStore((state) => state.doctor);
   const doctorLoading = useAppStore((state) => state.doctorLoading);
   const doctorError = useAppStore((state) => state.doctorError);
@@ -31,18 +33,47 @@ export function DoctorPanel({ harness }: DoctorPanelProps) {
   const driftLoading = useAppStore((state) => state.driftLoading);
   const driftError = useAppStore((state) => state.driftError);
   const loadDrift = useAppStore((state) => state.loadDrift);
-  const [doctorOpen, setDoctorOpen] = useState(false);
-  const [driftOpen, setDriftOpen] = useState(false);
 
   const report = doctor?.find((item) => item.harness === harness.id) ?? null;
   const driftReport = drift?.find((item) => item.harness === harness.id) ?? null;
   const changed = driftReport?.files.filter((file) => file.status !== 'in-sync') ?? [];
-  const refreshing = doctorLoading || driftLoading;
-  const showDiff =
-    driftReport !== null &&
-    driftReport.active &&
-    changed.length > 0 &&
-    driftReport.status !== 'in-sync';
+  const drifted = driftReport !== null && driftReport.active && driftReport.status !== 'in-sync';
+  const summary = report ? countByStatus(report) : null;
+  const unhealthy = summary !== null && summary.error + summary.warn > 0;
+
+  function refresh() {
+    void loadDoctor(harness.id);
+    void loadDrift();
+  }
+
+  return {
+    report,
+    summary,
+    unhealthy,
+    doctorError,
+    driftReport,
+    driftError,
+    changed,
+    drifted,
+    refreshing: doctorLoading || driftLoading,
+    refresh,
+    loadDoctor,
+    loadDrift,
+    drift,
+  };
+}
+
+/**
+ * Shows up above the configuration list only when something needs attention: a doctor
+ * warning or error, or live files that no longer match the active configuration. A
+ * healthy harness renders nothing here; its report stays reachable from the details.
+ */
+export function HealthBanner({ harness }: DoctorPanelProps) {
+  const { t } = useTranslation();
+  const health = useHarnessHealth(harness);
+  const { loadDoctor, loadDrift, drift } = health;
+  const [doctorOpen, setDoctorOpen] = useState(false);
+  const [driftOpen, setDriftOpen] = useState(false);
 
   useEffect(() => {
     void loadDoctor(harness.id);
@@ -54,47 +85,44 @@ export function DoctorPanel({ harness }: DoctorPanelProps) {
     }
   }, [drift, loadDrift]);
 
-  function refresh() {
-    void loadDoctor(harness.id);
-    void loadDrift();
+  const showDiff = health.drifted && health.changed.length > 0;
+  if (!health.unhealthy && !health.drifted) {
+    return null;
   }
+  const severe = (health.summary?.error ?? 0) > 0;
 
   return (
-    <section className="rounded-2xl border bg-card p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]">
+    <section
+      className={cn(
+        'rounded-2xl border p-5 shadow-[0_12px_34px_-28px_rgb(36_39_70/0.38)]',
+        severe
+          ? 'border-destructive/40 bg-destructive/5'
+          : 'border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10',
+      )}
+    >
       <div className="flex items-center gap-2">
-        <Stethoscope className="size-4 text-primary" />
+        <TriangleAlert
+          className={cn(
+            'size-4',
+            severe ? 'text-destructive' : 'text-amber-600 dark:text-amber-400',
+          )}
+        />
         <h3 className="font-semibold">{t('doctor.title')}</h3>
         <span className="ml-auto">
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label={t('doctor.rerun')}
-            onClick={() => refresh()}
-          >
-            <RefreshCcw className={refreshing ? 'animate-spin' : undefined} />
-          </Button>
+          <RefreshButton refreshing={health.refreshing} onClick={health.refresh} />
         </span>
       </div>
 
       <div className="mt-4 space-y-3">
-        {doctorError ? (
-          <p className="text-sm text-destructive">{lineText(t, doctorError)}</p>
-        ) : report === null ? (
-          <p className="text-sm text-muted-foreground">{t('doctor.checking')}</p>
-        ) : (
-          <SummaryBadges report={report} />
-        )}
-
-        {driftError ? (
-          <p className="text-sm text-destructive">{lineText(t, driftError)}</p>
-        ) : driftReport === null ? (
-          <p className="text-sm text-muted-foreground">{t('drift.checking')}</p>
-        ) : (
+        {health.unhealthy && health.report ? (
+          <SummaryBadges report={health.report} statuses={['error', 'warn']} />
+        ) : null}
+        {health.drifted && health.driftReport ? (
           <div className="space-y-2">
-            <DriftBadge report={driftReport} />
-            {changed.length > 0 ? (
+            <DriftBadge report={health.driftReport} />
+            {health.changed.length > 0 ? (
               <ul className="space-y-1">
-                {changed.slice(0, 3).map((file) => (
+                {health.changed.slice(0, 3).map((file) => (
                   <li key={file.key} className="flex items-center gap-2 text-xs">
                     <span className="size-1.5 shrink-0 rounded-full bg-destructive/70" />
                     <span className="truncate font-mono text-muted-foreground">
@@ -105,22 +133,22 @@ export function DoctorPanel({ harness }: DoctorPanelProps) {
                     </span>
                   </li>
                 ))}
-                {changed.length > 3 ? (
+                {health.changed.length > 3 ? (
                   <li className="pl-3.5 text-xs text-muted-foreground">
-                    {t('drift.moreFiles', { count: changed.length - 3 })}
+                    {t('drift.moreFiles', { count: health.changed.length - 3 })}
                   </li>
                 ) : null}
               </ul>
             ) : null}
           </div>
-        )}
+        ) : null}
       </div>
 
-      <div className={`mt-4 grid gap-2 ${showDiff ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      <div className="mt-4 flex flex-wrap gap-2">
         <Button
           size="sm"
           variant="outline"
-          disabled={report === null}
+          disabled={health.report === null}
           onClick={() => setDoctorOpen(true)}
         >
           {t('doctor.viewDetails')}
@@ -138,12 +166,73 @@ export function DoctorPanel({ harness }: DoctorPanelProps) {
   );
 }
 
-function SummaryBadges({ report }: { report: DoctorReport }) {
+/**
+ * The compact doctor line inside the folded details: status badges, the full report and a
+ * rerun. This is where a healthy harness's report lives once the banner has nothing to say.
+ */
+export function DoctorRow({ harness }: DoctorPanelProps) {
+  const { t } = useTranslation();
+  const health = useHarnessHealth(harness);
+  const [doctorOpen, setDoctorOpen] = useState(false);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <Stethoscope className="size-4 text-primary" />
+        <h4 className="text-sm font-semibold">{t('doctor.title')}</h4>
+        <span className="ml-auto flex items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={health.report === null}
+            onClick={() => setDoctorOpen(true)}
+          >
+            {t('doctor.viewDetails')}
+          </Button>
+          <RefreshButton refreshing={health.refreshing} onClick={health.refresh} />
+        </span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {health.doctorError ? (
+          <p className="text-sm text-destructive">{lineText(t, health.doctorError)}</p>
+        ) : health.report === null ? (
+          <p className="text-sm text-muted-foreground">{t('doctor.checking')}</p>
+        ) : (
+          <SummaryBadges report={health.report} />
+        )}
+        {health.driftError ? (
+          <p className="text-sm text-destructive">{lineText(t, health.driftError)}</p>
+        ) : health.driftReport === null ? (
+          <p className="text-sm text-muted-foreground">{t('drift.checking')}</p>
+        ) : (
+          <DriftBadge report={health.driftReport} />
+        )}
+      </div>
+      <DoctorDialog harnessId={harness.id} open={doctorOpen} onOpenChange={setDoctorOpen} />
+    </div>
+  );
+}
+
+function RefreshButton({ refreshing, onClick }: { refreshing: boolean; onClick(): void }) {
+  const { t } = useTranslation();
+  return (
+    <Button size="icon" variant="ghost" aria-label={t('doctor.rerun')} onClick={onClick}>
+      <RefreshCcw className={refreshing ? 'animate-spin' : undefined} />
+    </Button>
+  );
+}
+
+function SummaryBadges({
+  report,
+  statuses = ['error', 'warn', 'ok', 'unknown'],
+}: {
+  report: DoctorReport;
+  /** The banner lists only what is wrong; the details row lists everything. */
+  statuses?: readonly DoctorCheckStatus[];
+}) {
   const { t } = useTranslation();
   const summary = countByStatus(report);
-  const entries = (['error', 'warn', 'ok', 'unknown'] as const).filter(
-    (status) => summary[status] > 0,
-  );
+  const entries = statuses.filter((status) => summary[status] > 0);
 
   if (entries.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('doctor.noChecks')}</p>;

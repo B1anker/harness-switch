@@ -57,16 +57,24 @@ test('without a provider the placeholder is the channel number', () => {
   expect(screen.getByLabelText('渠道标签')).toHaveAttribute('placeholder', '渠道 1');
 });
 
-test('the model picker trigger matches the protocol select height', () => {
+test('changing protocol reveals multi-select checkboxes instead of a single select', () => {
   const favorite = favoriteFixture('daily', 'model');
   stubStoreActions(['loadFavoriteCatalog']);
   renderWithI18n(<FavoriteEditor favorite={favorite} onClose={() => undefined} />);
   const model = screen.getByRole('combobox', { name: /^模型(?:（可多选）)?$/ });
-  fireEvent.click(screen.getByRole('button', { name: '更改协议' }));
-  const protocol = screen.getByRole('combobox', { name: '协议' });
   expect(model.className).toContain('h-10');
   expect(model.className).not.toContain('min-h-11');
-  expect(protocol.className).toContain('h-10');
+  fireEvent.click(screen.getByRole('button', { name: '更改协议' }));
+  expect(screen.getByRole('group', { name: '协议' })).toBeInTheDocument();
+  expect(screen.getByRole('checkbox', { name: 'OpenAI Responses' })).toHaveAttribute(
+    'data-state',
+    'checked',
+  );
+  expect(screen.getByRole('checkbox', { name: 'Anthropic Messages' })).toHaveAttribute(
+    'data-state',
+    'unchecked',
+  );
+  expect(screen.queryByRole('combobox', { name: '协议' })).toBeNull();
 });
 
 test('the model list scrolls with the wheel inside the modal dialog', () => {

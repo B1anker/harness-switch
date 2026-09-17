@@ -90,7 +90,7 @@ function locateConnectionIssue(
     located.fields[`${connectionId}-provider`] = key;
   } else if (field === 'requestModelId') {
     located.fields[`${connectionId}-model`] = key;
-  } else if (field === 'protocol') {
+  } else if (field === 'protocol' || field === 'protocols') {
     located.fields[`${connectionId}-protocol`] = key;
   } else if (field === 'label') {
     located.fields[`${connectionId}-label`] = key;

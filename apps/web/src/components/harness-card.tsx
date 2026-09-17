@@ -179,6 +179,7 @@ export function HarnessCard({
                     key={group.id}
                     group={group}
                     harness={harness}
+                    switching={switching}
                     onActivate={setActivating}
                     onOpenTemplate={onOpenTemplate}
                   />

@@ -18,6 +18,7 @@ export type ApplyDialogProps = {
   favorite: ModelFavorite;
   onClose(): void;
   initialItems?: FavoritePlanRequest['items'];
+  /** @deprecated Always activates; kept so call sites can pass it without churn. */
   initialMode?: 'save' | 'activate';
   initialPreview?: boolean;
   onApplied?(): void;
@@ -25,11 +26,13 @@ export type ApplyDialogProps = {
   onEditConnections?(): void;
 };
 
+const asActivate = (items: FavoritePlanRequest['items']) =>
+  items.map((item) => ({ ...item, mode: 'activate' as const }));
+
 export function useApplyWorkflow({
   favorite,
   onClose,
   initialItems = [],
-  initialMode = 'save',
   initialPreview = false,
   onApplied,
   quickHarness,
@@ -41,8 +44,15 @@ export function useApplyWorkflow({
   const clear = useAppStore((state) => state.clearFavoritePlan);
   const targets = useAppStore((state) => state.favoriteTargets[favorite.id]);
   const loadTargets = useAppStore((state) => state.loadFavoriteTargets);
-  const [items, setItems] = useState(initialItems);
-  const [mode, setMode] = useState(initialMode);
+  const [items, setItemsState] = useState(() => asActivate(initialItems));
+  const setItems = (
+    next:
+      | FavoritePlanRequest['items']
+      | ((previous: FavoritePlanRequest['items']) => FavoritePlanRequest['items']),
+  ) => {
+    setItemsState((previous) => asActivate(typeof next === 'function' ? next(previous) : next));
+  };
+  const mode = 'activate' as const;
   const [step, setStep] = useState<0 | 1 | 2>(initialPreview || quickHarness ? 1 : 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -61,7 +71,7 @@ export function useApplyWorkflow({
   const connections = quickHarness ? compatibleConnections(favorite, quickHarness.id, targets) : [];
   const selectedChannel =
     channel ||
-    (quickHarness ? favoriteSelection(favorite, quickHarness, targets, mode).connectionId : '');
+    (quickHarness ? favoriteSelection(favorite, quickHarness, targets).connectionId : '');
   const connection = connections.find((entry) => entry.id === selectedChannel);
   const failed = results.some((item) => item.status === 'failed' || item.status === 'skipped');
   const completedHarnesses = results
@@ -95,7 +105,7 @@ export function useApplyWorkflow({
     setError('');
     const selection = [
       {
-        ...favoriteSelection(favorite, quickHarness, targets, mode),
+        ...favoriteSelection(favorite, quickHarness, targets),
         connectionId: selectedChannel,
       },
     ];
@@ -119,18 +129,7 @@ export function useApplyWorkflow({
     return () => {
       active = false;
     };
-  }, [
-    quickHarness,
-    selectedChannel,
-    favorite,
-    targets,
-    mode,
-    clear,
-    makePlan,
-    t,
-    previewAttempt,
-    step,
-  ]);
+  }, [quickHarness, selectedChannel, favorite, targets, clear, makePlan, t, previewAttempt, step]);
 
   const run = async (action: () => Promise<void>) => {
     if (running.current) {
@@ -218,8 +217,8 @@ export function useApplyWorkflow({
             submittedItems.current.get(result.harness);
           return item ? [item] : [];
         });
-      setItems(remaining);
-      await preview(remaining);
+      setItems(asActivate(remaining));
+      await preview(asActivate(remaining));
     });
   const close = () => {
     if (busy || running.current) {
@@ -253,7 +252,6 @@ export function useApplyWorkflow({
     items,
     setItems,
     mode,
-    setMode,
     step,
     setStep,
     busy,

@@ -23,7 +23,6 @@ export function ToolSelection({
   favorite,
   items,
   setItems,
-  mode,
   plan,
   targets,
   clear,
@@ -35,7 +34,6 @@ export function ToolSelection({
   favorite: ModelFavorite;
   items: FavoritePlanRequest['items'];
   setItems: Dispatch<SetStateAction<FavoritePlanRequest['items']>>;
-  mode: 'save' | 'activate';
   plan: FavoritePlan | null;
   targets: FavoriteSlice['favoriteTargets'][string] | undefined;
   clear(): void;
@@ -128,7 +126,7 @@ export function ToolSelection({
                                   : '',
                             existing: linked.length === 1,
                             profile: linked.length === 1 ? linked[0]!.name : undefined,
-                            mode,
+                            mode: 'activate',
                             ignorePreference: false,
                             overwriteDiverged: false,
                           },

@@ -23,7 +23,6 @@ export function favoriteSelection(
   favorite: ModelFavorite,
   harness: HarnessSummary,
   targets: FavoriteSlice['favoriteTargets'][string] | undefined,
-  mode: 'save' | 'activate',
 ): FavoritePlanRequest['items'][number] {
   const connections = compatibleConnections(favorite, harness.id, targets);
   const linked = harness.profiles.filter(
@@ -49,7 +48,7 @@ export function favoriteSelection(
           : '',
     existing: !!existing,
     profile: existing?.name,
-    mode,
+    mode: 'activate',
     ignorePreference: false,
     overwriteDiverged: false,
   };

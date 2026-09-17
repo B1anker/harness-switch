@@ -1,4 +1,5 @@
 import type { FavoriteConnection } from '@seaveyon/harness-switch-shared';
+import { syncConnectionProtocols } from '@seaveyon/harness-switch-shared';
 import { ChevronDown, Network, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -148,7 +149,7 @@ export function ConnectionCard({
                   onChange({
                     providerId: selected.providerId,
                     endpointKey: selected.endpointKey,
-                    ...(selected.protocol ? { protocol: selected.protocol } : {}),
+                    ...(selected.protocol ? syncConnectionProtocols([selected.protocol]) : {}),
                   });
                 }
               }}

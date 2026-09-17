@@ -1,26 +1,20 @@
 import {
   ERROR_CODES,
+  FAVORITE_PROTOCOL_SUPPORT,
   type FavoriteConnection,
   type FavoriteInput,
   type FavoriteProjection,
   type FavoriteProjectionResult,
   favoriteEffortSchema,
-  type HarnessId,
   mapReasoningEffort,
   modelFactsSchema,
+  pickProtocolForHarness,
   resolveFavorite,
 } from '@seaveyon/harness-switch-shared';
 import { HttpError } from '../../common/errors';
 import type { AdapterProfile, HarnessAdapter } from './types';
 
-const PROTOCOLS = ['openai-chat', 'openai-responses', 'anthropic-messages'] as const;
-export const FAVORITE_SUPPORT = {
-  claude: ['anthropic-messages'],
-  codex: ['openai-responses'],
-  kimi: PROTOCOLS,
-  pi: PROTOCOLS,
-  dsh: PROTOCOLS,
-} satisfies Record<HarnessId, readonly string[]>;
+export const FAVORITE_SUPPORT = FAVORITE_PROTOCOL_SUPPORT;
 
 export function projectFavorite(
   adapter: Pick<HarnessAdapter, 'id' | 'fields'>,
@@ -35,6 +29,7 @@ export function projectFavorite(
   if (binding?.reasoningEffort) {
     preferences.reasoningEffort = binding.reasoningEffort;
   }
+  const protocol = pickProtocolForHarness(connection, id);
   const extras: FavoriteProjection['extras'] = {};
   const represented = new Set<string>();
   const put = (key: keyof FavoriteProjection['extras'], field: keyof typeof facts) => {
@@ -63,7 +58,7 @@ export function projectFavorite(
     warnings: [],
     blockers: [],
   };
-  if (!(FAVORITE_SUPPORT[id] as readonly string[]).includes(connection.protocol)) {
+  if (!protocol) {
     result.blockers.push({ code: ERROR_CODES.favoriteProtocolUnsupported });
   }
   if (
@@ -73,16 +68,16 @@ export function projectFavorite(
   ) {
     result.blockers.push({ code: ERROR_CODES.favoriteProjectionUnsupported });
   }
-  if (id === 'kimi') {
+  if (id === 'kimi' && protocol) {
     extras.providerType = {
       'openai-chat': 'openai_legacy',
       'openai-responses': 'openai_responses',
       'anthropic-messages': 'anthropic',
-    }[connection.protocol];
+    }[protocol];
     put('maxContextSize', 'contextWindow');
   }
-  if (id === 'pi' || id === 'dsh') {
-    extras.api = connection.protocol === 'openai-chat' ? 'openai-completions' : connection.protocol;
+  if ((id === 'pi' || id === 'dsh') && protocol) {
+    extras.api = protocol === 'openai-chat' ? 'openai-completions' : protocol;
     put('contextWindow', 'contextWindow');
     put('maxTokens', 'maxOutputTokens');
     if (id === 'pi') {

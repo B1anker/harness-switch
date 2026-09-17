@@ -104,6 +104,8 @@ test('unified configuration workspace previews a selected favorite as an uncommi
       harness={useAppStore.getState().harnesses[0]!}
       onNewProfile={() => {}}
       onOpenTemplate={() => {}}
+      onManageTemplates={() => {}}
+      onCreateTemplate={() => {}}
       onEditProfile={() => {}}
       onCopyProfile={() => {}}
     />,
@@ -154,6 +156,8 @@ test('ambiguous channels require an explicit choice instead of silently switchin
       harness={useAppStore.getState().harnesses[0]!}
       onNewProfile={() => {}}
       onOpenTemplate={() => {}}
+      onManageTemplates={() => {}}
+      onCreateTemplate={() => {}}
       onEditProfile={() => {}}
       onCopyProfile={() => {}}
     />,
@@ -170,6 +174,129 @@ test('ambiguous channels require an explicit choice instead of silently switchin
   expect(actions.planFavorite[0]![0]).toMatchObject({
     items: [{ harness: 'pi', connectionId: favorite.connections[1]!.id, mode: 'activate' }],
   });
+});
+
+function renderSwitcher(callbacks: { onManageTemplates?(): void; onCreateTemplate?(): void } = {}) {
+  stubStoreActions(['loadFavorites', 'loadProviders', 'loadFavoriteBackups']);
+  renderWithI18n(
+    <ConfigurationSwitcher
+      harness={useAppStore.getState().harnesses[0]!}
+      onNewProfile={() => {}}
+      onOpenTemplate={() => {}}
+      onManageTemplates={callbacks.onManageTemplates ?? (() => {})}
+      onCreateTemplate={callbacks.onCreateTemplate ?? (() => {})}
+      onEditProfile={() => {}}
+      onCopyProfile={() => {}}
+    />,
+  );
+}
+
+test('templates stay out of the tool page until the user has one', () => {
+  setStoreState({
+    favorites: [],
+    providers: [],
+    harnesses: [harnessFixture({ profiles: [profileFixture({ name: 'only' })] })],
+  });
+  renderSwitcher();
+  expect(screen.getByRole('button', { name: '新建配置' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '从模板创建配置' })).toBeNull();
+  expect(screen.queryByRole('button', { name: '管理模板' })).toBeNull();
+  expect(screen.queryByText(/共用同一供应商/)).toBeNull();
+});
+
+test('two configurations on one provider earn the suggestion to make a template', () => {
+  const opened: string[] = [];
+  setStoreState({
+    favorites: [],
+    providers: [],
+    harnesses: [
+      harnessFixture({
+        profiles: [
+          profileFixture({ name: 'work', providerId: 'acme' }),
+          profileFixture({ name: 'home', providerId: 'acme' }),
+          profileFixture({ name: 'other', providerId: 'zeta' }),
+        ],
+      }),
+    ],
+  });
+  renderSwitcher({ onCreateTemplate: () => opened.push('create') });
+  expect(screen.getByText(/有 2 个配置共用同一供应商/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '新建模板' }));
+  expect(opened).toEqual(['create']);
+});
+
+test('once a template exists the page offers it and a way to manage templates', () => {
+  const opened: string[] = [];
+  setStoreState({
+    favorites: [favoriteFixture('daily', 'model')],
+    providers: [],
+    harnesses: [
+      harnessFixture({
+        profiles: [
+          profileFixture({ name: 'work', providerId: 'acme' }),
+          profileFixture({ name: 'home', providerId: 'acme' }),
+        ],
+      }),
+    ],
+  });
+  renderSwitcher({ onManageTemplates: () => opened.push('manage') });
+  expect(screen.getByRole('button', { name: '从模板创建配置' })).toBeInTheDocument();
+  // The hint was about having no template; with one in hand it has nothing to add.
+  expect(screen.queryByText(/共用同一供应商/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '管理模板' }));
+  expect(opened).toEqual(['manage']);
+});
+
+test('templates already linked on this tool stay visible but marked as already configured', () => {
+  const favorite = favoriteFixture('daily', 'model');
+  const other = {
+    ...favoriteFixture('spare', 'other'),
+    id: '00000000-0000-4000-8000-000000000099',
+  };
+  const harness = harnessFixture({
+    id: 'pi',
+    label: 'Pi',
+    profiles: [
+      profileFixture({
+        harness: 'pi',
+        name: 'main',
+        modelFavorite: {
+          favoriteId: favorite.id,
+          connectionId: favorite.connections[0]!.id,
+          appliedRevision: 1,
+          projectionVersion: 1,
+          baseline: {
+            harness: 'pi',
+            model: 'model',
+            providerId: '',
+            providerEndpoint: '',
+            extras: {},
+          },
+        },
+      }),
+    ],
+  });
+  setStoreState({
+    favorites: [favorite, other],
+    providers: [],
+    harnesses: [harness],
+  });
+  stubStoreActions(['loadFavorites', 'loadProviders', 'loadFavoriteBackups']);
+  renderWithI18n(
+    <ConfigurationSwitcher
+      harness={harness}
+      onNewProfile={() => {}}
+      onOpenTemplate={() => {}}
+      onManageTemplates={() => {}}
+      onCreateTemplate={() => {}}
+      onEditProfile={() => {}}
+      onCopyProfile={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '从模板创建配置' }));
+  expect(document.body.textContent?.includes('daily')).toBe(true);
+  expect(document.body.textContent?.includes('spare')).toBe(true);
+  expect(document.body.textContent?.includes('已有配置')).toBe(true);
 });
 
 test('rapid timeline selection keeps the latest preview and restores that exact fingerprint', async () => {

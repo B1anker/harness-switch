@@ -1,11 +1,20 @@
 import { z } from 'zod';
-import { HARNESS_IDS } from './harnesses';
+import { HARNESS_IDS, type HarnessId } from './harnesses';
 
 export const favoriteProtocolSchema = z.enum([
   'openai-chat',
   'openai-responses',
   'anthropic-messages',
 ]);
+export type FavoriteProtocol = z.infer<typeof favoriteProtocolSchema>;
+/** Which wire protocols each tool can consume from a template connection. */
+export const FAVORITE_PROTOCOL_SUPPORT = {
+  claude: ['anthropic-messages'],
+  codex: ['openai-responses'],
+  kimi: ['openai-chat', 'openai-responses', 'anthropic-messages'],
+  pi: ['openai-chat', 'openai-responses', 'anthropic-messages'],
+  dsh: ['openai-chat', 'openai-responses', 'anthropic-messages'],
+} as const satisfies Record<HarnessId, readonly FavoriteProtocol[]>;
 export const favoriteEffortSchema = z.enum([
   'none',
   'minimal',
@@ -28,13 +37,51 @@ export const modelFactsSchema = z.object({
   supportedReasoningEfforts: efforts.optional(),
 });
 const preferencesSchema = z.object({ reasoningEffort: favoriteEffortSchema.optional() });
-export const favoriteConnectionSchema = z.object({
+
+/** Prefer `protocols`; lift legacy single `protocol` so old templates keep loading. */
+export function connectionProtocols(
+  connection: Pick<
+    { protocol?: FavoriteProtocol; protocols?: FavoriteProtocol[] },
+    'protocol' | 'protocols'
+  >,
+): FavoriteProtocol[] {
+  if (connection.protocols?.length) {
+    return [...new Set(connection.protocols)];
+  }
+  return connection.protocol ? [connection.protocol] : [];
+}
+
+/** Keep `protocol` (primary) and `protocols` in lockstep for writers and older readers. */
+export function syncConnectionProtocols(protocols: readonly FavoriteProtocol[]): {
+  protocol: FavoriteProtocol;
+  protocols: FavoriteProtocol[];
+} {
+  const unique = [...new Set(protocols)];
+  if (!unique.length) {
+    throw new Error('connection requires at least one protocol');
+  }
+  return { protocols: unique, protocol: unique[0]! };
+}
+
+export function pickProtocolForHarness(
+  connection: Pick<
+    { protocol?: FavoriteProtocol; protocols?: FavoriteProtocol[] },
+    'protocol' | 'protocols'
+  >,
+  harness: HarnessId,
+): FavoriteProtocol | undefined {
+  const available = new Set(connectionProtocols(connection));
+  return FAVORITE_PROTOCOL_SUPPORT[harness].find((protocol) => available.has(protocol));
+}
+
+export const favoriteConnectionFieldsSchema = z.object({
   id: z.uuid(),
   groupId: z.uuid().optional(),
   label: z.string().trim().min(1).max(120),
   providerId: z.string().min(1).max(120),
   endpointKey: z.string().min(1).max(60),
-  protocol: favoriteProtocolSchema,
+  protocol: favoriteProtocolSchema.optional(),
+  protocols: z.array(favoriteProtocolSchema).min(1).max(3).optional(),
   requestModelId: z.string().trim().min(1).max(120),
   factOverrides: z
     .object({
@@ -48,6 +95,17 @@ export const favoriteConnectionSchema = z.object({
     .object({ reasoningEffort: favoriteEffortSchema.nullable().optional() })
     .default({}),
 });
+
+export const favoriteConnectionSchema = favoriteConnectionFieldsSchema
+  .superRefine((value, ctx) => {
+    if (!connectionProtocols(value).length) {
+      ctx.addIssue({ code: 'custom', path: ['protocols'], message: 'favoriteInvalidFacts' });
+    }
+  })
+  .transform((value) => {
+    const synced = syncConnectionProtocols(connectionProtocols(value));
+    return { ...value, ...synced };
+  });
 const toolBindingSchema = z.object({
   connectionId: z.uuid().optional(),
   modelIds: z.array(z.uuid()).max(50).optional(),
@@ -183,7 +241,7 @@ function validateFavorite(value: FavoriteInput, ctx: z.RefinementCtx): void {
     const identity = JSON.stringify([
       connection.providerId,
       connection.endpointKey,
-      connection.protocol,
+      [...connectionProtocols(connection)].slice().sort(),
       connection.requestModelId,
     ]);
     if (identities.has(identity) || ids.has(connection.id)) {
@@ -211,11 +269,13 @@ function validateFavorite(value: FavoriteInput, ctx: z.RefinementCtx): void {
     const first = groups.get(key);
     if (
       first &&
-      ['providerId', 'endpointKey', 'protocol', 'label'].some(
+      (['providerId', 'endpointKey', 'label'].some(
         (field) =>
           first[field as keyof FavoriteConnection] !==
           connection[field as keyof FavoriteConnection],
-      )
+      ) ||
+        [...connectionProtocols(first)].slice().sort().join('\0') !==
+          [...connectionProtocols(connection)].slice().sort().join('\0'))
     ) {
       ctx.addIssue({ code: 'custom', path: ['connections'], message: 'favoriteInvalidGroup' });
     }
@@ -321,8 +381,8 @@ export type FavoriteProjection = z.infer<typeof favoriteProjectionSchema>;
 export const modelFavoriteLinkSchema = z.object({
   collectionOverrides: z
     .object({
-      factOverrides: favoriteConnectionSchema.shape.factOverrides,
-      preferenceOverrides: favoriteConnectionSchema.shape.preferenceOverrides,
+      factOverrides: favoriteConnectionFieldsSchema.shape.factOverrides,
+      preferenceOverrides: favoriteConnectionFieldsSchema.shape.preferenceOverrides,
     })
     .optional(),
   favoriteId: z.uuid(),
