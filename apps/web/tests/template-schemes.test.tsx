@@ -1,5 +1,9 @@
 import { expect, rs, test } from '@rstest/core';
-import type { FavoriteInput } from '@seaveyon/harness-switch-shared';
+import type {
+  FavoriteInput,
+  ToolModelsPreview,
+  ToolModelsRequest,
+} from '@seaveyon/harness-switch-shared';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { SchemeApply } from '@/components/model-favorite-apply-dialog/scheme-apply';
 import { FavoriteEditor } from '@/components/model-favorites/editor';
@@ -101,6 +105,68 @@ test('cancelling the selected tool preview closes the workflow instead of return
   fireEvent.click(screen.getByRole('button', { name: '预览并确认' }));
   fireEvent.click(screen.getByRole('button', { name: 'cancel preview' }));
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+function collectionSetup() {
+  const favorite = favoriteFixture('daily', 'vendor/main');
+  setStoreState({
+    harnesses: [harnessFixture({ id: 'claude' }), harnessFixture({ id: 'dsh' })],
+    toolModels: [
+      {
+        harness: 'dsh',
+        state: { revision: 0, draft: { items: [], defaultItemId: null }, applied: [] },
+      },
+    ],
+  });
+  const actions = stubStoreActions([
+    'loadToolModels',
+    'saveToolModels',
+    'previewToolModels',
+    'applyToolModels',
+  ]);
+  renderWithI18n(
+    <SchemeApply props={{ favorite, onClose: () => undefined }} renderSingle={() => null} />,
+  );
+  fireEvent.click(screen.getByRole('tab', { name: 'DSH' }));
+  return { favorite, actions };
+}
+
+test('a collection tool walks the same save-or-switch steps as a profile tool', async () => {
+  const { favorite, actions } = collectionSetup();
+  expect(screen.getByRole('radio', { name: '保存备用' })).toBeChecked();
+  expect(screen.queryByRole('button', { name: '预览应用' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '预览并确认' }));
+  await screen.findByText('仅保存不会修改原生文件。选择同时激活后才会应用到工具。');
+  expect(actions.previewToolModels).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: '保存 1 份备用配置' }));
+  await waitFor(() => expect(actions.saveToolModels).toHaveLength(1));
+  const [harness, request] = actions.saveToolModels[0] as [string, ToolModelsRequest];
+  expect(harness).toBe('dsh');
+  expect(request.draft.defaultItemId).toBe(favorite.connections[0]!.id);
+  expect(actions.applyToolModels).toHaveLength(0);
+  expect(screen.getByRole('button', { name: '完成' })).toBeInTheDocument();
+});
+
+test('switching a collection tool previews the native files as a diff before applying', async () => {
+  const { favorite, actions } = collectionSetup();
+  const preview: ToolModelsPreview = {
+    id: 'reviewed-plan',
+    items: [],
+    removed: [],
+    defaultItemId: favorite.connections[0]!.id,
+    files: [{ key: 'config', changed: true, before: '', after: '{"models":[]}' }],
+  };
+  setStoreState({
+    previewToolModels: async () => setStoreState({ toolModelsPreview: preview }),
+  });
+  fireEvent.click(screen.getByRole('radio', { name: '保存并立即切换' }));
+  fireEvent.click(screen.getByRole('button', { name: '预览并确认' }));
+  await screen.findByText('工具当前配置 → 应用后');
+  expect(screen.getByText('config')).toBeInTheDocument();
+  expect(screen.queryByText('变更前')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '确认保存并切换 1 个工具' }));
+  await waitFor(() => expect(actions.applyToolModels).toEqual([['dsh', 'reviewed-plan']]));
+  expect(actions.saveToolModels).toHaveLength(0);
 });
 
 test('ignore update sends the current template revision through the store', async () => {

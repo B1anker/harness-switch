@@ -8,11 +8,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { TabList, TabPanel } from '@/components/ui/tabs';
 import { useTranslation } from '@/lib/i18n';
 import { useAppStore } from '@/stores/app-store';
 import { CollectionApply } from './collection-apply';
+import { ModeRadio } from './mode-radio';
 import type { ApplyDialogProps } from './use-apply-workflow';
 
 export function SchemeApply({
@@ -85,27 +85,23 @@ export function SchemeApply({
           className="flex min-h-0 flex-1 flex-col"
         >
           {tool === 'kimi' || tool === 'dsh' ? (
-            <CollectionApply key={tool} harness={tool} onBusyChange={setBusy} {...props} />
+            <CollectionApply
+              key={tool}
+              harness={tool}
+              mode={mode}
+              onModeChange={setMode}
+              onBusyChange={setBusy}
+              {...props}
+            />
           ) : tool ? (
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="space-y-4 p-6">
                 <p className="text-sm text-muted-foreground">
                   {t('favorites.scheme.reviewTool', { tool: t(`favorites.scheme.tools.${tool}`) })}
                 </p>
-                <RadioGroup
-                  aria-label={t('favorites.mode')}
-                  value={mode}
-                  onValueChange={(value) => setMode(value === 'activate' ? 'activate' : 'save')}
-                >
-                  {(['save', 'activate'] as const).map((value) => (
-                    <label key={value} className="flex items-center gap-2 text-sm">
-                      <RadioGroupItem value={value} />
-                      {t(`favorites.modeLabel.${value}`)}
-                    </label>
-                  ))}
-                </RadioGroup>
+                <ModeRadio value={mode} onChange={setMode} />
               </div>
-              <div className="flex shrink-0 justify-between gap-3 border-t p-6">
+              <div className="flex shrink-0 justify-between gap-3 border-t bg-card px-6 py-4">
                 <Button variant="outline" onClick={props.onClose}>
                   {t('common.cancel')}
                 </Button>

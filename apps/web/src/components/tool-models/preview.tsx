@@ -1,7 +1,8 @@
 import { catalogKey, ERROR_CODES, type ToolModelsPreview } from '@seaveyon/harness-switch-shared';
+import { FileCode2 } from 'lucide-react';
+import { ConfigDiffs } from '@/components/config-diff';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Disclosure } from '@/components/ui/disclosure';
 import { useTranslation } from '@/lib/i18n';
 
 export function ModelsPreview({
@@ -58,28 +59,24 @@ export function ModelsPreview({
           ) : null}
         </div>
       ))}
-      <Disclosure title={t('toolModels.fileChanges')}>
-        {preview.files.map((file) => (
-          <div key={file.key} className="min-w-0 space-y-2">
-            <p className="text-sm font-medium">
-              {file.key} · {t(file.changed ? 'toolModels.changed' : 'toolModels.unchanged')}
-            </p>
-            <div className="grid min-w-0 gap-3 lg:grid-cols-2">
-              {[
-                ['before', file.before],
-                ['after', file.after],
-              ].map(([label, content]) => (
-                <div key={label} className="min-w-0">
-                  <p className="text-xs text-muted-foreground">{t(`toolModels.${label}`)}</p>
-                  <pre className="max-h-64 overflow-auto rounded-lg bg-muted p-3 text-xs">
-                    {content}
-                  </pre>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </Disclosure>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <FileCode2 className="size-4" />
+          {t('favorites.liveComparison')}
+        </div>
+        <p className="text-xs text-muted-foreground">{t('favorites.liveComparisonHint')}</p>
+        <ConfigDiffs
+          collapseUnchanged
+          intent="apply"
+          files={preview.files.map((file) => ({
+            path: file.key,
+            // The server hands back '' for a file that is not on disk yet.
+            existed: file.before !== '',
+            currentContent: file.before || null,
+            content: file.after,
+          }))}
+        />
+      </div>
       {onApply ? <Button onClick={onApply}>{t('toolModels.apply')}</Button> : null}
     </div>
   );
