@@ -12,10 +12,11 @@ import { useTranslation } from '@/lib/i18n';
 import { useFavoriteTargets } from '@/lib/use-favorite-targets';
 import { useAppStore } from '@/stores/app-store';
 import type { FavoriteListItem } from '@/stores/slices/model-favorites';
-import { modelGroups } from './editor/model-groups';
+import { accountClusters, accountLabel } from './editor/model-groups';
 import { FavoriteSelect } from './fields';
 
-const groupNodeId = (group: FavoriteConnection[]) => group[0]!.groupId ?? group[0]!.id;
+const clusterNodeId = (cluster: FavoriteConnection[]) =>
+  cluster[0]!.groupId ?? cluster[0]!.providerId ?? cluster[0]!.id;
 
 export function FavoriteRelationships({
   favorite,
@@ -33,14 +34,27 @@ export function FavoriteRelationships({
   );
   const [mode, setMode] = useState<'save' | 'activate'>('activate');
   const connection = favorite.connections.find((entry) => entry.id === channel);
-  // One node per account rather than per model: a template with a dozen models on one
-  // account would otherwise fill the left column, and the model is a second choice anyway.
-  const groups = modelGroups(favorite.connections);
-  const selectedGroup = groups.find((group) => group.some((entry) => entry.id === channel)) ?? [];
-  const pickFromGroup = (group: FavoriteConnection[]) =>
-    (group.find((entry) => entry.id === channel) ??
-      group.find((entry) => entry.id === favorite.defaultConnectionId) ??
-      group[0])!.id;
+  // Same account + same models under two protocols (cpa / cpa · codex) collapse to one
+  // node; the tool's apply path picks the protocol it can speak.
+  const clusters = accountClusters(favorite.connections);
+  const selectedCluster =
+    clusters.find((cluster) => cluster.some((entry) => entry.id === channel)) ?? [];
+  const models = [
+    ...new Map(
+      selectedCluster
+        .filter((entry) => entry.requestModelId)
+        .map((entry) => [entry.requestModelId, entry] as const),
+    ).entries(),
+  ];
+  const pickFromCluster = (cluster: FavoriteConnection[], modelId?: string) => {
+    const wanted = modelId ?? connection?.requestModelId;
+    const sameModel = wanted ? cluster.filter((entry) => entry.requestModelId === wanted) : cluster;
+    return (sameModel.find((entry) => entry.id === channel) ??
+      sameModel.find((entry) => entry.id === favorite.defaultConnectionId) ??
+      sameModel.find((entry) => entry.protocol === connection?.protocol) ??
+      sameModel[0] ??
+      cluster[0])!.id;
+  };
   const status = (harness: HarnessSummary) => {
     const refs = favorite.references.filter(
       (ref) =>
@@ -63,34 +77,34 @@ export function FavoriteRelationships({
     }
     return refs.length ? 'workspace.saved' : 'workspace.available';
   };
-  const count = Math.max(groups.length, harnesses.length, 1);
+  const count = Math.max(clusters.length, harnesses.length, 1);
   const height = count * 88 + 48;
   const middle = (height - 66) / 2;
   const nodes = [
-    ...groups.map((group, index) => {
-      const entry = group[0]!;
+    ...clusters.map((cluster, index) => {
+      const entry = cluster[0]!;
       const provider =
         providers?.find((item) => item.id === entry.providerId)?.name ??
         t('workspace.missingProvider');
-      const title = entry.label || provider;
-      // Two groups on one account differ only by protocol, so that is what the caption
-      // carries; the account is already the title.
+      const title = accountLabel(cluster, provider);
+      const protocols = [...new Set(cluster.map((item) => item.protocol))];
+      const modelCount = new Set(cluster.map((item) => item.requestModelId).filter(Boolean)).size;
       const caption = [
-        entry.protocol,
-        group.length > 1 ? t('favorites.scheme.selectedCount', { count: group.length }) : '',
+        protocols.join(' · '),
+        modelCount > 1 ? t('favorites.scheme.selectedCount', { count: modelCount }) : '',
       ]
         .filter(Boolean)
         .join(' · ');
       return flowNode(
-        groupNodeId(group),
+        clusterNodeId(cluster),
         24,
-        middle - ((groups.length - 1) * 88) / 2 + index * 88,
+        middle - ((clusters.length - 1) * 88) / 2 + index * 88,
         {
           kind: 'source',
           label: caption,
           value: title,
-          selected: group.some((item) => item.id === channel),
-          action: () => setChannel(pickFromGroup(group)),
+          selected: cluster.some((item) => item.id === channel),
+          action: () => setChannel(pickFromCluster(cluster)),
           actionLabel: title + ' · ' + caption,
         },
       );
@@ -136,7 +150,7 @@ export function FavoriteRelationships({
   ];
   const edges = connection
     ? [
-        flowEdge(groupNodeId(selectedGroup), 'model'),
+        flowEdge(clusterNodeId(selectedCluster), 'model'),
         ...harnesses
           .filter((harness) =>
             compatibleConnections(favorite, harness.id, targets).some(
@@ -164,15 +178,16 @@ export function FavoriteRelationships({
             t(value === 'save' ? 'favorites.modeLabel.save' : 'favorites.modeLabel.activate')
           }
         </SegmentedControl>
-        {selectedGroup.length > 1 ? (
+        {models.length > 1 ? (
           <FavoriteSelect
             id="relationship-model"
             label={t('favorites.modelPicker')}
             value={channel ?? ''}
-            options={selectedGroup
-              .filter((entry) => entry.requestModelId)
-              .map((entry) => ({ value: entry.id, label: entry.requestModelId }))}
-            onChange={setChannel}
+            options={models.map(([model]) => ({
+              value: pickFromCluster(selectedCluster, model),
+              label: model,
+            }))}
+            onChange={(value) => setChannel(value)}
             className="w-72 font-mono text-xs"
           />
         ) : null}

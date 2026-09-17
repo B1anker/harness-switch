@@ -2,7 +2,6 @@ import type { HarnessId } from '@seaveyon/harness-switch-shared';
 import { type Edge, Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { Box, Network } from 'lucide-react';
 import { HarnessIcon } from '@/components/harness-icon';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 export type FlowNodeData = {
   dual?: boolean;
@@ -88,6 +87,7 @@ export function RouteNode({ data }: NodeProps<Node<FlowNodeData>>) {
           ? 'switch-flow-node switch-flow-node-next'
           : 'switch-flow-node'
       }
+      data-disabled={data.disabled ? 'true' : undefined}
     >
       {data.kind === 'model' ? (
         <Handle type="target" position={Position.Left} className="switch-flow-handle" />
@@ -114,9 +114,11 @@ export function RouteNode({ data }: NodeProps<Node<FlowNodeData>>) {
         <Handle type="target" position={Position.Left} className="switch-flow-handle" />
       ) : null}
       {data.action ? (
-        <Button
-          variant="ghost"
-          className="pointer-events-auto absolute inset-0 z-10 h-full w-full rounded-[14px]"
+        // A plain button — not the ghost Button — so hover paints the whole node via CSS
+        // instead of a washed-out overlay that reads as disabled.
+        <button
+          type="button"
+          className="switch-flow-hit"
           aria-label={data.actionLabel ?? data.value}
           disabled={data.disabled}
           onClick={(event) => {
@@ -136,7 +138,7 @@ export function RouteNode({ data }: NodeProps<Node<FlowNodeData>>) {
         <Network className="text-primary" />
       )}
       <span className="min-w-0">
-        <span className="line-clamp-2 text-xs text-muted-foreground">{data.label}</span>
+        <span className="block truncate text-xs text-muted-foreground">{data.label}</span>
         {model ? (
           <Tooltip>
             <TooltipTrigger asChild>

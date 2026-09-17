@@ -221,10 +221,13 @@ test('a tool that cannot take the selected channel offers the compatible one ins
   renderWithI18n(
     <FavoriteRelationships favorite={favorite} onApply={(items) => requests.push(items)} />,
   );
-  expect(screen.getByRole('button', { name: /^route · .*openai-responses$/ })).toBeInTheDocument();
+  // Same account + same models under two protocols collapse to one node.
   expect(
-    screen.getByRole('button', { name: /^route · claude · .*anthropic-messages$/ }),
+    screen.getByRole('button', {
+      name: /^route · (openai-responses · anthropic-messages|anthropic-messages · openai-responses)$/,
+    }),
   ).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /route · claude/ })).toBeNull();
   const tool = await screen.findByRole('button', { name: 'Pi 换渠道可配置' });
   await waitFor(() => expect(tool).toBeEnabled());
   fireEvent.click(tool);
